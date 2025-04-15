@@ -124,9 +124,9 @@ jobs:
           sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} \
           "cd /home/ec2-user/timshel-backend; \
            sudo docker login -u "${{ secrets.USER_NAME }}" -p ${{ secrets.DOCKER_PASSWORD }} ghcr.io/intuition-business/timshel/backend:production; \
-           sudo docker-compose down; \
+           sudo docker compose down; \
            sudo docker image rm ghcr.io/intuition-business/timshel/backend:production; \
-           sudo docker-compose up -d;"
+           sudo docker compose up -d;"
 
   # Job to deploy the application to development (testing)
   deploy_dev:
@@ -164,6 +164,6 @@ jobs:
           sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} \
           "cd /home/ec2-user/timshel-backend-dev; \
            sudo docker login -u "${{ secrets.USER_NAME }}" -p ${{ secrets.DOCKER_PASSWORD }} ghcr.io/intuition-business/timshel/backend:dev; \
-           sudo docker-compose down; \
+           sudo docker compose down; \
            sudo docker image rm ghcr.io/intuition-business/timshel/backend:dev; \
-           sudo docker-compose up -d;"
+           sudo docker compose up -d;"
