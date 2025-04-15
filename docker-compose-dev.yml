@@ -1,0 +1,11 @@
+services:
+  oncater_backend:
+    image: ghcr.io/intuition-business/timshel/backend:dev
+    mem_limit: 1G
+    mem_reservation: 512M
+    ports:
+      - "8081:8081"
+    restart: always
+    environment:
+      - NODE_ENV=dev
+      - PORT=8081
