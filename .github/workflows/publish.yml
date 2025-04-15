@@ -157,7 +157,7 @@ jobs:
 
       - name: Copy files to server
         run: |
-          sshpass scp -i my_ssh -o StrictHostKeyChecking=no -r timshel-backend-dev ubuntu@${{ secrets.SERVER_IP }}:/home/ubuntu/
+          sshpass scp -i my_ssh -o StrictHostKeyChecking=no -r timshel-backend-dev ec2-user@${{ secrets.SERVER_IP }}:/home/ubuntu/
 
       - name: SSH and deploy
         run: |
