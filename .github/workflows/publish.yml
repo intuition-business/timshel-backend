@@ -27,13 +27,13 @@ jobs:
       # Add environment variables to .env
       - name: Add environment variables to .env
         run: |
-          # For Production (master branch)
-          if [ "${GITHUB_REF}" == "refs/heads/master" ]; then
+          # For Production (main branch)
+          if [ "${GITHUB_REF}" == "refs/heads/main" ]; then
             echo "Setting production variables"
             echo DB_USER=${{ secrets.DB_USER }} >> .env
             echo PORT=${{ secrets.PORT }} >> .env
             echo DB_PASSWORD=${{ secrets.DB_PASSWORD }} >> .env
-            echo NODE_ENV=${{ secrets.ODE_ENV }} >> .env
+            echo NODE_ENV=${{ secrets.NODE_ENV }} >> .env
             echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
             echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
             echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
@@ -41,12 +41,12 @@ jobs:
           fi
 
           # For Development (dev branch)
-          if [ "${GITHUB_REF}" == "refs/heads/master" ]; then
+          if [ "${GITHUB_REF}" == "refs/heads/main" ]; then
             echo "Setting production variables"
             echo DB_USER=${{ secrets.DB_USER }} >> .env
             echo PORT=${{ secrets.PORT }} >> .env
             echo DB_PASSWORD=${{ secrets.DB_PASSWORD }} >> .env
-            echo NODE_ENV=${{ secrets.ODE_ENV }} >> .env
+            echo NODE_ENV=${{ secrets.NODE_ENV }} >> .env
             echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
             echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
             echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
@@ -58,7 +58,7 @@ jobs:
             echo DB_USER=${{ secrets.DB_USER }} >> .env
             echo PORT=${{ secrets.PORT }} >> .env
             echo DB_PASSWORD=${{ secrets.DB_PASSWORD }} >> .env
-            echo NODE_ENV=${{ secrets.ODE_ENV }} >> .env
+            echo NODE_ENV=${{ secrets.NODE_ENV }} >> .env
             echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
             echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
             echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
@@ -70,7 +70,7 @@ jobs:
 
       # Build Docker image for production
       - name: Build Production Docker image
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/main'
         run: docker build --build-arg NODE_ENV=production --build-arg env_port=8080 -t ghcr.io/intuition-business/timshel/backend:production .
 
       # Build Docker image for development
@@ -80,7 +80,7 @@ jobs:
 
       # Push Production Docker image to registry
       - name: Push Production Docker image to registry
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/main'
         run: docker push ghcr.io/intuition-business/timshel/backend:production
 
       # Push Development Docker image to registry
@@ -93,7 +93,7 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: build_docker_image
-    if: github.ref == 'refs/heads/master'  # Only for the master branch
+    if: github.ref == 'refs/heads/main'  # Only for the master branch
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -117,11 +117,11 @@ jobs:
 
       - name: Copy files to server
         run: |
-          sshpass scp -i my_ssh -o StrictHostKeyChecking=no -r timshel-backend ubuntu@${{ secrets.SERVER_IP }}:/home/ubuntu/
+          sshpass scp -i my_ssh -o StrictHostKeyChecking=no -r timshel-backend ec2-user@${{ secrets.SERVER_IP }}:/home/ubuntu/
 
       - name: SSH and deploy
         run: |
-          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.SERVER_IP }} \
+          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} \
           "cd /home/ubuntu/timshel-backend; \
            sudo docker login -u "${{ secrets.USER_NAME }}" -p ${{ secrets.DOCKER_PASSWORD }} ghcr.io/intuition-business/timshel/backend:production; \
            sudo docker-compose down; \
