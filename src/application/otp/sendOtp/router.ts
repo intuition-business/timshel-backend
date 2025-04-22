@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { validateHandler } from "./../../../middleware";
-import { sendOtpDto } from "./dto";
+import { sendOtpDto } from "../dto";
 import { sendOTP } from "./controller/sendOTP";
 //import { verifyToken } from "../../../middleware/authJwt";
 

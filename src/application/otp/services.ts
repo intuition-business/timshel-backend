@@ -1,3 +1,4 @@
+import { ObjectId } from "mongoose";
 import { OtpModel } from "./model";
 import { ICreateOtp } from "./sendOtp/types";
 
@@ -18,6 +19,11 @@ class OtpService {
   async findOtpByPhonenumber(phone: string) {
     const existingPhoneUser = await OtpModel.findOne({ phone });
     return existingPhoneUser;
+  }
+
+  async remove(id: ObjectId | any) {
+    await OtpModel.deleteOne({ _id: id });
+    return true;
   }
 }
 

@@ -19,6 +19,16 @@ class RegisterService {
     const existingPhoneUser = await RegisterModel.findOne({ phone });
     return existingPhoneUser;
   }
+
+  async updatePassword(userId: string, newPassword: string) {
+    const updatedUser = await RegisterModel.findByIdAndUpdate(
+      userId,
+      { password: newPassword },
+      { new: true } // Para devolver el documento actualizado
+    );
+
+    return updatedUser;
+  }
 }
 
 export default RegisterService;

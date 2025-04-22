@@ -2,6 +2,7 @@ import Joi from "joi";
 const email = Joi.string().email({ tlds: { allow: false } });
 const phonenumber = Joi.string();
 const name = Joi.string().required();
+const otp = Joi.number().required();
 
 export const sendOtpDto = Joi.object({
   phonenumber,
@@ -9,10 +10,8 @@ export const sendOtpDto = Joi.object({
   name,
 });
 
-export const validateOtpDtoEmail = Joi.object({
+export const validateOtpDto = Joi.object({
   email,
-});
-
-export const validateOtpDtoPhone = Joi.object({
-  email,
+  phonenumber,
+  otp,
 });
