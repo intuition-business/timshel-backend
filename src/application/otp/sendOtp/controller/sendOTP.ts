@@ -11,7 +11,7 @@ export const sendOTP = async (req?: Request, res?: Response, next?: any) => {
   const created_at = Date.now();
   const expires_at = Date.now() + OTP_EXPIRATION_TIME;
   const { email, phonenumber, name } = req?.body || {};
-
+  console.log("REQUEST", req?.body);
   try {
     if (email) {
       const otp = generateOTPEmail(6);
