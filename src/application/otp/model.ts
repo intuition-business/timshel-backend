@@ -1,4 +1,3 @@
-import { Schema, model } from "mongoose";
 import pool from "../../config/db";
 
 export const OTP_AUTH_TABLE = "auth";
