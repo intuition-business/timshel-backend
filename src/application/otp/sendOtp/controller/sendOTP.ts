@@ -10,63 +10,75 @@ export const sendOTP = async (
   res: Response,
   next: NextFunction
 ) => {
+  const date = new Date();
   const OTP_EXPIRATION_TIME = 600000;
   const services = new OtpService();
   const created_at = Date.now();
   const expires_at = Date.now() + OTP_EXPIRATION_TIME;
-  const { email, phonenumber, name } = req?.body || {};
-  try {
-    if (email) {
-      const otp = generateOTPEmail(6);
-      const response: any = await sendWithEmail(email, name, otp);
+  const { email, phonenumber, name = "" } = req?.body || {};
 
-      if (!response.error) {
-        const otpData: ICreateAuth = {
-          usuario_id: 0,
-          entrenador_id: 0,
-          email,
-          code: otp,
-          telefono: "",
-          id_apple: 0,
-          tipo_login: "email",
-          fecha_creacion: created_at,
-          fecha_expiracion: expires_at,
-          isUsed: 1,
-        };
-        const thereIsUser: any = await services.findByEmail(email);
+  const otp = generateOTPEmail(6);
+  let response;
+  const otpData: ICreateAuth = {
+    usuario_id: 0,
+    entrenador_id: 0,
+    email,
+    code: otp,
+    telefono: phonenumber,
+    id_apple: 0,
+    tipo_login: "email",
+    fecha_creacion: created_at,
+    fecha_expiracion: expires_at,
+    isUsed: 1,
+  };
 
-        await services.create(otpData, thereIsUser);
+  if (email) {
+    try {
+      response = await sendWithEmail(email, otp, name);
+      const thereIsUser: any = await services.findByEmail(email);
+      const createDB = await services.create(otpData, thereIsUser);
+      if (createDB && !response.error) {
         res?.status(200).json(response);
+        return;
       }
+
+      res.status(500).json({
+        message: "Ocurrio un error",
+        error: true,
+        date,
+      });
+
       res?.status(400).json(response);
+    } catch (error) {
+      console.log("Error: ", error);
+      next(error);
     }
-
-    if (phonenumber) {
-      const otp = generateOTPSmS(6);
-      const response = await sendWithPhonenumber(phonenumber, name, otp);
-
-      if (!response.error) {
-        const otpData: ICreateAuth = {
-          usuario_id: 0,
-          entrenador_id: 0,
-          email: "",
-          code: otp,
-          telefono: phonenumber,
-          id_apple: 0,
-          tipo_login: "telefono",
-          fecha_creacion: created_at,
-          fecha_expiracion: expires_at,
-          isUsed: 1,
-        };
-        const thereIsUser: any = await services.findByPhone(phonenumber);
-
-        await services.create(otpData, thereIsUser);
-        res?.status(200).json(response);
-      }
-      res?.status(400).json(response);
-    }
-  } catch (error) {
-    console.log("Error: ", error);
-    next(error);
   }
+
+  if (phonenumber) {
+    try {
+      response = await sendWithPhonenumber(phonenumber, otp, name);
+      const thereIsUser: any = await services.findByPhone(phonenumber);
+      const createDB = await services.create(otpData, thereIsUser);
+      if (createDB && !response.error) {
+        res?.status(200).json(response);
+        return;
+      }
+
+      res.status(500).json({
+        message: "Ocurrio un error",
+        error: true,
+        date,
+      });
+    } catch (error) {
+      console.log("Error: ", error);
+      next(error);
+    }
+  }
+
+  res.status(400).json({
+    message: "Se requiere email o número de teléfono",
+    error: true,
+    date,
+  });
 };

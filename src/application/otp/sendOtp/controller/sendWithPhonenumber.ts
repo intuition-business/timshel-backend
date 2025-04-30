@@ -7,8 +7,8 @@ import {
 
 export const sendWithPhonenumber = async (
   phonenumber: string,
-  name: string,
-  otp: number
+  otp: number,
+  name?: string
 ) => {
   const date = new Date();
 
@@ -21,7 +21,7 @@ export const sendWithPhonenumber = async (
     const msgOptions = {
       from: twilioNumber,
       to: phonenumber,
-      body: `Hola ${name}, bienvenido a Timshel, tu codigo es : ${otp}`,
+      body: `Hola ${name}. bienvenido a Timshell, tu codigo es : ${otp}`,
     };
     const message = await twilioData.messages.create(msgOptions);
     if (message) {

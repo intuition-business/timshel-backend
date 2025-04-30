@@ -13,7 +13,7 @@ const rol = Joi.number().integer().min(0);
 const reason = Joi.string().min(3).max(255);
 const otp_email = Joi.number().integer().min(100000).max(999999);
 const otp_phone = Joi.number().integer().min(100000).max(999999);
-const name = Joi.string().min(2).max(100);
+const name = Joi.string().min(2).max(100).optional();
 const password_confirmation = Joi.string()
   .valid(Joi.ref("password"))
 

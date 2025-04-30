@@ -3,8 +3,8 @@ import { API_KEY_SENDGRID } from "../../../../config";
 
 export const sendWithEmail = async (
   email: string,
-  name: string,
-  otp: number
+  otp: number,
+  name?: string
 ) => {
   const date = new Date();
   sendgrid.setApiKey(API_KEY_SENDGRID);
@@ -14,9 +14,9 @@ export const sendWithEmail = async (
     const message = {
       to: email,
       from: "info@intuitionstudio.co",
-      subject: `Hola, ${name}. Bienvenido a timshell.`,
+      subject: `Hola ${name}. Bienvenido a timshell.`,
       text: `Tu codigo es : ${otp}`,
-      html: `<h4>Hola, ${name}. Tu codigo es : <b>${otp}</b></h4>`,
+      html: `<h4>Hola ${name}. Tu codigo es : <b>${otp}</b></h4>`,
     };
 
     const data = await sendgrid.send(message);

@@ -27,9 +27,8 @@ class OtpService {
         fecha_expiracion: data.fecha_expiracion,
         isUsed: data.isUsed,
       });
-
-      const result = { user, auth, otp };
-      return result;
+      if (user && auth && otp) return true;
+      return false;
     } else {
       const otp = await OtpModel.updateOtp({
         auth_id: thereIsUser[0].auth_id,
@@ -38,7 +37,8 @@ class OtpService {
         fecha_expiracion: data.fecha_expiracion,
         isUsed: data.isUsed,
       });
-      return { otp };
+      if (otp) return true;
+      return false;
     }
   }
 
