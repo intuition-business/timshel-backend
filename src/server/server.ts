@@ -3,6 +3,7 @@ import helmet from "helmet";
 import cors from "cors";
 import passport from "passport";
 import session from "express-session";
+import swaggerUi from "swagger-ui-express";
 import { router } from "./../router";
 import {
   cosrsOptions,
@@ -13,6 +14,7 @@ import {
 } from "../middleware";
 import { conectionMysql } from "./../infrastructure/database";
 import { NODE_ENV, PORT, URL } from "../config";
+import { openapiSpecification } from "../infrastructure/swagger";
 
 const Server = () => {
   const app: Application = express();
@@ -51,7 +53,7 @@ const Server = () => {
       router(app);
       conectionMysql();
       // connectionMongo();
-
+      app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapiSpecification));
       app.use(logErrors);
       app.use(ormHandlerError);
       app.use(boomHandleErrors);
