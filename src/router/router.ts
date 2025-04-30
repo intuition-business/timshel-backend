@@ -6,7 +6,7 @@ import { loginRouter } from "../application/login";
 import { validateOTPRouter } from "../application/otp/validateOtp";
 import { GoogleRouter } from "../application/google";
 
-const { sendOtp, validateData, validateOtp, register, login, google } = path;
+const { sendOtp, validateOtp, register, login, google } = path;
 
 const router = (app: Application) => {
   app.use(sendOtp, sendOtpRouter);
