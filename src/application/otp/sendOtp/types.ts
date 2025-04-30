@@ -1,7 +1,16 @@
 export interface ICreateOtp {
-  otp: string;
-  email?: string;
-  phone?: string;
-  created_at: number;
-  expires_at: number;
+  auth_id?: number;
+  fecha_creacion: number;
+  fecha_expiracion: number;
+  isUsed: number;
+  code: number;
+}
+
+export interface ICreateAuth extends ICreateOtp {
+  usuario_id?: number;
+  entrenador_id?: number;
+  email: string;
+  telefono: string;
+  id_apple: number;
+  tipo_login: string;
 }

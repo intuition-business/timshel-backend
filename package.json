@@ -12,8 +12,10 @@
   "license": "ISC",
   "dependencies": {
     "@hapi/boom": "10.0.1",
+    "@sendgrid/mail": "8.1.5",
     "@types/express": "5.0.1",
     "@types/node": "22.14.0",
+    "@types/passport-google-oauth20": "2.0.16",
     "bcryptjs": "3.0.2",
     "cors": "2.8.5",
     "dotenv": "16.5.0",
@@ -23,12 +25,19 @@
     "joi": "17.13.3",
     "jsonwebtoken": "9.0.2",
     "mongoose": "8.13.2",
+    "mysql2": "3.14.0",
     "nodemon": "3.1.9",
+    "passport": "0.7.0",
+    "passport-google-oauth": "2.0.0",
+    "passport-google-oauth20": "2.0.0",
     "twilio": "5.5.2",
     "typescript": "5.8.3"
   },
   "devDependencies": {
     "@types/cors": "2.8.17",
-    "@types/jsonwebtoken": "9.0.9"
+    "@types/express-session": "1.18.1",
+    "@types/jsonwebtoken": "9.0.9",
+    "@types/passport": "1.0.17",
+    "@types/passport-google-oauth": "1.0.45"
   }
 }

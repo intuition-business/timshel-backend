@@ -9,4 +9,5 @@ export const Path: PathProps = {
   logout: "/api/logout",
   forgotPassword: "/api/forgot-password",
   resetPassword: "/api/reset-password",
+  google: "/api/auth",
 };

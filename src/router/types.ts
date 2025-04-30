@@ -7,4 +7,5 @@ export interface PathProps {
   logout: string;
   forgotPassword: string;
   resetPassword: string;
+  google: string;
 }

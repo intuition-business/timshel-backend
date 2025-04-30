@@ -8,11 +8,11 @@ import {
 export const sendWithPhonenumber = async (
   phonenumber: string,
   name: string,
-  otp: string
+  otp: number
 ) => {
   const date = new Date();
 
-  const response = { message: "", error: false, code: "", date };
+  const response = { message: "", error: false, code: 0, date };
 
   try {
     const twilioNumber = TWILIO_NUMBER;
@@ -24,7 +24,6 @@ export const sendWithPhonenumber = async (
       body: `Hola ${name}, bienvenido a Timshel, tu codigo es : ${otp}`,
     };
     const message = await twilioData.messages.create(msgOptions);
-    console.log(message);
     if (message) {
       response.message = "mensaje enviado";
       response.code = otp;

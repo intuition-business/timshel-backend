@@ -1,28 +1,31 @@
-import twilio from "twilio";
-import {
-  TWILIO_ACCOUNT_SID,
-  TWILIO_AUTH_TOKEN,
-  TWILIO_NUMBER,
-} from "../../../../config";
+import sendgrid from "@sendgrid/mail";
+import { API_KEY_SENDGRID } from "../../../../config";
 
 export const sendWithEmail = async (
-  phonenumber: string,
+  email: string,
   name: string,
-  otp: string
+  otp: number
 ) => {
   const date = new Date();
-
-  const response = { message: "", error: false, code: "", date };
+  sendgrid.setApiKey(API_KEY_SENDGRID);
+  const response = { message: "", error: false, code: otp, date };
 
   try {
-    // const twilioNumber = TWILIO_NUMBER;
-    //const twilioData = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+    const message = {
+      to: email,
+      from: "info@intuitionstudio.co",
+      subject: `Hola, ${name}. Bienvenido a timshell.`,
+      text: `Tu codigo es : ${otp}`,
+      html: `<h4>Hola, ${name}. Tu codigo es : <b>${otp}</b></h4>`,
+    };
 
-    /* const msgOptions = {
-      from: twilioNumber,
-      to: phonenumber,
-      body: `Hola ${name}, bienvenido a Timshel, tu codigo es : ${otp}`,
-    }; */
+    const data = await sendgrid.send(message);
+
+    if (!data[0].statusCode) {
+      response.error = true;
+      response.message = "Ocurrio un error";
+    }
+    response.message = "Email enviado";
     return response;
   } catch (error: any) {
     response.error = true;

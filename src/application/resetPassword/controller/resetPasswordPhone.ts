@@ -1,5 +1,4 @@
 import { NextFunction } from "express";
-import OtpService from "../../otp/services";
 import RegisterService from "../../register/services";
 
 export const resetPasswordPhone = async (

@@ -11,12 +11,12 @@ export const validateOtpSMS = async (
     const response = { message: "", error: false, date, status: 200 };
     const services = new OtpService();
 
-    const dataForValidate: any = await services.findOtpByPhonenumber(phone);
+    const dataForValidate: any = await services.findByPhone(phone);
     if (!dataForValidate) {
     }
-    const { expires_at } = dataForValidate || {};
-    if (Date.now() >= expires_at) {
-      const remove = await services.remove(dataForValidate?._id);
+    const { fecha_expiracion } = dataForValidate[0] || {};
+    if (Date.now() >= Number(fecha_expiracion)) {
+      const remove = await services.removeOtp(dataForValidate[0]?.auth_id);
       if (remove) {
         response.message = "Tu codigo de verificacion ha expirado.";
         response.error = true;
@@ -24,8 +24,8 @@ export const validateOtpSMS = async (
         return response;
       }
     }
-    console.log("GGGGG", { dataForValidate });
-    if (otp !== dataForValidate?.otp) {
+
+    if (otp !== dataForValidate[0]?.code) {
       response.message = "Tu codigo de verificacion no coincide.";
       response.error = true;
       response.status = 400;

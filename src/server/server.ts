@@ -1,7 +1,8 @@
 import express, { Application } from "express";
 import helmet from "helmet";
 import cors from "cors";
-
+import passport from "passport";
+import session from "express-session";
 import { router } from "./../router";
 import {
   cosrsOptions,
@@ -10,10 +11,8 @@ import {
   boomHandleErrors,
   ormHandlerError,
 } from "../middleware";
-import { connectionMongo } from "./../infrastructure/database";
+import { conectionMysql } from "./../infrastructure/database";
 import { NODE_ENV, PORT, URL } from "../config";
-console.log({ NODE_ENV, PORT, URL });
-// import { createRole } from "../libs/initialSetup";
 
 const Server = () => {
   const app: Application = express();
@@ -23,6 +22,22 @@ const Server = () => {
   app.use(express.urlencoded({ extended: false }));
   app.use(helmet());
   app.use(cors(cosrsOptions));
+
+  app.use(
+    session({
+      secret: "EXPRESS_SESSION", // ¡Reemplaza esto con una clave secreta fuerte!
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production", // Solo habilitar en producción con HTTPS
+        maxAge: 24 * 60 * 60 * 1000, // Ejemplo: 24 horas de duración de la sesión
+      },
+    })
+  );
+
+  app.use(passport.initialize());
+  app.use(passport.session());
 
   app.get("/", (req, res) => {
     res.json({
@@ -34,7 +49,8 @@ const Server = () => {
   const listen = () => {
     try {
       router(app);
-      connectionMongo();
+      conectionMysql();
+      // connectionMongo();
 
       app.use(logErrors);
       app.use(ormHandlerError);

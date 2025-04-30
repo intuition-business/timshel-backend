@@ -1,29 +1,59 @@
-import { ObjectId } from "mongoose";
 import { OtpModel } from "./model";
-import { ICreateOtp } from "./sendOtp/types";
+import { ICreateAuth } from "./sendOtp/types";
 
 class OtpService {
   constructor() {}
 
-  async create(data: ICreateOtp) {
-    const otpModel = new OtpModel(data);
-    const result = await otpModel.save();
-    return result;
+  async create(data: ICreateAuth, thereIsUser: any) {
+    const date = new Date();
+
+    if (thereIsUser.length === 0) {
+      const user = await OtpModel.createUser({
+        nombre: "",
+        fecha_registro: date,
+        planes_id: 0,
+      });
+
+      const auth = await OtpModel.createAuth({
+        ...data,
+        usuario_id: user.insertId,
+        entrenador_id: 0,
+      });
+
+      const otp = await OtpModel.createOtp({
+        auth_id: auth.insertId,
+        code: data.code,
+        fecha_creacion: data.fecha_creacion,
+        fecha_expiracion: data.fecha_expiracion,
+        isUsed: data.isUsed,
+      });
+
+      const result = { user, auth, otp };
+      return result;
+    } else {
+      const otp = await OtpModel.updateOtp({
+        auth_id: thereIsUser[0].auth_id,
+        code: data.code,
+        fecha_creacion: data.fecha_creacion,
+        fecha_expiracion: data.fecha_expiracion,
+        isUsed: data.isUsed,
+      });
+      return { otp };
+    }
   }
 
-  async findOtpByEmail(email: string) {
-    const existingEmailUser = await OtpModel.findOne({ email });
-    return existingEmailUser;
+  async findByEmail(email: string) {
+    const data = await OtpModel.findByEmail(email);
+    return data;
   }
 
-  async findOtpByPhonenumber(phone: string) {
-    const existingPhoneUser = await OtpModel.findOne({ phone });
-    return existingPhoneUser;
+  async findByPhone(phone: string) {
+    const data = await OtpModel.findByPhone(phone);
+    return data;
   }
-
-  async remove(id: ObjectId | any) {
-    await OtpModel.deleteOne({ _id: id });
-    return true;
+  async removeOtp(auth_id: string) {
+    const data = await OtpModel.removeOtp(auth_id);
+    return data;
   }
 }
 

@@ -30,39 +30,58 @@ jobs:
           # For Production (main branch)
           if [ "${GITHUB_REF}" == "refs/heads/main" ]; then
             echo "Setting production variables"
-            echo DB_USER=${{ secrets.DB_USER }} >> .env
             echo PORT=${{ secrets.PORT }} >> .env
-            echo DB_PASSWORD=${{ secrets.DB_PASSWORD }} >> .env
             echo NODE_ENV=${{ secrets.NODE_ENV }} >> .env
             echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
             echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
             echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
             echo TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} >> .env
+            echo API_KEY_SENDGRID=${{ secrets.API_KEY_SENDGRID }} >> .env
+            echo GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} >> .env
+            echo GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} >> .env
+            echo HOST=${{ secrets.HOST }} >> .env
+            echo USER_DB=${{ secrets.USER_DB }} >> .env
+            echo PASSWORD_DB=${{ secrets.PASSWORD_DB }} >> .env
+            echo DATABASE=${{ secrets.DATABASE }} >> .env
+            echo PORT_DB=${{ secrets.PORT_DB }} >> .env
           fi
 
           # For Development (dev branch)
           if [ "${GITHUB_REF}" == "refs/heads/main" ]; then
             echo "Setting production variables"
-            echo DB_USER=${{ secrets.DB_USER }} >> .env
             echo PORT=${{ secrets.PORT }} >> .env
-            echo DB_PASSWORD=${{ secrets.DB_PASSWORD }} >> .env
             echo NODE_ENV=${{ secrets.NODE_ENV }} >> .env
             echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
             echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
             echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
             echo TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} >> .env
+            echo API_KEY_SENDGRID=${{ secrets.API_KEY_SENDGRID }} >> .env
+            echo GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} >> .env
+            echo GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} >> .env
+            echo HOST=${{ secrets.HOST }} >> .env
+            echo USER_DB=${{ secrets.USER_DB }} >> .env
+            echo PASSWORD_DB=${{ secrets.PASSWORD_DB }} >> .env
+            echo DATABASE=${{ secrets.DATABASE }} >> .env
+            echo PORT_DB=${{ secrets.PORT_DB }} >> .env
           fi
 
           # Common environment variables for both
             echo "Setting production variables"
-            echo DB_USER=${{ secrets.DB_USER }} >> .env
+            echo "Setting production variables"
             echo PORT=${{ secrets.PORT }} >> .env
-            echo DB_PASSWORD=${{ secrets.DB_PASSWORD }} >> .env
             echo NODE_ENV=${{ secrets.NODE_ENV }} >> .env
             echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
             echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
             echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
             echo TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} >> .env
+            echo API_KEY_SENDGRID=${{ secrets.API_KEY_SENDGRID }} >> .env
+            echo GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} >> .env
+            echo GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} >> .env
+            echo HOST=${{ secrets.HOST }} >> .env
+            echo USER_DB=${{ secrets.USER_DB }} >> .env
+            echo PASSWORD_DB=${{ secrets.PASSWORD_DB }} >> .env
+            echo DATABASE=${{ secrets.DATABASE }} >> .env
+            echo PORT_DB=${{ secrets.PORT_DB }} >> .env
 
       # Validate .env file contents
       - name: Print .env file contents for debugging
