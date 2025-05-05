@@ -12,6 +12,7 @@ export const validateOtpEmail = async (
     const services = new OtpService();
 
     const dataForValidate: any = await services.findByEmail(email);
+    console.log(dataForValidate);
     if (!dataForValidate) {
       response.message = "Ocurrio un error.";
       response.error = true;
@@ -38,7 +39,7 @@ export const validateOtpEmail = async (
     response.message = "Ah sido verificado con exito.";
     response.error = false;
     response.status = 200;
-    return response;
+    return { ...response, user_id: dataForValidate[0]?.auth_id };
   } catch (error) {
     next(error);
   }

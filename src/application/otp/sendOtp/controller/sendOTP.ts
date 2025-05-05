@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { sendWithEmail } from "./sendWithEmail";
 import { sendWithPhonenumber } from "./sendWithPhonenumber";
-import { generateOTPSmS, generateOTPEmail } from "./generateOTP";
+import { generateOTPEmail } from "./generateOTP";
 import OtpService from "../../services";
 import { ICreateAuth } from "../types";
 
@@ -20,6 +20,7 @@ export const sendOTP = async (
   const otp = generateOTPEmail(6);
   let response;
   const otpData: ICreateAuth = {
+    name,
     usuario_id: 0,
     entrenador_id: 0,
     email,
@@ -37,8 +38,8 @@ export const sendOTP = async (
       response = await sendWithEmail(email, otp, name);
       const thereIsUser: any = await services.findByEmail(email);
       const createDB = await services.create(otpData, thereIsUser);
-      if (createDB && !response.error) {
-        res?.status(200).json(response);
+      if (createDB.ok && !response.error) {
+        res?.status(200).json({ ...response, user_id: createDB?.user_id });
         return;
       }
 
@@ -60,8 +61,8 @@ export const sendOTP = async (
       response = await sendWithPhonenumber(phonenumber, otp, name);
       const thereIsUser: any = await services.findByPhone(phonenumber);
       const createDB = await services.create(otpData, thereIsUser);
-      if (createDB && !response.error) {
-        res?.status(200).json(response);
+      if (createDB.ok && !response.error) {
+        res?.status(200).json({ ...response, user_id: createDB?.user_id });
         return;
       }
 

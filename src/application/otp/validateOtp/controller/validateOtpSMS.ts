@@ -36,7 +36,7 @@ export const validateOtpSMS = async (
     response.message = "Ah sido verificado con exito.";
     response.error = false;
     response.status = 200;
-    return response;
+    return { ...response, user_id: dataForValidate[0]?.auth_id };
   } catch (error) {
     next(error);
   }

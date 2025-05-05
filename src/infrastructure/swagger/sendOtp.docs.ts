@@ -46,6 +46,7 @@ const router = Router();
  *         - error
  *         - code
  *         - date
+ *         - user_id
  *       properties:
  *         message:
  *           type: string
@@ -59,11 +60,15 @@ const router = Router();
  *         date:
  *           type: date
  *           description: fecha
+ *         user_id:
+ *           type: number
+ *           description: id del usuario
  *       example:
  *         message: Mensaje enviado
  *         error: false
  *         code: 123456
  *         date: "2025-04-30T21:07:19.269Z"
+ *         user_id: 12
  *
  */
 
