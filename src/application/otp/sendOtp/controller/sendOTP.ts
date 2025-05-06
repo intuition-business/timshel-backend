@@ -20,12 +20,12 @@ export const sendOTP = async (
   const otp = generateOTPEmail(6);
   let response;
   const otpData: ICreateAuth = {
-    name,
+    name: name !== undefined ? name : null,
     usuario_id: 0,
     entrenador_id: 0,
-    email,
+    email: email !== undefined ? email : null,
     code: otp,
-    telefono: phonenumber,
+    telefono: phonenumber !== undefined ? phonenumber : null,
     id_apple: 0,
     tipo_login: "email",
     fecha_creacion: created_at,
@@ -33,12 +33,13 @@ export const sendOTP = async (
     isUsed: 1,
   };
 
-  if (email) {
+  if (email !== undefined) {
+    otpData.tipo_login = "email";
     try {
       response = await sendWithEmail(email, otp, name);
       const thereIsUser: any = await services.findByEmail(email);
-      const createDB = await services.create(otpData, thereIsUser);
-      if (createDB.ok && !response.error) {
+      if (!response.error) {
+        const createDB = await services.create(otpData, thereIsUser);
         res?.status(200).json({ ...response, user_id: createDB?.user_id });
         return;
       }
@@ -48,20 +49,22 @@ export const sendOTP = async (
         error: true,
         date,
       });
-
-      res?.status(400).json(response);
+      return;
     } catch (error) {
       console.log("Error: ", error);
       next(error);
     }
+    return;
   }
 
-  if (phonenumber) {
+  if (phonenumber !== undefined) {
+    otpData.tipo_login = "phone";
     try {
       response = await sendWithPhonenumber(phonenumber, otp, name);
       const thereIsUser: any = await services.findByPhone(phonenumber);
-      const createDB = await services.create(otpData, thereIsUser);
-      if (createDB.ok && !response.error) {
+      console.log("PPPP", response);
+      if (!response.error) {
+        const createDB = await services.create(otpData, thereIsUser);
         res?.status(200).json({ ...response, user_id: createDB?.user_id });
         return;
       }
@@ -75,6 +78,7 @@ export const sendOTP = async (
       console.log("Error: ", error);
       next(error);
     }
+    return;
   }
 
   res.status(400).json({
@@ -82,4 +86,5 @@ export const sendOTP = async (
     error: true,
     date,
   });
+  return;
 };

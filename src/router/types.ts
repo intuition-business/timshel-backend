@@ -8,4 +8,5 @@ export interface PathProps {
   forgotPassword: string;
   resetPassword: string;
   google: string;
+  forms: string;
 }

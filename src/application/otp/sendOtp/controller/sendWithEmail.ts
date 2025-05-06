@@ -10,24 +10,25 @@ export const sendWithEmail = async (
   sendgrid.setApiKey(API_KEY_SENDGRID);
   const response = { message: "", error: false, code: otp, date };
 
-  try {
-    const message = {
-      to: email,
-      from: "info@intuitionstudio.co",
-      subject: `Hola ${name}. Bienvenido a timshell.`,
-      text: `Tu codigo es : ${otp}`,
-      html: `<h4>Hola ${name}. Tu codigo es : <b>${otp}</b></h4>`,
-    };
+  const message = {
+    to: email,
+    from: "info@intuitionstudio.co",
+    subject: `Hola ${name}. Bienvenido a timshell.`,
+    text: `Tu codigo es : ${otp}`,
+    html: `<h4>Hola ${name}. Tu codigo es : <b>${otp}</b></h4>`,
+  };
 
+  try {
     const data = await sendgrid.send(message);
 
-    if (!data[0].statusCode) {
+    if (!data[0]?.statusCode) {
       response.error = true;
       response.message = "Ocurrio un error";
     }
     response.message = "Email enviado";
     return response;
   } catch (error: any) {
+    console.log("III", error);
     response.error = true;
     response.message = error.message;
     return response;
