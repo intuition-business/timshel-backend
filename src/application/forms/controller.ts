@@ -131,7 +131,10 @@ export const getFormsByUserId = async (
 ) => {
   const { user_id } = req.params;
   const response: any = { message: "", error: false, data: [] };
-
+  const { headers } = req;
+  const token = headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (<any>(<unknown>decode)).userId;
   try {
     if (!pool) {
       response.error = true;
@@ -141,20 +144,26 @@ export const getFormsByUserId = async (
 
     const [rows] = await pool.execute(
       "SELECT * FROM formulario WHERE usuario_id = ?",
-      [user_id]
+      [user_id || userId]
     );
 
     response.data = adapterForms(rows);
-    response.message = `Formularios para el usuario con ID ${user_id} obtenidos exitosamente`;
+    response.message = `Formularios para el usuario con ID ${
+      user_id || userId
+    } obtenidos exitosamente`;
     res.status(200).json(response);
   } catch (error) {
     console.error(
-      `Error al obtener los formularios del usuario con ID ${user_id}:`,
+      `Error al obtener los formularios del usuario con ID ${
+        user_id || userId
+      }:`,
       error
     );
     next(error);
     res.status(500).json({
-      message: `Error al obtener los formularios del usuario con ID ${user_id}`,
+      message: `Error al obtener los formularios del usuario con ID ${
+        user_id || userId
+      }`,
     });
   }
 };

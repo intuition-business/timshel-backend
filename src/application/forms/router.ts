@@ -13,7 +13,7 @@ router.post(
   createforms
 );
 router.get(
-  "/:user_id",
+  "/",
   verifyToken,
   validateHandler(getFormsDto, "params"),
   getFormsByUserId

@@ -32,7 +32,6 @@ export const verifyToken = async (
     const decode = token && verify(`${token}`, SECRET);
     req.userId = (<TokenInterface>(<unknown>decode)).userId;
     const verifyUser = await services.findById(req.userId || "");
-    console.log("VERIFY", verifyUser);
     if (!verifyUser) {
       return res
         .status(404)
