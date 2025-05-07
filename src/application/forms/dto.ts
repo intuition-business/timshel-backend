@@ -1,5 +1,5 @@
 import Joi from "joi";
-const user_id = Joi.number().required();
+const user_id = Joi.number();
 const height = Joi.number().required();
 const age = Joi.number().required();
 const weight = Joi.number().required();

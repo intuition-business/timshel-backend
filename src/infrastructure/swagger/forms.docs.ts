@@ -5,15 +5,21 @@ import {
 
 import { Router } from "express";
 import { validateHandler } from "../../middleware";
-import { sendOtpDto } from "../../application/otp/dto";
-import { sendOTP } from "../../application/otp/sendOtp/controller/sendOTP";
-import { createFormsDto } from "../../application/forms/dto";
+import { createFormsDto, getFormsDto } from "../../application/forms/dto";
+import { verifyToken } from "../../middleware/jwtVerify";
 
 const router = Router();
 
 /**
  * @swagger
  * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: apiKey
+ *       in: header
+ *       name: x-access-token
+ *       description: "Token de acceso requerido para la autenticación ejemplo: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjExLCJlbWFpbCI6ImdlbHZlenoyMjNAZ21haWwuY29tIiwiaWF0IjoxNzQ2NjA2MjE2fQ.SEE0djAniALGF9P53cDNUuKwKr6zHTwWxkZ2DI0k_Uk."
+ *
  *   schemas:
  *     create-forms-questions:
  *       type: object
@@ -165,6 +171,8 @@ const router = Router();
  *   post:
  *     summary: retorna unos datos
  *     tags: [Timshell]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -179,10 +187,12 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/create-forms-response'
  *
- * /api/forms/:user_id :
+ * /api/forms/{user_id} :
  *   get:
  *     summary: retorna unos datos
  *     tags: [Timshell]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -199,10 +209,15 @@ const router = Router();
  *
  */
 
-router.post("/forms", validateHandler(createFormsDto, "body"), createforms);
-
-router.get(
-  "/:usuario_id",
+router.post(
+  "/",
+  verifyToken,
   validateHandler(createFormsDto, "body"),
+  createforms
+);
+router.get(
+  "/:user_id",
+  verifyToken,
+  validateHandler(getFormsDto, "params"),
   getFormsByUserId
 );

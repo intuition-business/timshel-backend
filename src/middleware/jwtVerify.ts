@@ -1,23 +1,25 @@
 import { NextFunction, Request, Response } from "express";
-import { IUser } from "../application/register/types";
 import { verify } from "jsonwebtoken";
 
 import { SECRET } from "../config";
-import { RegisterModel } from "../application/register/model";
+import OtpService from "../application/otp/services";
 
 interface AuthenticatedRequest extends Request {
   userId?: string;
 }
 
 interface TokenInterface {
-  userFound: IUser;
+  userId: any;
+  phone?: string;
+  email?: string;
 }
 
 export const verifyToken = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-) => {
+): Promise<any> => {
+  const services = new OtpService();
   const date = new Date();
   try {
     const { headers } = req;
@@ -28,11 +30,9 @@ export const verifyToken = async (
         .json({ message: "token esta vacio", error: true, date });
     }
     const decode = token && verify(`${token}`, SECRET);
-    req.userId = (<TokenInterface>(<unknown>decode)).userFound._id;
-    const verifyUser = await RegisterModel.findById(req.userId, {
-      password: 0,
-    });
-
+    req.userId = (<TokenInterface>(<unknown>decode)).userId;
+    const verifyUser = await services.findById(req.userId || "");
+    console.log("VERIFY", verifyUser);
     if (!verifyUser) {
       return res
         .status(404)

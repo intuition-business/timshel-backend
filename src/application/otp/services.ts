@@ -51,6 +51,10 @@ class OtpService {
     const data = await OtpModel.findByPhone(phone);
     return data;
   }
+  async findById(id: string) {
+    const data = await OtpModel.findById(id);
+    return data;
+  }
 
   async removeOtp(auth_id: string) {
     const data = await OtpModel.removeOtp(auth_id);

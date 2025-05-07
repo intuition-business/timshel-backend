@@ -7,7 +7,7 @@ const options = {
     info: {
       title: "Timshell",
       version: "1.0.0",
-      description: "Una descripción de mi increíble API",
+      description: "Timshell API",
     },
   },
   apis: [path.join(__dirname, "./*.ts")],

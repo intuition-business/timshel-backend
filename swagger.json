@@ -1,0 +1,15 @@
+{
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "securitySchemes": {
+    "bearerAuth": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "x-access-token",
+      "description": "Token de acceso requerido. Ejemplo: eyJhbGciOiJIUzI1NiIs..."
+    }
+  }
+}

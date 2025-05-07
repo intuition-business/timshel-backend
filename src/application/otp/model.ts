@@ -132,6 +132,20 @@ const findByPhone = async (phone: string) => {
   }
 };
 
+const findById = async (id: string) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM ${OTP_AUTH_TABLE} WHERE usuario_id = ?`,
+      [id] // Proporciona el email como parámetro
+    );
+
+    return rows; // Devuelve un array de objetos, donde cada objeto representa una fila
+  } catch (error) {
+    console.error("Error al obtener datos de auth y otp_validation:", error);
+    throw error; // Relanza el error para que pueda ser manejado por quien llama a la función
+  }
+};
+
 const removeOtp = async (auth_id: string) => {
   try {
     const [result] = await pool.execute(
@@ -156,4 +170,5 @@ export const OtpModel = {
   findByPhone,
   updateOtp,
   removeOtp,
+  findById,
 };

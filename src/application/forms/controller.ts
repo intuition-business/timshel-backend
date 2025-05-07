@@ -1,6 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import pool from "../../config/db";
 import { adapterForms } from "./adapter";
+import { verify } from "jsonwebtoken";
+import { SECRET } from "../../config";
 
 export const createforms = async (
   req: Request,
@@ -28,6 +30,11 @@ export const createforms = async (
     illness,
   } = req.body;
 
+  const { headers } = req;
+  const token = headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (<any>(<unknown>decode)).userId;
+
   try {
     if (!pool) {
       response.error = true;
@@ -37,7 +44,7 @@ export const createforms = async (
 
     const [existingForm] = await pool.execute(
       "SELECT usuario_id FROM formulario WHERE usuario_id = ?",
-      [user_id]
+      [user_id || userId]
     );
 
     if ((existingForm as any).length > 0) {
@@ -59,7 +66,7 @@ export const createforms = async (
           meals_per_day,
           foods_not_consumed,
           illness,
-          user_id,
+          user_id || userId,
         ]
       );
 
@@ -78,7 +85,7 @@ export const createforms = async (
       const [result] = await pool.execute(
         "INSERT INTO formulario (usuario_id, estatura, edad, peso, genero, factor_actividad, objetivo, disponibilidad, horas_dia, lesion, patologia, alimentos, comidas_dia, alimentos_no_consumo, enfermedad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
-          user_id,
+          user_id || userId,
           height,
           age,
           weight,

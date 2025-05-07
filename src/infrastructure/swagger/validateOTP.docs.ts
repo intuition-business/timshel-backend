@@ -49,6 +49,7 @@ const router = Router();
  *         - code
  *         - date
  *         - user_id
+ *         - token
  *       properties:
  *         message:
  *           type: string
@@ -65,12 +66,16 @@ const router = Router();
  *         user_id:
  *           type: number
  *           description: id del usuario
+ *         token:
+ *           type: string
+ *           description: token
  *       example:
  *         message: Ah sido verificado con exito.
  *         error: false
  *         date: "2025-04-30T21:07:19.269Z"
  *         status: 200
  *         user_id: 12
+ *         token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEyLCJlbWFpbCI6Iis1NzMxMTQ4MzExNTciLCJpYXQiOjE3NDY2MDU5NjIsImV4cCI6MTc1MDIwNTk2Mn0.WBsuMrgur8v48yPrT1mm3rXwNfsMe8PSLSLiaRMCviY"
  *
  */
 
