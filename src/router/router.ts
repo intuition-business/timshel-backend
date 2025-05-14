@@ -6,8 +6,10 @@ import { loginRouter } from "../application/login";
 import { validateOTPRouter } from "../application/otp/validateOtp";
 import { GoogleRouter } from "../application/google";
 import { formRouter } from "../application/forms";
+import { routinesRouter } from "../application/routines";
 
-const { sendOtp, validateOtp, register, login, google, forms } = path;
+const { sendOtp, validateOtp, register, login, google, forms, getRoutines } =
+  path;
 
 const router = (app: Application) => {
   app.use(sendOtp, sendOtpRouter);
@@ -17,6 +19,7 @@ const router = (app: Application) => {
   app.use(forms, formRouter);
   // app.use(validateData, validateData);
   app.use(validateOtp, validateOTPRouter);
+  app.use(getRoutines, routinesRouter);
 };
 
 export default router;

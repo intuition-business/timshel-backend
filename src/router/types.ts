@@ -9,4 +9,5 @@ export interface PathProps {
   resetPassword: string;
   google: string;
   forms: string;
+  getRoutines: string;
 }

@@ -1,0 +1,314 @@
+[
+  {
+    "nombre": "D\u00eda 1 - Pecho y Tr\u00edceps",
+    "ejercicios": [
+      {
+        "nombre_ejercicio": "PRESS PLANO MANCUERNA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 4,
+          "Detalle series": [
+            { "Reps": 10, "carga": 12 },
+            { "Reps": 10, "carga": 12 },
+            { "Reps": 8, "carga": 14 },
+            { "Reps": 8, "carga": 14 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "APERTURAS MAQUINA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 12, "carga": 10 },
+            { "Reps": 12, "carga": 10 },
+            { "Reps": 10, "carga": 12 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "PRESS FRANCESS EZ",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 10, "carga": 8 },
+            { "Reps": 10, "carga": 8 },
+            { "Reps": 8, "carga": 10 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "FONDOS",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 8, "carga": 0 },
+            { "Reps": 8, "carga": 0 },
+            { "Reps": 6, "carga": 0 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "CURL POLEA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 12, "carga": 8 },
+            { "Reps": 12, "carga": 8 },
+            { "Reps": 10, "carga": 10 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "CRUNCH MAQUINA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 15, "carga": 0 },
+            { "Reps": 15, "carga": 0 },
+            { "Reps": 12, "carga": 0 }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "nombre": "D\u00eda 2 - Espalda y B\u00edceps",
+    "ejercicios": [
+      {
+        "nombre_ejercicio": "HALON ABIERTO",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 4,
+          "Detalle series": [
+            { "Reps": 10, "carga": 15 },
+            { "Reps": 10, "carga": 15 },
+            { "Reps": 8, "carga": 17 },
+            { "Reps": 8, "carga": 17 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "REMO MANCUERNA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 12, "carga": 10 },
+            { "Reps": 12, "carga": 10 },
+            { "Reps": 10, "carga": 12 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "PULL OVER POLEA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 10, "carga": 12 },
+            { "Reps": 10, "carga": 12 },
+            { "Reps": 8, "carga": 14 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "CURL MANCUERNA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 12, "carga": 8 },
+            { "Reps": 12, "carga": 8 },
+            { "Reps": 10, "carga": 10 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "CURL MARTILLO",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 10, "carga": 8 },
+            { "Reps": 10, "carga": 8 },
+            { "Reps": 8, "carga": 10 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "ELEVACIONES DE PIERNAS",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 15, "carga": 0 },
+            { "Reps": 15, "carga": 0 },
+            { "Reps": 12, "carga": 0 }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "nombre": "D\u00eda 3 - Piernas y Gl\u00fateos",
+    "ejercicios": [
+      {
+        "nombre_ejercicio": "SENTADILLA LIBRE",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 4,
+          "Detalle series": [
+            { "Reps": 10, "carga": 20 },
+            { "Reps": 10, "carga": 20 },
+            { "Reps": 8, "carga": 25 },
+            { "Reps": 8, "carga": 25 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "PRENSA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 12, "carga": 40 },
+            { "Reps": 12, "carga": 40 },
+            { "Reps": 10, "carga": 50 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "EXTENSIONES DE RODILLA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 12, "carga": 15 },
+            { "Reps": 12, "carga": 15 },
+            { "Reps": 10, "carga": 20 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "HIP THRUST MAQUINA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 10, "carga": 30 },
+            { "Reps": 10, "carga": 30 },
+            { "Reps": 8, "carga": 35 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "ADUCTOR MAQUINA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 12, "carga": 15 },
+            { "Reps": 12, "carga": 15 },
+            { "Reps": 10, "carga": 20 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "ELEVACIONES DE TALONES RODILLA FLEXIONADA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 15, "carga": 0 },
+            { "Reps": 15, "carga": 0 },
+            { "Reps": 12, "carga": 0 }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "nombre": "D\u00eda 4 - Full Body",
+    "ejercicios": [
+      {
+        "nombre_ejercicio": "PRESS MILITAR MANCUERNA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 4,
+          "Detalle series": [
+            { "Reps": 10, "carga": 10 },
+            { "Reps": 10, "carga": 10 },
+            { "Reps": 8, "carga": 12 },
+            { "Reps": 8, "carga": 12 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "SENTADILLA SMITH",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 10, "carga": 20 },
+            { "Reps": 10, "carga": 20 },
+            { "Reps": 8, "carga": 25 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "REMO MAQUINA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 12, "carga": 15 },
+            { "Reps": 12, "carga": 15 },
+            { "Reps": 10, "carga": 20 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "CURL BAYESIAN",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 12, "carga": 8 },
+            { "Reps": 12, "carga": 8 },
+            { "Reps": 10, "carga": 10 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "ELEVACIONES DE PIERNAS COLGADO",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 10, "carga": 0 },
+            { "Reps": 10, "carga": 0 },
+            { "Reps": 8, "carga": 0 }
+          ]
+        }
+      },
+      {
+        "nombre_ejercicio": "PLANCHA",
+        "Esquema": {
+          "Descanso": 1,
+          "Series": 3,
+          "Detalle series": [
+            { "Reps": 30, "carga": 0 },
+            { "Reps": 30, "carga": 0 },
+            { "Reps": 30, "carga": 0 }
+          ]
+        }
+      }
+    ]
+  }
+]
