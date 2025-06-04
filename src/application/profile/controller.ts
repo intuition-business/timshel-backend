@@ -51,15 +51,10 @@ export const uploadUserImage = async (
   };
 
   try {
-    // Verificar token y obtener userId
-    const token = req.headers["x-access-token"];
-    if (!token) {
-      response.error = true;
-      response.message = "Token no proporcionado";
-      return res.status(401).json(response);
-    }
-    const decoded = verify(token as string, SECRET) as any;
-    const userId = decoded.userId;
+    const { headers } = req;
+    const token = headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
 
     if (!req.file) {
       response.error = true;
@@ -113,7 +108,10 @@ export const getUserImage = async (
   };
 
   try {
-    const { userId } = req.params; // Obtener el userId desde los parámetros de la URL
+    const { headers } = req;
+    const token = headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
 
     // Validación del userId
     if (!userId) {

@@ -18,5 +18,7 @@ router.post(
   asyncHandler(uploadUserImage)
 );
 
-router.get("/user/:userId/image", asyncHandler(getUserImage));
+router.get("/user/image",
+  verifyToken,
+  asyncHandler(getUserImage));
 export default router;

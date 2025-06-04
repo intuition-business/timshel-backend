@@ -17,12 +17,12 @@ const s3 = new S3Client({
     },
 });
 
-// Permitir solo ciertos tipos de archivos (imagenes, pdf, excel)
+
 const allowedMimes = [
-    "image/jpeg", "image/png", "image/gif", "image/webp", // Imágenes
-    "application/pdf", // PDF
-    "application/vnd.ms-excel", // Excel
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // Excel 2007+
+    "image/jpeg", "image/png", "image/gif", "image/webp",
+    "application/pdf",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ];
 
 // Configuración de multer para S3
@@ -42,9 +42,9 @@ const storage = multerS3({
 // Validación de tipo de archivo permitido
 const fileFilter = (req: any, file: any, cb: any) => {
     if (allowedMimes.includes(file.mimetype)) {
-        cb(null, true); // Aceptar el archivo
+        cb(null, true);
     } else {
-        cb(new Error("Tipo de archivo no permitido"), false); // Rechazar el archivo
+        cb(new Error("Tipo de archivo no permitido"), false);
     }
 };
 
@@ -52,5 +52,5 @@ const fileFilter = (req: any, file: any, cb: any) => {
 export const upload = multer({
     storage,
     fileFilter,
-    limits: { fileSize: 50 * 1024 * 1024 }, // Limitar tamaño a 50MB
+    limits: { fileSize: 50 * 1024 * 1024 },
 });
