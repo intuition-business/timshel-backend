@@ -14,7 +14,7 @@ dotenv.config();
 // Configuración de AWS S3
 const s3 = new S3Client({
   region: process.env.AWS_REGION || "us-east-2",
-  endpoint: "https://s3.us-east-2.amazonaws.com",  // Especificar el endpoint de la región
+  endpoint: "https://s3.us-east-2.amazonaws.com",
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
@@ -35,7 +35,7 @@ const storage = multerS3({
   },
 });
 
-// Usamos la configuración de multerS3 en lugar de almacenamiento local
+
 export const upload = multer({ storage });
 
 // Controlador para guardar la imagen vinculada a un usuario
@@ -68,7 +68,7 @@ export const uploadUserImage = async (
     }
 
     // URL de la imagen almacenada en S3
-    const imageUrl = (req.file as any).location; // La URL pública de S3
+    const imageUrl = (req.file as any).location;
 
     // Verificar si ya existe una imagen para este usuario
     const [rows] = await pool.execute(
@@ -98,5 +98,50 @@ export const uploadUserImage = async (
     console.error("Error al subir imagen:", error);
     next(error);
     res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const getUserImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response<any>> => {
+  const response = {
+    message: "",
+    error: false,
+    imageUrl: null,
+  };
+
+  try {
+    const { userId } = req.params; // Obtener el userId desde los parámetros de la URL
+
+    // Validación del userId
+    if (!userId) {
+      response.error = true;
+      response.message = "ID de usuario no proporcionado";
+      return res.status(400).json(response);
+    }
+
+    // Buscar la imagen del usuario en la base de datos
+    const [rows] = await pool.execute(
+      "SELECT image_path FROM user_images WHERE user_id = ?",
+      [userId]
+    );
+
+    if ((rows as any[]).length > 0) {
+      // Si se encuentra una imagen, devolverla
+      const imageUrl = (rows as any[])[0].image_path; // Obtenemos la URL de la imagen de la base de datos
+      response.imageUrl = imageUrl;
+      return res.status(200).json(response); // Enviamos la URL de la imagen
+    } else {
+      // Si no se encuentra la imagen, enviar un mensaje de error
+      response.error = true;
+      response.message = "No se encontró una imagen asociada a este usuario";
+      return res.status(404).json(response);
+    }
+  } catch (error) {
+    console.error("Error al obtener la imagen del usuario:", error);
+    next(error); // Pasamos el error al siguiente middleware de manejo de errores
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };

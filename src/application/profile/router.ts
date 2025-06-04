@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { uploadUserImage, upload } from "./controller";
+import { uploadUserImage, upload, getUserImage } from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";
 
 const router = Router();
@@ -18,4 +18,5 @@ router.post(
   asyncHandler(uploadUserImage)
 );
 
+router.get("/user/:userId/image", asyncHandler(getUserImage));
 export default router;
