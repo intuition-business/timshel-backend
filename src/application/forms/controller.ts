@@ -198,7 +198,6 @@ export const getFormsByUserId = async (
       "SELECT * FROM formulario WHERE usuario_id = ?",
       [user_id || userId]
     );
-
     response.data = adapterForms(rows);
     response.message = `Formularios para el usuario con ID ${
       user_id || userId
