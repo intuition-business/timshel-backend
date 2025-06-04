@@ -1,7 +1,7 @@
 import Joi from "joi";
 const user_id = Joi.number();
 const height = Joi.number().required();
-const age = Joi.number().required();
+const birth_date = Joi.number().required();
 const weight = Joi.number().required();
 const gender = Joi.string().required();
 const activity_factor = Joi.string().required();
@@ -15,10 +15,11 @@ const meals_per_day = Joi.number().required();
 const foods_not_consumed = Joi.string().required();
 const illness = Joi.string().required();
 
+
 export const createFormsDto = Joi.object({
   user_id,
   height,
-  age,
+  birth_date,
   weight,
   gender,
   activity_factor,
