@@ -12,4 +12,5 @@ export const Path: PathProps = {
   google: "/api/auth",
   forms: "/api/forms",
   getRoutines: "/api/get-routines",
+  profile: "/api/profile",
 };

@@ -10,4 +10,5 @@ export interface PathProps {
   google: string;
   forms: string;
   getRoutines: string;
+  profile: string;
 }
