@@ -26,29 +26,30 @@ const router = Router();
  *       required:
  *         - user_id
  *         - height
- *         - age
  *         - weight
  *         - gender
  *         - activity_factor
  *         - goal
- *         - availability
  *         - hours_per_day
  *         - injury
  *         - pathology
- *         - food
- *         - meals_per_day
  *         - foods_not_consumed
  *         - illness
+ *         - allergy
+ *         - usually_dinner
+ *         - usually_lunch
+ *         - usually_breakfast
+ *         - weekly_availability
+ *         - birthday
+ *         - name
+ *         - user_id
  *       properties:
- *         email:
+ *         user_id:
  *           type: number
  *           description: Id de usuario
  *         height:
  *           type: double
  *           description: Estatura de usuario
- *         age:
- *           type: number
- *           description: Edad de usuario
  *         weight:
  *           type: number
  *           description: Peso de usuario
@@ -61,7 +62,7 @@ const router = Router();
  *         goal:
  *           type: string
  *           description: Objetivo de usuario
- *         availability:
+ *         weekly_availability:
  *           type: string
  *           description: Disponibilidad de usuario
  *         hours_per_day:
@@ -73,34 +74,49 @@ const router = Router();
  *         pathology:
  *           type: string
  *           description: Patologias de usuario
- *         food:
+ *         allergy:
  *           type: string
- *           description: Alimentos de usuario
- *         meals_per_day:
- *           type: number
- *           description: Comidas por dia de usuario
+ *           description: Alergia de usuario
  *         foods_not_consumed:
  *           type: string
  *           description: Alimentos no consumidos por el usuario
  *         illness:
  *           type: string
  *           description: Enfermedades de usuario
+ *         usually_breakfast:
+ *           type: string
+ *           description: desayuno de usuario
+ *         usually_lunch:
+ *           type: string
+ *           description: almuerzo de usuario
+ *         usually_dinner:
+ *           type: string
+ *           description: cena de usuario
+ *         birthday:
+ *           type: string
+ *           description: fecha de nacimiento de usuario
+ *         name:
+ *           type: string
+ *           description: nombre de usuario
  *       example:
  *         user_id: 12
  *         height: 1.70
- *         age: 28
- *         weight: 180
+ *         weight: 160
  *         gender: Masculino
- *         factor_actividad: Mucho xd
+ *         activity_factor: Mucho xd
  *         goal: perder grasa
- *         availability: 7 dias
  *         hours_per_day: 1
  *         injury: No
- *         pathology: Nunguna
- *         food: Todos
- *         meals_per_day: 3
+ *         pathology: Ninguna
  *         foods_not_consumed: Ninguno
  *         illness: No
+ *         allergy: No
+ *         usually_dinner: Pollo
+ *         usually_lunch: Carne
+ *         usually_breakfast: Arepa
+ *         weekly_availability: 5
+ *         birthday: 1997/02/22
+ *         name: Carlos
  *
  *     get-forms-questions:
  *       type: object

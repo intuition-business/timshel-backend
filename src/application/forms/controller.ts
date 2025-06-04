@@ -3,6 +3,7 @@ import pool from "../../config/db";
 import { adapterForms } from "./adapter";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
+import calcularEdad from "./useCase/calcularEdad";
 
 export const createforms = async (
   req: Request,
@@ -15,7 +16,7 @@ export const createforms = async (
   const {
     user_id,
     height,
-    age,
+    //age,
     weight,
     gender,
     activity_factor,
@@ -24,17 +25,22 @@ export const createforms = async (
     hours_per_day,
     injury,
     pathology,
-    food,
-    meals_per_day,
     foods_not_consumed,
     illness,
+    allergy,
+    usually_dinner,
+    usually_lunch,
+    usually_breakfast,
+    weekly_availability,
+    birthday,
+    name,
   } = req.body;
 
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
-
+  const newAge = calcularEdad(birthday);
   try {
     if (!pool) {
       response.error = true;
@@ -50,22 +56,45 @@ export const createforms = async (
     if ((existingForm as any).length > 0) {
       const formulario_id = (existingForm as any)[0].id;
       const [updateResult] = await pool.execute(
-        "UPDATE formulario SET estatura = ?, edad = ?, peso = ?, genero = ?, factor_actividad = ?, objetivo = ?, disponibilidad = ?, horas_dia = ?, lesion = ?, patologia = ?, alimentos = ?, comidas_dia = ?, alimentos_no_consumo = ?, enfermedad = ? WHERE usuario_id = ?",
+        `UPDATE formulario SET 
+          estatura = ?, 
+          edad = ?, 
+          peso = ?, 
+          genero = ?, 
+          factor_actividad = ?, 
+          objetivo = ?, 
+          horas_dia = ?, 
+          lesion = ?, 
+          patologia = ?, 
+          alimentos_no_consumo = ?,
+          enfermedad = ?,
+          alergia = ?,
+          cena = ?,
+          almuerzo = ?,
+          desayuno = ?,
+          actividad_semanal = ?,
+          fecha_nacimiento = ?,
+          name = ?
+        WHERE usuario_id = ?`,
         [
           height,
-          age,
+          newAge,
           weight,
           gender,
           activity_factor,
           goal,
-          availability,
           hours_per_day,
           injury,
           pathology,
-          food,
-          meals_per_day,
           foods_not_consumed,
           illness,
+          allergy,
+          usually_dinner,
+          usually_lunch,
+          usually_breakfast,
+          weekly_availability,
+          birthday,
+          name,
           user_id || userId,
         ]
       );
@@ -83,11 +112,32 @@ export const createforms = async (
       }
     } else {
       const [result] = await pool.execute(
-        "INSERT INTO formulario (usuario_id, estatura, edad, peso, genero, factor_actividad, objetivo, disponibilidad, horas_dia, lesion, patologia, alimentos, comidas_dia, alimentos_no_consumo, enfermedad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        `INSERT INTO formulario (
+          usuario_id, 
+          estatura, 
+          edad, 
+          peso, 
+          genero, 
+          factor_actividad,
+          objetivo, 
+          disponibilidad, 
+          horas_dia, 
+          lesion, 
+          patologia, 
+          alimentos_no_consumo, 
+          enfermedad, 
+          alergia,
+          cena,
+          almuerzo,
+          desayuno,
+          disponibilidad_mensual,
+          fecha_nacimiento,
+          nombre,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           user_id || userId,
           height,
-          age,
+          newAge,
           weight,
           gender,
           activity_factor,
@@ -96,10 +146,15 @@ export const createforms = async (
           hours_per_day,
           injury,
           pathology,
-          food,
-          meals_per_day,
           foods_not_consumed,
           illness,
+          allergy,
+          usually_dinner,
+          usually_lunch,
+          usually_breakfast,
+          weekly_availability,
+          birthday,
+          name,
         ]
       );
 
