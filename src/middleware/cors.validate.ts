@@ -1,10 +1,10 @@
 import { CorsOptions } from "cors";
 
-const whiteList = [""];
+const whiteList = ["*"];
 
 const cosrsOptions: CorsOptions = {
   origin: (origin, callback) => {
-    if (!origin || whiteList.indexOf(origin) !== -1) {
+    if (!origin || whiteList.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error("access denied - CORS-disabled to white list"));
