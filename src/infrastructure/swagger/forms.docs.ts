@@ -114,7 +114,7 @@ const router = Router();
  *         usually_dinner: Pollo
  *         usually_lunch: Carne
  *         usually_breakfast: Arepa
- *         weekly_availability: 5
+ *         weekly_availability: "5"
  *         birthday: 1997/02/22
  *         name: Carlos
  *
@@ -148,7 +148,7 @@ const router = Router();
  *       example:
  *         message: Formularios para el usuario con ID 12 obtenidos exitosamente
  *         error: false
- *         data: [{user_id: 12, height: 1.70, age: 28, weight: 180, gender: "Masculino",activity_factor: "Mucho xd",goal: "perder grasa",availability: "7 dias",hours_per_day: 1,injury: "No",pathology: "Ninguna",food: "todos",meals_per_day: 3,foods_not_consumed: "Ninguno",illness: "No"}]
+ *         data: [{user_id: 12, height: 1.70, age: 28, weight: 180, gender: "Masculino",activity_factor: "Mucho xd",goal: "perder grasa",hours_per_day: 1,injury: "No",pathology: "Ninguna",food: "todos",meals_per_day: 3,foods_not_consumed: "Ninguno",illness: "No"}]
  *
  *     create-forms-response:
  *       type: object
