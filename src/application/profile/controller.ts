@@ -128,9 +128,9 @@ export const getUserImage = async (
 
     if ((rows as any[]).length > 0) {
       // Si se encuentra una imagen, devolverla
-      const imageUrl = (rows as any[])[0].image_path; // Obtenemos la URL de la imagen de la base de datos
+      const imageUrl = (rows as any[])[0].image_path;
       response.imageUrl = imageUrl;
-      return res.status(200).json(response); // Enviamos la URL de la imagen
+      return res.status(200).json(response);
     } else {
       // Si no se encuentra la imagen, enviar un mensaje de error
       response.error = true;
@@ -139,7 +139,7 @@ export const getUserImage = async (
     }
   } catch (error) {
     console.error("Error al obtener la imagen del usuario:", error);
-    next(error); // Pasamos el error al siguiente middleware de manejo de errores
+    next(error);
     return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
