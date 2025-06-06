@@ -5,7 +5,7 @@ import { SECRET } from "../../config";
 import multer from "multer";
 import path from "path";
 import multerS3 from "multer-s3";
-import { S3Client } from "@aws-sdk/client-s3";
+import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import dotenv from "dotenv";
 
 // Cargar variables de entorno de AWS
@@ -139,6 +139,54 @@ export const getUserImage = async (
     }
   } catch (error) {
     console.error("Error al obtener la imagen del usuario:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const deleteUserImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response<any>> => {
+  const response = {
+    message: "",
+    error: false,
+  };
+
+  try {
+    const { headers } = req;
+    const token = headers["x-access-token"];
+    const decoded = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decoded)).userId;
+
+    // Validación del userId
+    if (!userId) {
+      response.error = true;
+      response.message = "ID de usuario no proporcionado";
+      return res.status(400).json(response);
+    }
+
+    // Buscar la imagen del usuario en la base de datos
+    const [rows] = await pool.execute(
+      "SELECT image_path FROM user_images WHERE user_id = ?",
+      [userId]
+    );
+
+    if ((rows as any[]).length === 0) {
+      // Si no se encuentra la imagen, enviar un mensaje de error
+      response.error = true;
+      response.message = "No se encontró una imagen asociada a este usuario";
+      return res.status(404).json(response);
+    }
+
+    // Eliminar la imagen de la base de datos
+    await pool.execute("DELETE FROM user_images WHERE user_id = ?", [userId]);
+
+    response.message = "Imagen de perfil eliminada correctamente de la base de datos";
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("Error al eliminar la imagen del usuario:", error);
     next(error);
     return res.status(500).json({ message: "Error interno del servidor" });
   }
