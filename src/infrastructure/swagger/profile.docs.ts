@@ -1,8 +1,7 @@
 import { Router } from "express";
-
 import { verifyToken } from "../../middleware/jwtVerify";
 import { upload } from "../../services/fileService";
-import { getUserImage, uploadUserImage } from "../../application/profile/controller";
+import { getUserImage, uploadUserImage, deleteUserImage } from "../../application/profile/controller";
 
 const router = Router();
 
@@ -68,7 +67,23 @@ const router = Router();
  *         message: "Imagen obtenida exitosamente."
  *         error: false
  *         imageUrl: "https://s3.amazonaws.com/user-images/1234567890.png"
- *   
+ * 
+ *     delete-image-response:
+ *       type: object
+ *       required:
+ *         - message
+ *         - error
+ *       properties:
+ *         message:
+ *           type: string
+ *           description: "Mensaje de respuesta."
+ *         error:
+ *           type: boolean
+ *           description: "Indica si hubo un error."
+ *       example:
+ *         message: "Imagen eliminada exitosamente."
+ *         error: false
+ * 
  */
 
 /**
@@ -137,6 +152,32 @@ const router = Router();
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/get-image-response'
+ * 
+ * /api/profile/user/image/delete:
+ *   delete:
+ *     summary: "Elimina la imagen de perfil del usuario"
+ *     tags: [Timshell]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: "Imagen eliminada exitosamente"
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/delete-image-response'
+ *       404:
+ *         description: "No se encontró una imagen para eliminar"
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/delete-image-response'
+ *       500:
+ *         description: "Error interno del servidor"
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/delete-image-response'
  */
 
 function asyncHandler(fn: any) {
@@ -156,6 +197,13 @@ router.get(
     "/user/image",
     verifyToken,
     asyncHandler(getUserImage)
+);
+
+// Nueva ruta para eliminar la imagen de perfil
+router.delete(
+    "/user/image/delete",
+    verifyToken,
+    asyncHandler(deleteUserImage)
 );
 
 
