@@ -4,6 +4,8 @@ import { adapterForms } from "./adapter";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import calcularEdad from "./useCase/calcularEdad";
+import { InsertForm } from "./useCase/insertForm";
+import { UpdateForm } from "./useCase/updateForm";
 
 export const createforms = async (
   req: Request,
@@ -54,49 +56,27 @@ export const createforms = async (
 
     if ((existingForm as any).length > 0) {
       const formulario_id = (existingForm as any)[0].id;
-      const [updateResult] = await pool.execute(
-        `UPDATE formulario SET 
-          estatura = ?, 
-          edad = ?, 
-          peso = ?, 
-          genero = ?, 
-          factor_actividad = ?, 
-          horas_dia = ?,
-          objetivo = ?,
-          lesion = ?, 
-          patologia = ?, 
-          alimentos_no_consumo = ?,
-          enfermedad = ?,
-          alergia = ?,
-          cena = ?,
-          almuerzo = ?,
-          desayuno = ?,
-          actividad_semanal = ?,
-          fecha_nacimiento = ?,
-          name = ?
-        WHERE usuario_id = ?`,
-        [
-          height,
-          newAge,
-          weight,
-          gender,
-          activity_factor,
-          hours_per_day,
-          goal,
-          injury,
-          pathology,
-          foods_not_consumed,
-          illness,
-          allergy,
-          usually_dinner,
-          usually_lunch,
-          usually_breakfast,
-          weekly_availability,
-          birthday,
-          name,
-          user_id || userId,
-        ]
-      );
+      const updateResult = await UpdateForm({
+        user_id: user_id || userId,
+        height,
+        age: newAge,
+        weight,
+        gender,
+        activity_factor,
+        goal,
+        hours_per_day,
+        injury,
+        pathology,
+        foods_not_consumed,
+        illness,
+        allergy,
+        usually_dinner,
+        usually_lunch,
+        usually_breakfast,
+        weekly_availability,
+        birthday,
+        name,
+      });
 
       if ((updateResult as any).affectedRows > 0) {
         response.message = "Formulario actualizado exitosamente";
@@ -110,50 +90,27 @@ export const createforms = async (
         return;
       }
     } else {
-      const [result] = await pool.execute(
-        `INSERT INTO formulario (
-          usuario_id, 
-          estatura, 
-          edad, 
-          peso, 
-          genero, 
-          factor_actividad,
-          objetivo, 
-          horas_dia, 
-          lesion, 
-          patologia, 
-          alimentos_no_consumo, 
-          enfermedad, 
-          alergia,
-          cena,
-          almuerzo,
-          desayuno,
-          actividad_semanal,
-          fecha_nacimiento,
-          name
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          user_id || userId,
-          height,
-          newAge,
-          weight,
-          gender,
-          activity_factor,
-          goal,
-          hours_per_day,
-          injury,
-          pathology,
-          foods_not_consumed,
-          illness,
-          allergy,
-          usually_dinner,
-          usually_lunch,
-          usually_breakfast,
-          weekly_availability,
-          birthday,
-          name,
-        ]
-      );
+      const result = await InsertForm({
+        user_id: user_id || userId,
+        height,
+        age: newAge,
+        weight,
+        gender,
+        activity_factor,
+        goal,
+        hours_per_day,
+        injury,
+        pathology,
+        foods_not_consumed,
+        illness,
+        allergy,
+        usually_dinner,
+        usually_lunch,
+        usually_breakfast,
+        weekly_availability,
+        birthday,
+        name,
+      });
 
       if ((result as any).insertId) {
         response.message = "Formulario creado exitosamente";
