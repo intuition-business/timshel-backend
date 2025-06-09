@@ -49,14 +49,14 @@ export const createforms = async (
       res.status(500).json(response);
     }
 
-    const [existingForm] = await pool.execute(
-      "SELECT usuario_id FROM formulario WHERE usuario_id = ?",
+    const [existingForm]: any = await pool.execute(
+      "SELECT * FROM formulario WHERE usuario_id = ?",
       [user_id || userId]
     );
 
-    if ((existingForm as any).length > 0) {
+    if (existingForm.length > 0) {
       const formulario_id = (existingForm as any)[0].id;
-      const updateResult = await UpdateForm({
+      const updateResult: any = await UpdateForm({
         user_id: user_id || userId,
         height,
         age: newAge,
@@ -78,7 +78,7 @@ export const createforms = async (
         name,
       });
 
-      if ((updateResult as any).affectedRows > 0) {
+      if (updateResult.affectedRows > 0) {
         response.message = "Formulario actualizado exitosamente";
         response.formulario_id = formulario_id;
         res.status(200).json(response);
@@ -90,7 +90,7 @@ export const createforms = async (
         return;
       }
     } else {
-      const result = await InsertForm({
+      const result: any = await InsertForm({
         user_id: user_id || userId,
         height,
         age: newAge,
@@ -112,7 +112,7 @@ export const createforms = async (
         name,
       });
 
-      if ((result as any).insertId) {
+      if (result.insertId) {
         response.message = "Formulario creado exitosamente";
         response.formulario_id = (result as any).insertId;
         res.status(201).json(response);
