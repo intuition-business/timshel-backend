@@ -41,7 +41,7 @@ export const createforms = async (
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
-  const newAge = calcularEdad(birthday);
+  const newAge = birthday ? calcularEdad(birthday) : null;
   try {
     if (!pool) {
       response.error = true;
