@@ -41,7 +41,6 @@ export const createforms = async (
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
-  const newAge = birthday ? calcularEdad(birthday) : null;
   try {
     if (!pool) {
       response.error = true;
@@ -53,7 +52,11 @@ export const createforms = async (
       "SELECT * FROM formulario WHERE usuario_id = ?",
       [user_id || userId]
     );
-
+    console.log("@@ - - - - - - ", existingForm);
+    const newAge =
+      birthday && existingForm.length === 0
+        ? calcularEdad(birthday)
+        : existingForm?.[0]?.edad;
     if (existingForm.length > 0) {
       const formulario_id = (existingForm as any)[0].id;
       const updateResult: any = await UpdateForm({
