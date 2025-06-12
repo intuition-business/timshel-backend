@@ -62,7 +62,6 @@ export const sendOTP = async (
     try {
       response = await sendWithPhonenumber(phonenumber, otp, name);
       const thereIsUser: any = await services.findByPhone(phonenumber);
-      console.log("PPPP", response);
       if (!response.error) {
         const createDB = await services.create(otpData, thereIsUser);
         res?.status(200).json({ ...response, user_id: createDB?.user_id });
