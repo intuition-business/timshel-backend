@@ -26,7 +26,6 @@ export const sendWithEmail = async (
 
   try {
     const data = await sendgrid.send(message);
-    console.log("DATA SENDEMAIL:", data);
     if (!data[0]?.statusCode) {
       response.error = true;
       response.message = "Ocurrio un error";
