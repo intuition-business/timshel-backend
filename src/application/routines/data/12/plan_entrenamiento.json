@@ -1,0 +1,679 @@
+{
+  "training_plan": [
+    {
+      "nombre": "Día 1 - Pecho y Tríceps",
+      "ejercicios": [
+        {
+          "nombre_ejercicio": "PRESS PLANO BARRA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 4,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 60
+              },
+              {
+                "Reps": 10,
+                "carga": 60
+              },
+              {
+                "Reps": 8,
+                "carga": 70
+              },
+              {
+                "Reps": 8,
+                "carga": 70
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "APERTURAS MAQUINA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 30
+              },
+              {
+                "Reps": 12,
+                "carga": 30
+              },
+              {
+                "Reps": 10,
+                "carga": 35
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "PRESS FRANCES MANCUERNA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 25
+              },
+              {
+                "Reps": 10,
+                "carga": 25
+              },
+              {
+                "Reps": 8,
+                "carga": 30
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "PUSH DOWN",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 40
+              },
+              {
+                "Reps": 12,
+                "carga": 40
+              },
+              {
+                "Reps": 10,
+                "carga": 45
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "FONDOS",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 8,
+                "carga": 0
+              },
+              {
+                "Reps": 8,
+                "carga": 0
+              },
+              {
+                "Reps": 6,
+                "carga": 0
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "CRUNCH MAQUINA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 15,
+                "carga": 20
+              },
+              {
+                "Reps": 15,
+                "carga": 20
+              },
+              {
+                "Reps": 12,
+                "carga": 25
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nombre": "Día 2 - Espalda y Bíceps",
+      "ejercicios": [
+        {
+          "nombre_ejercicio": "HALON ABIERTO",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 4,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 60
+              },
+              {
+                "Reps": 10,
+                "carga": 60
+              },
+              {
+                "Reps": 8,
+                "carga": 70
+              },
+              {
+                "Reps": 8,
+                "carga": 70
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "REMO MANCUERNA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 25
+              },
+              {
+                "Reps": 12,
+                "carga": 25
+              },
+              {
+                "Reps": 10,
+                "carga": 30
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "DOMINADAS",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 6,
+                "carga": 0
+              },
+              {
+                "Reps": 6,
+                "carga": 0
+              },
+              {
+                "Reps": 5,
+                "carga": 0
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "CURL MANCUERNA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 20
+              },
+              {
+                "Reps": 10,
+                "carga": 20
+              },
+              {
+                "Reps": 8,
+                "carga": 25
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "CURL MARTILLO",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 20
+              },
+              {
+                "Reps": 10,
+                "carga": 20
+              },
+              {
+                "Reps": 8,
+                "carga": 25
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "PLANCHA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 30,
+                "carga": 0
+              },
+              {
+                "Reps": 30,
+                "carga": 0
+              },
+              {
+                "Reps": 30,
+                "carga": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nombre": "Día 3 - Piernas",
+      "ejercicios": [
+        {
+          "nombre_ejercicio": "SENTADILLA LIBRE",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 4,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 80
+              },
+              {
+                "Reps": 10,
+                "carga": 80
+              },
+              {
+                "Reps": 8,
+                "carga": 90
+              },
+              {
+                "Reps": 8,
+                "carga": 90
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "PRENSA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 120
+              },
+              {
+                "Reps": 12,
+                "carga": 120
+              },
+              {
+                "Reps": 10,
+                "carga": 140
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "EXTENSIONES DE RODILLA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 40
+              },
+              {
+                "Reps": 12,
+                "carga": 40
+              },
+              {
+                "Reps": 10,
+                "carga": 50
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "FLEXION DE RODILLA ACOSTADO",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 30
+              },
+              {
+                "Reps": 12,
+                "carga": 30
+              },
+              {
+                "Reps": 10,
+                "carga": 35
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "TIJERA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 15
+              },
+              {
+                "Reps": 10,
+                "carga": 15
+              },
+              {
+                "Reps": 8,
+                "carga": 20
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "ELEVACIONES DE TALONES RODILLA FLEXIONADA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 15,
+                "carga": 30
+              },
+              {
+                "Reps": 15,
+                "carga": 30
+              },
+              {
+                "Reps": 12,
+                "carga": 35
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nombre": "Día 4 - Hombros y Abdomen",
+      "ejercicios": [
+        {
+          "nombre_ejercicio": "PRESS MILITAR BARRA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 4,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 50
+              },
+              {
+                "Reps": 10,
+                "carga": 50
+              },
+              {
+                "Reps": 8,
+                "carga": 60
+              },
+              {
+                "Reps": 8,
+                "carga": 60
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "VUELOS LATERALES MANCUERNA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 10
+              },
+              {
+                "Reps": 12,
+                "carga": 10
+              },
+              {
+                "Reps": 10,
+                "carga": 12
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "ELEVACIONES FRONTALES MANCUERNA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 10
+              },
+              {
+                "Reps": 12,
+                "carga": 10
+              },
+              {
+                "Reps": 10,
+                "carga": 12
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "FACE PULL POLEA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 30
+              },
+              {
+                "Reps": 12,
+                "carga": 30
+              },
+              {
+                "Reps": 10,
+                "carga": 35
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "CRUNCH V",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 15,
+                "carga": 0
+              },
+              {
+                "Reps": 15,
+                "carga": 0
+              },
+              {
+                "Reps": 12,
+                "carga": 0
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "ELEVACIONES DE PIERNAS",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 0
+              },
+              {
+                "Reps": 12,
+                "carga": 0
+              },
+              {
+                "Reps": 10,
+                "carga": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nombre": "Día 5 - Full Body",
+      "ejercicios": [
+        {
+          "nombre_ejercicio": "PESO MUERTO CONVENCIONAL",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 4,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 80
+              },
+              {
+                "Reps": 10,
+                "carga": 80
+              },
+              {
+                "Reps": 8,
+                "carga": 90
+              },
+              {
+                "Reps": 8,
+                "carga": 90
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "SENTADILLA SMITH",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 12,
+                "carga": 70
+              },
+              {
+                "Reps": 12,
+                "carga": 70
+              },
+              {
+                "Reps": 10,
+                "carga": 80
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "PRESS INCLINADO BARRA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 60
+              },
+              {
+                "Reps": 10,
+                "carga": 60
+              },
+              {
+                "Reps": 8,
+                "carga": 70
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "CURL BAYESIAN",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 20
+              },
+              {
+                "Reps": 10,
+                "carga": 20
+              },
+              {
+                "Reps": 8,
+                "carga": 25
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "FONDOS MAQUINA",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 10,
+                "carga": 0
+              },
+              {
+                "Reps": 10,
+                "carga": 0
+              },
+              {
+                "Reps": 8,
+                "carga": 0
+              }
+            ]
+          }
+        },
+        {
+          "nombre_ejercicio": "DRAGON FLAG",
+          "Esquema": {
+            "Descanso": 1,
+            "Series": 3,
+            "Detalle series": [
+              {
+                "Reps": 8,
+                "carga": 0
+              },
+              {
+                "Reps": 8,
+                "carga": 0
+              },
+              {
+                "Reps": 6,
+                "carga": 0
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

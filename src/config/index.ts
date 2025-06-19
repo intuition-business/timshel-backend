@@ -15,6 +15,8 @@ const API_KEY_SENDGRID = process.env.API_KEY_SENDGRID || "";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 
+const OPENAI_KEY = process.env.OPENIA_KEY || "";
+
 export {
   DB_PASSWORD,
   DB_USER,
@@ -28,4 +30,5 @@ export {
   API_KEY_SENDGRID,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
+  OPENAI_KEY,
 };

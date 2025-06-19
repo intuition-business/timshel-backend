@@ -48,6 +48,7 @@ jobs:
             echo AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} >> .env
             echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
             echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
+            echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
           fi
 
           # For Development (dev branch)
@@ -71,6 +72,8 @@ jobs:
             echo AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} >> .env
             echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
             echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
+            echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
+
           fi
 
           # Common environment variables for both
@@ -94,6 +97,8 @@ jobs:
             echo AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} >> .env
             echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
             echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
+            echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
+
 
       # Validate .env file contents
       - name: Print .env file contents for debugging
