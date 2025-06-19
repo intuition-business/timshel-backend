@@ -1,10 +1,15 @@
 import { Router } from "express";
-import { getRoutines } from "./controller";
+import {
+  getRoutines,
+  generateRoutinesIa,
+  getGeneratedRoutinesIa,
+} from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";
-//import { verifyToken } from "../../../middleware/authJwt";
 
 const router = Router();
 
 router.get("/", verifyToken, getRoutines);
+router.post("/ia", verifyToken, generateRoutinesIa);
+router.get("/ia", verifyToken, getGeneratedRoutinesIa);
 
 export default router;

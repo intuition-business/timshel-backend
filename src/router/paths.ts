@@ -11,6 +11,6 @@ export const Path: PathProps = {
   resetPassword: "/api/reset-password",
   google: "/api/auth",
   forms: "/api/forms",
-  getRoutines: "/api/get-routines",
+  getRoutines: "/api/routines",
   profile: "/api/profile",
 };
