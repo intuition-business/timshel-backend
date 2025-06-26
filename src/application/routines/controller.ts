@@ -6,6 +6,7 @@ import { getOpenAI } from "../../infrastructure/openIA";
 import { adapter } from "./useCase/adapter";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
+import pool from "../../config/db";
 
 export const getRoutines = async (
   req: Request,
@@ -52,12 +53,16 @@ export const generateRoutinesIa = async (
   next: NextFunction
 ) => {
   try {
-    const { body, headers } = req;
+    const { headers } = req;
     const token = headers["x-access-token"];
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
 
-    const personData = adapter(body);
+    const [rows]: any = await pool.execute(
+      "SELECT * FROM formulario WHERE usuario_id = ?",
+      [userId]
+    );
+    const personData = adapter(rows?.[0]);
     const prompt = await readFiles(personData);
     const { response, error } = await getOpenAI(prompt);
 
@@ -76,9 +81,9 @@ export const generateRoutinesIa = async (
       );
 
       res.json({
-        response: response.choices[0].message.content,
+        response: "Documento generado.",
         error: false,
-        message: "Ok",
+        message: "Documento generado.",
       });
       return;
     }
