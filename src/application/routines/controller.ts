@@ -98,3 +98,79 @@ export const generateRoutinesIa = async (
     next(error);
   }
 };
+
+export const getRoutinesSaved = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { headers } = req;
+    const token = headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    const [rows]: any = await pool.execute(
+      "SELECT * FROM complete_rutina WHERE user_id = ?",
+      [userId]
+    );
+
+    if (rows.length > 0) {
+      const responseData = rows.map((item: any) => {
+        return {
+          fecha_rutina: item?.fecha_rutina,
+          id: item?.id,
+          rutina: JSON.parse(item?.rutina),
+        };
+      });
+
+      res.status(200).json({
+        error: false,
+        message: "Rutinas guardadas",
+        response: responseData,
+      });
+      return;
+    }
+    res.status(404).json({
+      error: true,
+      response: undefined,
+      message: "No se encontro rutinas guardadas",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const routinesSaved = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { headers, body } = req;
+    const token = headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+    const { fecha_rutina, rutina } = body;
+    const parsedRutina = JSON.stringify(rutina).trim();
+    const [result] = await pool.execute(
+      "INSERT INTO complete_rutina (fecha_rutina,rutina, user_id) VALUES (?, ?, ?)",
+      [fecha_rutina, parsedRutina, userId]
+    );
+
+    if (result) {
+      res.status(200).json({
+        error: false,
+        message: "Rutinas guardadas",
+        response: result,
+      });
+    }
+    res.status(404).json({
+      error: true,
+      response: undefined,
+      message: "No se encontro rutinas guardadas",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
