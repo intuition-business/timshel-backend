@@ -52,7 +52,6 @@ export const createforms = async (
       "SELECT * FROM formulario WHERE usuario_id = ?",
       [user_id || userId]
     );
-    console.log("@@ - - - - - - ", existingForm);
     const newAge =
       birthday && existingForm.length === 0
         ? calcularEdad(birthday)
