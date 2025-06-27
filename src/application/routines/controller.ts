@@ -33,10 +33,13 @@ export const getGeneratedRoutinesIa = async (
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
-  const filePath = path.join(
-    __dirname,
-    `data/${userId}/plan_entrenamiento.json`
-  );
+
+  // const filePath = path.join(
+  //   __dirname,
+  //   `data/${userId}/plan_entrenamiento.json`
+  // );
+
+  const filePath = `/usr/src/app/src/application/routines/data/${userId}/plan_entrenamiento.json`;
   try {
     const data = await fs.readFile(filePath, "utf8");
     res.json(JSON.parse(data)); // Express automáticamente establece el Content-Type a application/json y envía el JSON
