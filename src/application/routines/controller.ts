@@ -84,6 +84,7 @@ export const generateRoutinesIa = async (
         response: "Documento generado.",
         error: false,
         message: "Documento generado.",
+        path_file: pathFilePrompt,
       });
       return;
     }
