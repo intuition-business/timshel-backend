@@ -11,4 +11,5 @@ export interface PathProps {
   forms: string;
   getRoutines: string;
   profile: string;
+  routineDays: string;
 }
