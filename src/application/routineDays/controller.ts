@@ -44,6 +44,26 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
     // Generamos la rutina para los días seleccionados
     const routineData = await generateGlobalRoutine(selected_days, startDate, endDate);
 
+    // Validamos si alguna de las fechas y días ya existe
+    const duplicates = [];
+    for (const item of routineData) {
+      const [existingRoutine] = await pool.execute(
+        "SELECT id FROM user_routine WHERE user_id = ? AND day = ? AND date = ?",
+        [userId, item.day, item.date]
+      );
+
+      if ((existingRoutine as any).length > 0) {
+        duplicates.push(item);
+      }
+    }
+
+    // Si existen duplicados, respondemos con un error
+    if (duplicates.length > 0) {
+      response.error = true;
+      response.message = `Ya existe una rutina para los siguientes días: ${duplicates.map(item => `${item.day} ${formatDateWithSlash(new Date(item.date))}`).join(", ")}`;
+      return res.status(400).json(response);
+    }
+
     // Insertar en la base de datos
     const query = "INSERT INTO user_routine (user_id, day, date, start_date, end_date) VALUES ?";
     const [result]: any = await pool.query(query, [routineData.map(item => [userId, item.day, item.date, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]])]);
@@ -66,6 +86,7 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
     return res.status(500).json({ message: "Error al crear la rutina." });
   }
 };
+
 
 // Genera las fechas de la rutina
 const generateGlobalRoutine = (selectedDays: string[], startDate: Date, endDate: Date) => {
