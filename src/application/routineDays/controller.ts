@@ -14,7 +14,6 @@ const formatDateWithSlash = (date: Date) => {
   return `${day}/${month}/${year}`; // Formato "DD/MM/YYYY"
 };
 
-// Crear la rutina global para un usuario
 export const createRoutine = async (req: Request, res: Response, next: NextFunction) => {
   const { selected_days, start_date } = req.body;  // Días seleccionados y fecha de inicio enviados desde el frontend
 
@@ -30,6 +29,25 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
       response.error = true;
       response.message = "No se seleccionaron días para la rutina.";
       return res.status(400).json(response);
+    }
+
+    // Obtener la última rutina del usuario para comparar las fechas
+    const [lastRoutineRow] = await pool.execute(
+      "SELECT end_date FROM user_routine WHERE user_id = ? ORDER BY end_date DESC LIMIT 1",
+      [userId]
+    ) as [Array<{ end_date: string }>, any];
+
+    // Si no hay ninguna rutina, permitir crear una nueva
+    if (lastRoutineRow.length > 0) {
+      const lastEndDate = new Date(lastRoutineRow[0].end_date);
+      const startDate = new Date(start_date);  // Fecha proporcionada por el usuario
+
+      // Verificar que la fecha de inicio de la nueva rutina sea mayor que la fecha de fin de la última rutina
+      if (startDate <= lastEndDate) {
+        response.error = true;
+        response.message = `La fecha de inicio de la nueva rutina debe ser posterior a la fecha de fin de la última rutina, que fue el ${formatDateWithSlash(lastEndDate)}`;
+        return res.status(400).json(response);
+      }
     }
 
     // Usar la fecha de inicio proporcionada desde el frontend
@@ -86,7 +104,6 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
     return res.status(500).json({ message: "Error al crear la rutina." });
   }
 };
-
 
 // Genera las fechas de la rutina
 const generateGlobalRoutine = (selectedDays: string[], startDate: Date, endDate: Date) => {
