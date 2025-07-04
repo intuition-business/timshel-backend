@@ -8,8 +8,9 @@ import { GoogleRouter } from "../application/google";
 import { formRouter } from "../application/forms";
 import { routinesRouter } from "../application/routines";
 import { profileRouter } from "../application/profile";
+import { routineRouter } from "../application/routineDays";
 
-const { sendOtp, validateOtp, register, login, google, forms, getRoutines, profile } =
+const { sendOtp, validateOtp, register, login, google, forms, getRoutines, profile, routineDays } =
   path;
 
 const router = (app: Application) => {
@@ -23,6 +24,8 @@ const router = (app: Application) => {
   app.use(validateOtp, validateOTPRouter);
   app.use(getRoutines, routinesRouter);
   app.use(profile, profileRouter);
+  app.use(routineDays, routineRouter);
+
 };
 
 export default router;
