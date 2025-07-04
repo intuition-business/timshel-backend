@@ -19,29 +19,30 @@ function asyncHandler(fn: any) {
 // Ruta POST para crear una rutina
 router.post(
   "/create",
-  verifyToken,
-  asyncHandler(createRoutine)
+  verifyToken,  // Verificación de token
+  asyncHandler(createRoutine)  // Llama a la función del controlador
 );
 
-// Ruta GET para obtener la rutina de un usuario por su ID
+// Ruta GET para obtener la rutina del usuario
+// Este controlador no necesita el user_id en la URL, ya que se obtiene del token
 router.get(
-  "/:user_id",
-  verifyToken,
-  asyncHandler(getRoutineByUserId)
+  "/",
+  verifyToken,  // Verificación de token
+  asyncHandler(getRoutineByUserId)  // Llama al controlador para obtener la rutina
 );
 
 // Ruta PUT para actualizar el estado de un día (completado o pendiente)
 router.put(
   "/update-status",
-  verifyToken,
-  asyncHandler(updateRoutineDayStatus)
+  verifyToken,  // Verificación de token
+  asyncHandler(updateRoutineDayStatus)  // Llama al controlador para actualizar el estado del día
 );
 
 // Ruta DELETE para eliminar un día de la rutina
 router.delete(
   "/delete",
-  verifyToken,
-  asyncHandler(deleteRoutineDay)
+  verifyToken,  // Verificación de token
+  asyncHandler(deleteRoutineDay)  // Llama al controlador para eliminar el día
 );
 
 export default router;

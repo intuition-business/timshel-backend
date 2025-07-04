@@ -16,7 +16,8 @@ export const createRoutineDto = Joi.object({
 });
 
 export const getRoutineDto = Joi.object({
-  user_id,  // ID del usuario para obtener la rutina
+  // El `user_id` se obtiene del token JWT, pero puede ser útil para validación adicional si se pasa por la URL
+  user_id: Joi.number().required(),
 });
 
 export const updateRoutineStatusDto = Joi.object({
