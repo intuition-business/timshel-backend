@@ -127,7 +127,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/routine/create:
+ * /api/routine-days/create:
  *   post:
  *     summary: "Crea una rutina de ejercicios para el usuario"
  *     tags: [Routine]
@@ -159,7 +159,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/routine-response'
  *
- * /api/routine:
+ * /api/routine-days:
  *   get:
  *     summary: "Obtiene la rutina del usuario por su ID"
  *     tags: [Routine]
@@ -185,7 +185,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/get-routine-response'
  *
- * /api/routine/update-status:
+ * /api/routine-days/update-status:
  *   put:
  *     summary: "Actualiza el estado de un día en la rutina"
  *     tags: [Routine]
@@ -217,7 +217,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/update-routine-status-response'
  *
- * /api/routine/delete:
+ * /api/routine-days/delete:
  *   delete:
  *     summary: "Elimina un día de la rutina"
  *     tags: [Routine]
