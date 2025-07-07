@@ -12,7 +12,7 @@ export const sendWithEmail = async (
 
   const message = {
     to: email,
-    from: "info@intuitionstudio.co",
+    from: "urielmarciales@gmail.com",
     subject: `Hola ${name}. Bienvenido a timshel.`,
     text: `Tu codigo es : ${otp}`,
     html: `<h4>¡Hola ${name}!</h4>
