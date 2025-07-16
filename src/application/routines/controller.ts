@@ -66,7 +66,7 @@ export const generateRoutinesIa = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {  // Cambié el tipo de retorno a Promise<void>
   try {
     console.log("Iniciando la generación de rutina con IA...");
 
@@ -129,16 +129,40 @@ export const generateRoutinesIa = async (
       await fs.mkdir(userDirPath, { recursive: true });
 
       const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
-      const parsed = JSON.parse(response.choices[0].message.content || "");
+      let parsed;
+
+      try {
+        parsed = JSON.parse(response.choices[0].message.content || "");
+      } catch (error) {
+        console.error("Error al parsear la respuesta de OpenAI:", error);
+        res.json({
+          response: "",
+          error: true,
+          message: "La respuesta generada por la IA no es válida. Por favor intente nuevamente.",
+        });
+        return
+      }
 
       console.log("Rutina generada por OpenAI:", parsed);
 
-      // Asociamos las fechas con la rutina generada
-      parsed.forEach((day: any, index: number) => {
-        const dateData = daysData[index];
-        day.date = dateData ? dateData.date : null;
-      });
+      // Verificamos que parsed sea un array antes de hacer el forEach
+      if (Array.isArray(parsed)) {
+        // Asociamos las fechas con la rutina generada
+        parsed.forEach((day: any, index: number) => {
+          const dateData = daysData[index];
+          day.date = dateData ? dateData.date : null;
+        });
+      } else {
+        console.error("La respuesta generada no es un array:", parsed);
+        res.json({
+          response: "",
+          error: true,
+          message: "La respuesta generada por la IA no es válida. Por favor intente nuevamente.",
+        });
+        return
+      }
 
+      // Guardamos el archivo generado
       await fs.writeFile(pathFilePrompt, JSON.stringify(parsed, null, 2), "utf-8");
 
       console.log("Documento guardado en:", pathFilePrompt);
@@ -164,6 +188,8 @@ export const generateRoutinesIa = async (
     next(error);
   }
 };
+
+
 
 export const getRoutinesSaved = async (
   req: Request,
