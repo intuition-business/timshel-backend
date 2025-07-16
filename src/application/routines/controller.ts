@@ -136,12 +136,16 @@ export const getRoutinesSaved = async (
       const routinesMap = new Map();
 
       for (const item of rows) {
-        let seriesCompletedParsed;
-        try {
-          seriesCompletedParsed = JSON.parse(item.series_completed || '[]');
-        } catch (jsonError) {
-          console.error(`Error parsing series_completed for exercise ${item.exercise_name}:`, jsonError);
-          seriesCompletedParsed = [];
+        let seriesCompletedParsed = item.series_completed; // Asigna directamente si es JSON
+
+        // Si 'series_completed' no es un JSON válido, asignamos un arreglo vacío
+        if (typeof seriesCompletedParsed === 'string') {
+          try {
+            seriesCompletedParsed = JSON.parse(seriesCompletedParsed); // Solo parsear si es string
+          } catch (jsonError) {
+            console.error(`Error parsing series_completed for exercise ${item.exercise_name}:`, jsonError);
+            seriesCompletedParsed = [];  // Si hay error, asignamos un arreglo vacío
+          }
         }
 
         const routineKey = item.rutina_id;
@@ -187,6 +191,7 @@ export const getRoutinesSaved = async (
     next(error);
   }
 };
+
 
 export const routinesSaved = async (
   req: Request,
