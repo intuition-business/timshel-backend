@@ -83,25 +83,13 @@ export const generateRoutinesIa = async (
       [userId]
     );
 
-    console.log("Días seleccionados por el usuario:", userRoutineRows);
-
     // Si la tabla está vacía, generamos días predeterminados
     let daysData;
     if (userRoutineRows.length === 0) {
-      // Generamos los días de rutina por defecto: lunes, miércoles, viernes
-      const currentDate = new Date(); // Fecha actual para comenzar
-      const defaultDays = ['Monday', 'Wednesday', 'Friday'];
-      daysData = defaultDays.map((day, index) => {
-        let nextDate = new Date(currentDate);
-        nextDate.setDate(currentDate.getDate() + (index * 2)); // Sumamos 2 días por cada día de la semana
-        return {
-          day: day,
-          date: nextDate.toISOString().split('T')[0], // Formato: YYYY-MM-DD
-        };
-      });
+      daysData = generateDefaultRoutineDays(); // Llamamos a una función que genera los días predeterminados
       console.log("Días generados por defecto:", daysData);
     } else {
-      daysData = userRoutineRows; // Usamos los días guardados en la tabla
+      daysData = userRoutineRows; // Usamos los días guardados en la base de datos
       console.log("Días obtenidos de la base de datos:", daysData);
     }
 
@@ -110,8 +98,6 @@ export const generateRoutinesIa = async (
       "SELECT * FROM formulario WHERE usuario_id = ?",
       [userId]
     );
-
-    console.log("Datos del formulario obtenidos:", rows);
 
     const personData = adapter(rows?.[0]);
 
@@ -124,32 +110,15 @@ export const generateRoutinesIa = async (
     // Llamamos a la IA para generar la rutina
     const { response, error } = await getOpenAI(prompt);
 
-    // Verificamos si la respuesta de OpenAI es válida
-    if (response && response.choices && response.choices[0]?.message?.content) {
+    // Validamos si la respuesta de OpenAI es válida
+    if (response?.choices?.[0]?.message?.content) {
       console.log("Respuesta completa de OpenAI:", response); // Log para depuración
 
       let parsed;
       try {
         parsed = JSON.parse(response.choices[0].message.content || "");
       } catch (parseError: unknown) {
-        // Aquí hacemos la comprobación de tipo para 'parseError'
-        if (parseError instanceof Error) {
-          console.error("Error al parsear la respuesta de OpenAI:", parseError.message);
-          res.json({
-            response: "",
-            error: true,
-            message: `Error al parsear la respuesta de OpenAI: ${parseError.message}`,
-            details: parseError,
-          });
-        } else {
-          console.error("Error desconocido al parsear la respuesta de OpenAI");
-          res.json({
-            response: "",
-            error: true,
-            message: "Error desconocido al parsear la respuesta de OpenAI.",
-            details: parseError,
-          });
-        }
+        handleParseError(parseError, res);
         return;
       }
 
@@ -189,16 +158,14 @@ export const generateRoutinesIa = async (
         path_file: pathFilePrompt,
       });
       return;
-    } else {
-      console.error("No se generó respuesta de OpenAI o la respuesta está vacía.");
-      res.json({
-        response: "",
-        error: true,
-        message: "No se generó respuesta de OpenAI. Intenta más tarde.",
-        details: { openAiResponse: response },
-      });
-      return;
     }
+
+    res.json({
+      response: "",
+      error: true,
+      message: "No se generó respuesta de OpenAI. Intenta más tarde.",
+      details: { openAiResponse: response },
+    });
   } catch (error) {
     console.error("Error al generar la rutina con IA:", error);
     res.json({
@@ -210,6 +177,41 @@ export const generateRoutinesIa = async (
     next(error);
   }
 };
+
+// Función para manejar errores de parseo
+function handleParseError(parseError: unknown, res: Response) {
+  if (parseError instanceof Error) {
+    console.error("Error al parsear la respuesta de OpenAI:", parseError.message);
+    res.json({
+      response: "",
+      error: true,
+      message: `Error al parsear la respuesta de OpenAI: ${parseError.message}`,
+      details: parseError,
+    });
+  } else {
+    console.error("Error desconocido al parsear la respuesta de OpenAI");
+    res.json({
+      response: "",
+      error: true,
+      message: "Error desconocido al parsear la respuesta de OpenAI.",
+      details: parseError,
+    });
+  }
+}
+
+// Función para generar los días de rutina predeterminados
+function generateDefaultRoutineDays() {
+  const currentDate = new Date();
+  const defaultDays = ['Monday', 'Wednesday', 'Friday'];
+  return defaultDays.map((day, index) => {
+    let nextDate = new Date(currentDate);
+    nextDate.setDate(currentDate.getDate() + (index * 2)); // Sumamos 2 días por cada día de la semana
+    return {
+      day: day,
+      date: nextDate.toISOString().split('T')[0], // Formato: YYYY-MM-DD
+    };
+  });
+}
 
 
 export const getRoutinesSaved = async (
