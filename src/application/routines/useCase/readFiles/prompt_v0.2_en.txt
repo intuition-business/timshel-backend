@@ -21,22 +21,29 @@ I will now provide you with a person's data in the following format:
 - pathologies: Medical conditions (e.g., scoliosis, herniated disc)  
 - diseases: Chronic diseases (e.g., diabetes, hypertension)
 
-Your task is to assign exercises, sets, repetitions, and weight (in kg, if applicable) that match the user's profile.  
+Additionally, the user has selected the following training days (if available):
+
+###DIAS###  (these are the days provided by the application, either selected by the user or generated as defaults).
+
+Your task is to assign exercises, sets, repetitions, and weight (in kg, if applicable) that match the user's profile, while assigning each day's routine based on the user's training days (provided above). For each day of the training plan, include at least 6 exercises.
+
 Next, I will give you the list of exercises you may suggest (in CSV format, semicolon-delimited):
 
+´´´´
+Categoria;Ejercicio;Descripción
+...
+´´´´
 
-´´´´
-###EJERCICIOS###
-´´´´
-Please generate a **weekly training plan in JSON format** with the following structure:  
-It should be a list where each item corresponds to a training day, according to the **training_days_per_week** variable. In each set detail, you may vary repetitions or load if you consider it appropriate.
-Add at least 6 exercises for each day.
+Please generate a **weekly training plan in JSON format** with the following structure:
+It should be a list where each item corresponds to a training day, according to the **training_days_per_week** variable.
+Each day will have a specific date, and the following structure must be followed for each workout:
 
 #### JSON STRUCTURE:
 ```json
 [
     {
         "nombre": "Name of the day's workout",
+        "fecha": "The specific date of the workout (e.g., YYYY-MM-DD)",
         "ejercicios": [
             {
                 "nombre_ejercicio": "As per the exercise list",
@@ -55,8 +62,3 @@ Add at least 6 exercises for each day.
     },
     ...
 ]
-```
-The user's data in JSON format is:
-###DATOS_PERSONA###
-
-Remember to only generate the JSON in the specified format.

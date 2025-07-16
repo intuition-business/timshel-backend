@@ -68,32 +68,80 @@ export const generateRoutinesIa = async (
   next: NextFunction
 ) => {
   try {
+    console.log("Iniciando la generación de rutina con IA...");
+
     const { headers } = req;
     const token = headers["x-access-token"];
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
 
+    console.log("Token decodificado. userId:", userId);
+
+    // Consultamos los días seleccionados por el usuario
+    const [userRoutineRows]: any = await pool.execute(
+      "SELECT day, date FROM user_routine WHERE user_id = ? ORDER BY date",
+      [userId]
+    );
+
+    console.log("Días seleccionados por el usuario:", userRoutineRows);
+
+    // Si la tabla está vacía, generamos días predeterminados
+    let daysData;
+    if (userRoutineRows.length === 0) {
+      // Generamos los días de rutina por defecto: lunes, miércoles, viernes
+      const currentDate = new Date(); // Fecha actual para comenzar
+      const defaultDays = ['Monday', 'Wednesday', 'Friday'];
+      daysData = defaultDays.map((day, index) => {
+        let nextDate = new Date(currentDate);
+        nextDate.setDate(currentDate.getDate() + (index * 2)); // Sumamos 2 días por cada día de la semana
+        return {
+          day: day,
+          date: nextDate.toISOString().split('T')[0], // Formato: YYYY-MM-DD
+        };
+      });
+      console.log("Días generados por defecto:", daysData);
+    } else {
+      daysData = userRoutineRows; // Usamos los días guardados en la tabla
+      console.log("Días obtenidos de la base de datos:", daysData);
+    }
+
+    // Consulta para obtener los datos del usuario desde la tabla 'formulario'
     const [rows]: any = await pool.execute(
       "SELECT * FROM formulario WHERE usuario_id = ?",
       [userId]
     );
+
+    console.log("Datos del formulario obtenidos:", rows);
+
     const personData = adapter(rows?.[0]);
-    const prompt = await readFiles(personData);
+
+    // Modificamos el prompt para incluir los días específicos
+    let prompt = await readFiles(personData);
+    prompt = prompt.replace("###DIAS###", JSON.stringify(daysData));
+
+    console.log("Prompt generado para OpenAI:", prompt);
+
+    // Llamamos a la IA para generar la rutina
     const { response, error } = await getOpenAI(prompt);
 
     if (response) {
       const userDirPath = path.join(__dirname, `data/${userId}`);
-
       await fs.mkdir(userDirPath, { recursive: true });
 
       const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
       const parsed = JSON.parse(response.choices[0].message.content || "");
 
-      await fs.writeFile(
-        pathFilePrompt,
-        JSON.stringify(parsed, null, 2),
-        "utf-8"
-      );
+      console.log("Rutina generada por OpenAI:", parsed);
+
+      // Asociamos las fechas con la rutina generada
+      parsed.forEach((day: any, index: number) => {
+        const dateData = daysData[index];
+        day.date = dateData ? dateData.date : null;
+      });
+
+      await fs.writeFile(pathFilePrompt, JSON.stringify(parsed, null, 2), "utf-8");
+
+      console.log("Documento guardado en:", pathFilePrompt);
 
       res.json({
         response: "Documento generado.",
@@ -104,13 +152,15 @@ export const generateRoutinesIa = async (
       return;
     }
 
+    console.error("No se generó respuesta de OpenAI");
+
     res.json({
       response: "",
       error: true,
-      message:
-        "Ocurrio un error al procesar los datos. Por favor intente hacerlo mas tarde.",
+      message: "Ocurrió un error al procesar los datos. Por favor intente más tarde.",
     });
   } catch (error) {
+    console.error("Error al generar la rutina con IA:", error);
     next(error);
   }
 };
