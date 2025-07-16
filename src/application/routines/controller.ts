@@ -7,6 +7,18 @@ import { adapter } from "./useCase/adapter";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import pool from "../../config/db";
+import { any } from "joi";
+import { v4 as uuidv4 } from 'uuid';
+
+interface Exercise {
+  exercise_name: string;
+  description: string;
+  thumbnail_url: string;
+  video_url: string;
+  liked: boolean | null;
+  liked_reason: string | null;
+  series_completed: { reps: number, load: number, breakTime: number }[];  // Definimos las series completadas como un arreglo de objetos
+}
 
 export const getRoutines = async (
   req: Request,
@@ -114,19 +126,48 @@ export const getRoutinesSaved = async (
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
 
+    // Selecciona todos los campos necesarios para reconstruir la rutina y sus ejercicios
     const [rows]: any = await pool.execute(
-      "SELECT * FROM complete_rutina WHERE user_id = ?",
+      "SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed FROM complete_rutina WHERE user_id = ? ORDER BY fecha_rutina DESC, rutina_id, exercise_name",
       [userId]
     );
 
     if (rows.length > 0) {
-      const responseData = rows.map((item: any) => {
-        return {
-          fecha_rutina: item?.fecha_rutina,
-          id: item?.id,
-          rutina: JSON.parse(item?.rutina),
-        };
-      });
+      const routinesMap = new Map();
+
+      for (const item of rows) {
+        let seriesCompletedParsed;
+        try {
+          seriesCompletedParsed = JSON.parse(item.series_completed || '[]');
+        } catch (jsonError) {
+          console.error(`Error parsing series_completed for exercise ${item.exercise_name}:`, jsonError);
+          seriesCompletedParsed = [];
+        }
+
+        const routineKey = item.rutina_id;
+
+        if (!routinesMap.has(routineKey)) {
+          routinesMap.set(routineKey, {
+            fecha_rutina: item.fecha_rutina,
+            rutina_id: item.rutina_id,
+            routine_name: item.routine_name,
+            exercises: [],
+          });
+        }
+
+        const routine = routinesMap.get(routineKey);
+        routine.exercises.push({
+          exercise_name: item.exercise_name,
+          description: item.description,
+          thumbnail_url: item.thumbnail_url,
+          video_url: item.video_url,
+          liked: item.liked,
+          liked_reason: item.liked_reason,
+          series_completed: seriesCompletedParsed,
+        });
+      }
+
+      const responseData = Array.from(routinesMap.values());
 
       res.status(200).json({
         error: false,
@@ -135,12 +176,14 @@ export const getRoutinesSaved = async (
       });
       return;
     }
+
     res.status(404).json({
       error: true,
       response: undefined,
-      message: "No se encontro rutinas guardadas",
+      message: "No se encontraron rutinas guardadas",
     });
   } catch (error) {
+    console.error("Error al obtener rutinas guardadas:", error);
     next(error);
   }
 };
@@ -149,32 +192,121 @@ export const routinesSaved = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const { headers, body } = req;
     const token = headers["x-access-token"];
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
-    const { fecha_rutina, rutina } = body;
-    const parsedRutina = JSON.stringify(rutina).trim();
-    const [result] = await pool.execute(
-      "INSERT INTO complete_rutina (fecha_rutina,rutina, user_id) VALUES (?, ?, ?)",
-      [fecha_rutina, parsedRutina, userId]
-    );
 
-    if (result) {
-      res.status(200).json({
-        error: false,
-        message: "Rutinas guardadas",
-        response: result,
+    if (!body.fecha_rutina || !body.rutina) {
+      res.status(400).json({
+        error: true,
+        message: "El campo 'fecha_rutina' y 'rutina' son obligatorios.",
       });
+      return;
     }
-    res.status(404).json({
-      error: true,
-      response: undefined,
-      message: "No se encontro rutinas guardadas",
+
+    const { fecha_rutina, rutina } = body;
+    const { routine_name, exercises } = rutina;
+
+    if (!routine_name) {
+      res.status(400).json({
+        error: true,
+        message: "'routine_name' es obligatorio.",
+      });
+      return;
+    }
+
+    const validExercises = exercises.filter((exercise: any, index: number) => {
+      const valid = exercise.exercise_name && exercise.series_completed && exercise.series_completed.length > 0;
+      if (!valid) {
+        console.log(`Ejercicio inválido en el índice ${index}: ${exercise.exercise_name}`);
+      }
+      return valid;
     });
+
+    console.log(`Ejercicios a insertar (validados): ${validExercises.length}`);
+
+    if (validExercises.length === 0) {
+      res.status(400).json({
+        error: true,
+        message: "No se encontraron ejercicios válidos para insertar.",
+      });
+      return;
+    }
+
+    const rutinaId = uuidv4();
+    console.log(`UUID generado para rutina_id: ${rutinaId}`);
+    // ------------------------------------------
+
+    let totalInsertedExercises = 0;
+    const insertedExerciseResults = [];
+
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      for (const exercise of validExercises) {
+        const { exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed } = exercise;
+
+        const safeLiked = liked === undefined ? false : liked;
+        const safeLikedReason = liked_reason === null || liked_reason === undefined ? '' : liked_reason;
+        const safeSeriesCompleted = series_completed === null || series_completed === undefined ? '[]' : JSON.stringify(series_completed);
+
+        const [exerciseInsertResult]: any = await connection.execute(
+          "INSERT INTO complete_rutina (fecha_rutina, user_id, routine_name, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed, rutina_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            fecha_rutina,
+            userId,
+            routine_name,
+            exercise_name,
+            description,
+            thumbnail_url,
+            video_url,
+            safeLiked,
+            safeLikedReason,
+            safeSeriesCompleted,
+            rutinaId,
+          ]
+        );
+
+        console.log(`Resultado de inserción de ejercicio '${exercise_name}':`, exerciseInsertResult);
+
+        if (exerciseInsertResult && exerciseInsertResult.insertId) {
+          totalInsertedExercises++;
+          insertedExerciseResults.push(exerciseInsertResult);
+        }
+      }
+
+      await connection.commit();
+
+      if (totalInsertedExercises > 0) {
+        res.status(200).json({
+          error: false,
+          message: `Rutina y ${totalInsertedExercises} ejercicios guardados correctamente con rutina_id: ${rutinaId}`,
+          response: {
+            rutinaId: rutinaId,
+            exerciseResults: insertedExerciseResults,
+          },
+        });
+      } else {
+        await connection.rollback();
+        res.status(400).json({
+          error: true,
+          message: "No se insertó ningún ejercicio válido.",
+          response: undefined,
+        });
+      }
+    } catch (transactionError) {
+      await connection.rollback();
+      console.error("Error en la transacción al guardar rutinas:", transactionError);
+      next(transactionError);
+    } finally {
+      connection.release();
+    }
   } catch (error) {
+    console.error("Error general al guardar rutinas:", error);
     next(error);
   }
 };
