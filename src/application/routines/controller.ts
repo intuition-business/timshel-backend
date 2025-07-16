@@ -36,37 +36,11 @@ export const getRoutines = async (
   }
 };
 
-export const getGeneratedRoutinesIa = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const { headers } = req;
-  const token = headers["x-access-token"];
-  const decode = token && verify(`${token}`, SECRET);
-  const userId = (<any>(<unknown>decode)).userId;
-
-  // const filePath = path.join(
-  //   __dirname,
-  //   `data/${userId}/plan_entrenamiento.json`
-  // );
-
-  const filePath = `/usr/src/app/src/application/routines/data/${userId}/plan_entrenamiento.json`;
-  try {
-    const data = await fs.readFile(filePath, "utf8");
-    res.json(JSON.parse(data)); // Express automáticamente establece el Content-Type a application/json y envía el JSON
-  } catch (error) {
-    console.error("Error al leer el archivo JSON:", error);
-    //res.status(500).send("Error interno del servidor al leer el archivo JSON.");
-    next(error);
-  }
-};
-
 export const generateRoutinesIa = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {  // Cambié el tipo de retorno a Promise<void>
+): Promise<void> => {
   try {
     console.log("Iniciando la generación de rutina con IA...");
 
@@ -124,13 +98,11 @@ export const generateRoutinesIa = async (
     // Llamamos a la IA para generar la rutina
     const { response, error } = await getOpenAI(prompt);
 
-    if (response) {
-      const userDirPath = path.join(__dirname, `data/${userId}`);
-      await fs.mkdir(userDirPath, { recursive: true });
+    // Verificamos la respuesta antes de procesarla
+    if (response && response.choices && response.choices[0]?.message?.content) {
+      console.log("Respuesta completa de OpenAI:", response); // Log para depuración
 
-      const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
       let parsed;
-
       try {
         parsed = JSON.parse(response.choices[0].message.content || "");
       } catch (error) {
@@ -163,6 +135,10 @@ export const generateRoutinesIa = async (
       }
 
       // Guardamos el archivo generado
+      const userDirPath = path.join(__dirname, `data/${userId}`);
+      await fs.mkdir(userDirPath, { recursive: true });
+
+      const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
       await fs.writeFile(pathFilePrompt, JSON.stringify(parsed, null, 2), "utf-8");
 
       console.log("Documento guardado en:", pathFilePrompt);
@@ -174,22 +150,20 @@ export const generateRoutinesIa = async (
         path_file: pathFilePrompt,
       });
       return;
+    } else {
+      console.error("No se generó respuesta de OpenAI o la respuesta está vacía.");
+      res.json({
+        response: "",
+        error: true,
+        message: "No se generó respuesta de OpenAI. Intenta más tarde.",
+      });
+      return
     }
-
-    console.error("No se generó respuesta de OpenAI");
-
-    res.json({
-      response: "",
-      error: true,
-      message: "Ocurrió un error al procesar los datos. Por favor intente más tarde.",
-    });
   } catch (error) {
     console.error("Error al generar la rutina con IA:", error);
     next(error);
   }
 };
-
-
 
 export const getRoutinesSaved = async (
   req: Request,
