@@ -66,7 +66,7 @@ export const generateRoutinesIa = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {  // Cambié el tipo de retorno a Promise<void>
+): Promise<void> => {
   try {
     console.log("Iniciando la generación de rutina con IA...");
 
@@ -124,23 +124,33 @@ export const generateRoutinesIa = async (
     // Llamamos a la IA para generar la rutina
     const { response, error } = await getOpenAI(prompt);
 
-    if (response) {
-      const userDirPath = path.join(__dirname, `data/${userId}`);
-      await fs.mkdir(userDirPath, { recursive: true });
+    // Verificamos si la respuesta de OpenAI es válida
+    if (response && response.choices && response.choices[0]?.message?.content) {
+      console.log("Respuesta completa de OpenAI:", response); // Log para depuración
 
-      const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
       let parsed;
-
       try {
         parsed = JSON.parse(response.choices[0].message.content || "");
-      } catch (error) {
-        console.error("Error al parsear la respuesta de OpenAI:", error);
-        res.json({
-          response: "",
-          error: true,
-          message: "La respuesta generada por la IA no es válida. Por favor intente nuevamente.",
-        });
-        return
+      } catch (parseError: unknown) {
+        // Aquí hacemos la comprobación de tipo para 'parseError'
+        if (parseError instanceof Error) {
+          console.error("Error al parsear la respuesta de OpenAI:", parseError.message);
+          res.json({
+            response: "",
+            error: true,
+            message: `Error al parsear la respuesta de OpenAI: ${parseError.message}`,
+            details: parseError,
+          });
+        } else {
+          console.error("Error desconocido al parsear la respuesta de OpenAI");
+          res.json({
+            response: "",
+            error: true,
+            message: "Error desconocido al parsear la respuesta de OpenAI.",
+            details: parseError,
+          });
+        }
+        return;
       }
 
       console.log("Rutina generada por OpenAI:", parsed);
@@ -157,12 +167,17 @@ export const generateRoutinesIa = async (
         res.json({
           response: "",
           error: true,
-          message: "La respuesta generada por la IA no es válida. Por favor intente nuevamente.",
+          message: "La respuesta generada por la IA no es un array. Por favor intente nuevamente.",
+          details: { responseContent: response.choices[0].message.content },
         });
-        return
+        return;
       }
 
       // Guardamos el archivo generado
+      const userDirPath = path.join(__dirname, `data/${userId}`);
+      await fs.mkdir(userDirPath, { recursive: true });
+
+      const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
       await fs.writeFile(pathFilePrompt, JSON.stringify(parsed, null, 2), "utf-8");
 
       console.log("Documento guardado en:", pathFilePrompt);
@@ -174,21 +189,27 @@ export const generateRoutinesIa = async (
         path_file: pathFilePrompt,
       });
       return;
+    } else {
+      console.error("No se generó respuesta de OpenAI o la respuesta está vacía.");
+      res.json({
+        response: "",
+        error: true,
+        message: "No se generó respuesta de OpenAI. Intenta más tarde.",
+        details: { openAiResponse: response },
+      });
+      return;
     }
-
-    console.error("No se generó respuesta de OpenAI");
-
+  } catch (error) {
+    console.error("Error al generar la rutina con IA:", error);
     res.json({
       response: "",
       error: true,
-      message: "Ocurrió un error al procesar los datos. Por favor intente más tarde.",
+      message: "Ocurrió un error al generar la rutina con IA.",
+      details: error,
     });
-  } catch (error) {
-    console.error("Error al generar la rutina con IA:", error);
     next(error);
   }
 };
-
 
 
 export const getRoutinesSaved = async (
