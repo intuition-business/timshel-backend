@@ -120,17 +120,36 @@ export const generateRoutinesIa = async (
         return;
       }
 
-      console.log("Rutina generada por OpenAI:", parsed);
+      console.log("Respuesta completa parseada de OpenAI:", parsed);
 
-      // Verificamos que parsed sea un array antes de hacer el forEach
-      if (Array.isArray(parsed)) {
+      // Verificamos que parsed tenga la propiedad 'training_plan' y que sea un array
+      if (parsed && Array.isArray(parsed.training_plan)) {
+        const trainingPlan = parsed.training_plan;
+
         // Asociamos las fechas con la rutina generada
-        parsed.forEach((day: any, index: number) => {
+        trainingPlan.forEach((day: any, index: number) => {
           const dateData = daysData[index];
           day.date = dateData ? dateData.date : null;
         });
+
+        // Guardamos el archivo generado
+        const userDirPath = path.join(__dirname, `data/${userId}`);
+        await fs.mkdir(userDirPath, { recursive: true });
+
+        const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
+        await fs.writeFile(pathFilePrompt, JSON.stringify(trainingPlan, null, 2), "utf-8");
+
+        console.log("Documento guardado en:", pathFilePrompt);
+
+        res.json({
+          response: "Documento generado.",
+          error: false,
+          message: "Documento generado.",
+          path_file: pathFilePrompt,
+        });
+        return;
       } else {
-        console.error("La respuesta generada no es un array:", parsed);
+        console.error("La propiedad 'training_plan' no es un array:", parsed);
         res.json({
           response: "",
           error: true,
@@ -139,23 +158,6 @@ export const generateRoutinesIa = async (
         });
         return;
       }
-
-      // Guardamos el archivo generado
-      const userDirPath = path.join(__dirname, `data/${userId}`);
-      await fs.mkdir(userDirPath, { recursive: true });
-
-      const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
-      await fs.writeFile(pathFilePrompt, JSON.stringify(parsed, null, 2), "utf-8");
-
-      console.log("Documento guardado en:", pathFilePrompt);
-
-      res.json({
-        response: "Documento generado.",
-        error: false,
-        message: "Documento generado.",
-        path_file: pathFilePrompt,
-      });
-      return;
     }
 
     res.json({
