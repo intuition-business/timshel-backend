@@ -30,9 +30,7 @@ Your task is to assign exercises, sets, repetitions, and weight (in kg, if appli
 
 Next, I will give you the list of exercises you may suggest (in CSV format, semicolon-delimited):
 
-´´´´
 ###EJERCICIOS###
-´´´´
 
 Please generate a **weekly training plan in JSON format** with the following structure:
 It should be a list where each item corresponds to a training day, according to the **training_days_per_week** variable. In each set detail, you may vary repetitions or load if you consider it appropriate.

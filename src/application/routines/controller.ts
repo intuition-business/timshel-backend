@@ -102,9 +102,7 @@ export const generateRoutinesIa = async (
     const personData = adapter(rows?.[0]);
 
     // Modificamos el prompt para incluir los días específicos
-    let prompt = await readFiles(personData);
-    prompt = prompt.replace("###DIAS###", JSON.stringify(daysData));
-
+    let prompt = await readFiles(personData, daysData);  // Ahora se pasan los días aquí
     console.log("Prompt generado para OpenAI:", prompt);
 
     // Llamamos a la IA para generar la rutina
@@ -212,7 +210,6 @@ function generateDefaultRoutineDays() {
     };
   });
 }
-
 
 export const getRoutinesSaved = async (
   req: Request,
