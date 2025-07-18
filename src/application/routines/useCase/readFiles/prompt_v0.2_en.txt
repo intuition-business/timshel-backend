@@ -25,6 +25,11 @@ I will now provide you with a person's data in the following format:
 Additionally, the user has selected the following training days (if available):
 
 ###DIAS###
+For each of these training days, you need to create a customized workout routine. For each training day, assign 6 or more exercises, specifying the sets, repetitions, and load (in kg where applicable), and ensure that the exercises align with the user's profile and goals.
+
+Make sure that each of the following training days gets a unique routine:
+
+###DIAS###
 
 Your task is to assign exercises, sets, repetitions, and weight (in kg, if applicable) that match the user's profile, while assigning each day's routine based on the user's training days. For each day of the training plan, include at least 6 exercises.
 
