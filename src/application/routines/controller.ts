@@ -83,7 +83,6 @@ export const generateRoutinesIa = async (
       [userId]
     );
 
-    // Si la tabla está vacía, generamos días predeterminados
     let daysData;
     if (userRoutineRows.length === 0) {
       daysData = generateDefaultRoutineDays(); // Llamamos a una función que genera los días predeterminados
@@ -123,8 +122,8 @@ export const generateRoutinesIa = async (
       console.log("Respuesta completa parseada de OpenAI:", parsed);
 
       // Verificamos que parsed tenga la propiedad 'training_plan' y que sea un array
-      if (parsed && Array.isArray(parsed.training_plan)) {
-        const trainingPlan = parsed.training_plan;
+      if (parsed && Array.isArray(parsed.workout_plan)) {
+        const trainingPlan = parsed.workout_plan;
 
         // Asociamos las fechas con la rutina generada
         trainingPlan.forEach((day: any, index: number) => {
@@ -149,7 +148,7 @@ export const generateRoutinesIa = async (
         });
         return;
       } else {
-        console.error("La propiedad 'training_plan' no es un array:", parsed);
+        console.error("La propiedad 'workout_plan' no es un array:", parsed);
         res.json({
           response: "",
           error: true,
