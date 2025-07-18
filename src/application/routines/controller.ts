@@ -126,46 +126,56 @@ export const generateRoutinesIa = async (
       if (parsed && Array.isArray(parsed.training_plan)) {
         const trainingPlan = parsed.training_plan;
 
-        // Asociamos las fechas con la rutina generada
-        trainingPlan.forEach((day: any, index: number) => {
-          const dateData = daysData[index];
-          day.date = dateData ? dateData.date : null;
-        });
+        // Verificamos que la longitud de trainingPlan sea igual a daysData
+        if (trainingPlan.length === daysData.length) {
+          // Asociamos las fechas con la rutina generada
+          trainingPlan.forEach((day: any, index: number) => {
+            const dateData = daysData[index];
+            if (dateData) {
+              day.date = dateData.date; // Asignamos la fecha correcta
+            }
+          });
 
-        // Guardamos el archivo generado
-        const userDirPath = path.join(__dirname, `data/${userId}`);
-        await fs.mkdir(userDirPath, { recursive: true });
+          // Guardamos el archivo generado
+          const userDirPath = path.join(__dirname, `data/${userId}`);
+          await fs.mkdir(userDirPath, { recursive: true });
 
-        const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
-        await fs.writeFile(pathFilePrompt, JSON.stringify(trainingPlan, null, 2), "utf-8");
+          const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
+          await fs.writeFile(pathFilePrompt, JSON.stringify(trainingPlan, null, 2), "utf-8");
 
-        console.log("Documento guardado en:", pathFilePrompt);
+          console.log("Documento guardado en:", pathFilePrompt);
 
-        res.json({
-          response: "Documento generado.",
-          error: false,
-          message: "Documento generado.",
-          path_file: pathFilePrompt,
-        });
-        return;
+          res.json({
+            response: "Documento generado.",
+            error: false,
+            message: "Documento generado.",
+            path_file: pathFilePrompt,
+          });
+        } else {
+          console.error("La cantidad de días de la rutina no coincide con la cantidad de fechas.");
+          res.json({
+            response: "",
+            error: true,
+            message: "Hubo un error al generar la rutina, las fechas no coinciden con los días.",
+          });
+        }
       } else {
-        console.error("La propiedad 'training_plan' no es un array:", parsed);
+        console.error("La respuesta generada por la IA no contiene un array de entrenamiento.");
         res.json({
           response: "",
           error: true,
-          message: "La respuesta generada por la IA no es un array. Por favor intente nuevamente.",
-          details: { responseContent: response.choices[0].message.content },
+          message: "La respuesta generada por la IA no contiene la estructura esperada.",
         });
-        return;
       }
-    }
 
-    res.json({
-      response: "",
-      error: true,
-      message: "No se generó respuesta de OpenAI. Intenta más tarde.",
-      details: { openAiResponse: response },
-    });
+      // Si no se generó respuesta válida
+      res.json({
+        response: "",
+        error: true,
+        message: "No se generó respuesta de OpenAI. Intenta más tarde.",
+        details: { openAiResponse: response },
+      });
+    }
   } catch (error) {
     console.error("Error al generar la rutina con IA:", error);
     res.json({
@@ -212,6 +222,7 @@ function generateDefaultRoutineDays() {
     };
   });
 }
+
 
 export const getRoutinesSaved = async (
   req: Request,
