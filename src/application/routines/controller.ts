@@ -83,7 +83,6 @@ export const generateRoutinesIa = async (
       [userId]
     );
 
-    // Si la tabla está vacía, generamos días predeterminados
     let daysData;
     if (userRoutineRows.length === 0) {
       daysData = generateDefaultRoutineDays(); // Llamamos a una función que genera los días predeterminados
@@ -93,6 +92,10 @@ export const generateRoutinesIa = async (
       console.log("Días obtenidos de la base de datos:", daysData);
     }
 
+    // Verificar que tenemos todas las fechas (en este caso, 20 fechas)
+    console.log("Total de fechas disponibles: ", daysData.length);
+    console.log("Fechas:", daysData);
+
     // Consulta para obtener los datos del usuario desde la tabla 'formulario'
     const [rows]: any = await pool.execute(
       "SELECT * FROM formulario WHERE usuario_id = ?",
@@ -101,8 +104,15 @@ export const generateRoutinesIa = async (
 
     const personData = adapter(rows?.[0]);
 
-    // Modificamos el prompt para incluir los días específicos
-    let prompt = await readFiles(personData, daysData);  // Ahora se pasan los días aquí
+    // Crear el prompt que incluya las 20 fechas
+    let prompt = `Imagine you are a virtual fitness coach helping people improve their physical condition based on their physical characteristics, lifestyle, and training goals.
+
+    The user has selected the following training days (if available):
+
+    ${JSON.stringify(daysData)}
+
+    Based on the following user data, generate a personalized workout plan for each of these days.`;
+
     console.log("Prompt generado para OpenAI:", prompt);
 
     // Llamamos a la IA para generar la rutina
@@ -128,7 +138,6 @@ export const generateRoutinesIa = async (
 
         // Verificamos que la longitud de trainingPlan sea igual a daysData
         if (trainingPlan.length === daysData.length) {
-          // Asociamos las fechas con la rutina generada
           trainingPlan.forEach((day: any, index: number) => {
             const dateData = daysData[index];
             if (dateData) {
@@ -167,7 +176,7 @@ export const generateRoutinesIa = async (
           message: "La respuesta generada por la IA no contiene la estructura esperada.",
         });
       }
-
+    } else {
       // Si no se generó respuesta válida
       res.json({
         response: "",
