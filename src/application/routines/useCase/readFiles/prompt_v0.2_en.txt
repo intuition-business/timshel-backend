@@ -25,21 +25,23 @@ I will now provide you with a person's data in the following format:
 Additionally, the user has selected the following training days (if available):
 
 ###DIAS###
-For each of these training days, you need to create a customized workout routine. For each training day, assign 6 or more exercises, specifying the sets, repetitions, and load (in kg where applicable), and ensure that the exercises align with the user's profile and goals.
 
-Make sure that each of the following training days gets a unique routine:
+For each of these training days listed below, you need to create a customized workout routine. You must **generate a unique routine for each specific date provided**. For each training day, assign 6 or more exercises, specifying the sets, repetitions, and load (in kg where applicable), and ensure that the exercises align with the user's profile and goals.
 
-###DIAS###
+Please ensure that **every date listed** gets a unique training routine.
 
-Your task is to assign exercises, sets, repetitions, and weight (in kg, if applicable) that match the user's profile, while assigning each day's routine based on the user's training days. For each day of the training plan, include at least 6 exercises.
+The training days provided are as follows:
+
+[###DIAS###]
+
+Your task is to assign exercises, sets, repetitions, and weight (in kg, if applicable) that match the user's profile for **each specific date** in the list.
 
 Next, I will give you the list of exercises you may suggest (in CSV format, semicolon-delimited):
 
 ###EJERCICIOS###
 
 Please generate a **weekly training plan in JSON format** with the following structure:
-It should be a list where each item corresponds to a training day, according to the **training_days_per_week** variable. In each set detail, you may vary repetitions or load if you consider it appropriate.
-Add at least 6 exercises for each day.
+It should be a list where each item corresponds to a training day, based on the days provided in [###DIAS###]. For each day, include at least 6 exercises. You may vary repetitions or load if needed.
 
 #### JSON STRUCTURE:
 ```json
