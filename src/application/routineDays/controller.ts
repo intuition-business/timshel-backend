@@ -5,6 +5,14 @@ import { SECRET } from "../../config";
 import { adapterRoutineDays } from "./adapter";
 import { createRoutineDto, getRoutineDto, updateRoutineStatusDto, deleteRoutineDto } from "./dto"; // Importamos los DTOs
 
+
+interface Routine {
+  day: string;
+  date: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+}
 // Función para formatear las fechas a "DD/MM/YYYY"
 const formatDateWithSlash = (date: Date) => {
   const day = date.getDate().toString().padStart(2, '0'); // Día con 2 dígitos
@@ -14,6 +22,7 @@ const formatDateWithSlash = (date: Date) => {
   return `${day}/${month}/${year}`; // Formato "DD/MM/YYYY"
 };
 
+// Ajustamos el código de creación de la rutina
 export const createRoutine = async (req: Request, res: Response, next: NextFunction) => {
   const { selected_days, start_date } = req.body;  // Días seleccionados y fecha de inicio enviados desde el frontend
 
@@ -23,7 +32,7 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
     const { headers } = req;
     const token = headers["x-access-token"];
     const decode = token && verify(`${token}`, SECRET);
-    const userId = (<any>(<unknown>decode)).userId;  // Obtenemos el userId desde el token
+    const userId = (<any>(<unknown>decode)).userId;
 
     if (!selected_days || selected_days.length === 0) {
       response.error = true;
@@ -31,38 +40,18 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json(response);
     }
 
-    // Obtener la última rutina del usuario para comparar las fechas
-    const [lastRoutineRow] = await pool.execute(
-      "SELECT end_date FROM user_routine WHERE user_id = ? ORDER BY end_date DESC LIMIT 1",
-      [userId]
-    ) as [Array<{ end_date: string }>, any];
+    const startDate = new Date(start_date.split("/").reverse().join("-"));
 
-    // Si no hay ninguna rutina, permitir crear una nueva
-    if (lastRoutineRow.length > 0) {
-      const lastEndDate = new Date(lastRoutineRow[0].end_date);
-      const startDate = new Date(start_date);  // Fecha proporcionada por el usuario
+    startDate.setHours(0, 0, 0, 0);
 
-      // Verificar que la fecha de inicio de la nueva rutina sea mayor que la fecha de fin de la última rutina
-      if (startDate <= lastEndDate) {
-        response.error = true;
-        response.message = `La fecha de inicio de la nueva rutina debe ser posterior a la fecha de fin de la última rutina, que fue el ${formatDateWithSlash(lastEndDate)}`;
-        return res.status(400).json(response);
-      }
-    }
+    const start_date_formatted = formatDateWithSlash(startDate);
 
-    // Usar la fecha de inicio proporcionada desde el frontend
-    const startDate = new Date(start_date);  // Fecha proporcionada por el usuario
-    const start_date_formatted = formatDateWithSlash(startDate);  // Formato "DD/MM/YYYY"
-
-    // Calcular la fecha final (30 días después de la fecha de inicio)
     const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 30);  // 30 días después
-    const end_date_formatted = formatDateWithSlash(endDate);  // Formato "DD/MM/YYYY"
+    endDate.setDate(startDate.getDate() + 30);
+    const end_date_formatted = formatDateWithSlash(endDate);
 
-    // Generamos la rutina para los días seleccionados
     const routineData = await generateGlobalRoutine(selected_days, startDate, endDate);
 
-    // Validamos si alguna de las fechas y días ya existe
     const duplicates = [];
     for (const item of routineData) {
       const [existingRoutine] = await pool.execute(
@@ -75,14 +64,12 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
       }
     }
 
-    // Si existen duplicados, respondemos con un error
     if (duplicates.length > 0) {
       response.error = true;
       response.message = `Ya existe una rutina para los siguientes días: ${duplicates.map(item => `${item.day} ${formatDateWithSlash(new Date(item.date))}`).join(", ")}`;
       return res.status(400).json(response);
     }
 
-    // Insertar en la base de datos
     const query = "INSERT INTO user_routine (user_id, day, date, start_date, end_date) VALUES ?";
     const [result]: any = await pool.query(query, [routineData.map(item => [userId, item.day, item.date, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]])]);
 
@@ -91,7 +78,7 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
       return res.status(201).json({
         start_date: start_date_formatted,
         end_date: end_date_formatted,
-        routine: adapterRoutineDays(routineData),  // Usamos el adaptador para devolver los días
+        routine: adapterRoutineDays(routineData),
       });
     } else {
       response.error = true;
@@ -104,6 +91,7 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
     return res.status(500).json({ message: "Error al crear la rutina." });
   }
 };
+
 
 // Genera las fechas de la rutina
 const generateGlobalRoutine = (selectedDays: string[], startDate: Date, endDate: Date) => {
@@ -125,14 +113,14 @@ const generateGlobalRoutine = (selectedDays: string[], startDate: Date, endDate:
       if (!datesSet.has(trainingDay.toISOString().split('T')[0]) && trainingDay <= endDate) {
         routine.push({
           day: day,
-          date: trainingDay.toISOString().split('T')[0],  // Fecha en formato YYYY-MM-DD
+          date: trainingDay.toISOString().split('T')[0],
         });
 
-        datesSet.add(trainingDay.toISOString().split('T')[0]);  // Añadimos la fecha al Set para evitar duplicados
+        datesSet.add(trainingDay.toISOString().split('T')[0]);
       }
     });
 
-    currentDate.setDate(currentDate.getDate() + 1); // Aseguramos de seguir avanzando por los días
+    currentDate.setDate(currentDate.getDate() + 1);
   }
 
   return routine;
@@ -160,16 +148,15 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
 
-  const response = { message: "", error: false, data: [], start_date: "", end_date: "" };
+  const response = { message: "", error: false, data: [] as Routine[] };  // Especificamos que 'data' es un array de 'Routine'
 
   try {
     const [rows] = await pool.execute(
-      "SELECT day, date, start_date, end_date FROM user_routine WHERE user_id = ?",
+      "SELECT day, date, start_date, end_date, status FROM user_routine WHERE user_id = ?",
       [userId]
     );
 
-    const routineRows = rows as Array<{ day: string; date: string; start_date: string; end_date: string }>;
-
+    const routineRows = rows as Array<{ day: string; date: string; start_date: string; end_date: string; status: string }>;
 
     if (routineRows.length > 0) {
       // Convertimos las fechas a formato "DD/MM/YYYY" antes de devolverlas
@@ -178,32 +165,29 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
         date: formatDateWithSlash(new Date(row.date)),
         start_date: formatDateWithSlash(new Date(row.start_date)),
         end_date: formatDateWithSlash(new Date(row.end_date)),
+        status: row.status
       }));
 
-      // Asignar las fechas de inicio y final
-      const startDate = new Date(routineRows[0].start_date);
-      const endDate = new Date(routineRows[0].end_date);
-      response.start_date = formatDateWithSlash(startDate);
-      response.end_date = formatDateWithSlash(endDate);
-
-      response.data = adapterRoutineDays(formattedRows);  // Usamos el adaptador para formatear los datos
-      response.message = "Rutina obtenida exitosamente";
+      response.data = formattedRows;
+      response.message = "Rutinas obtenidas exitosamente";
       return res.status(200).json(response);
     } else {
       response.error = true;
-      response.message = "No se encontró rutina para este usuario";
+      response.message = "No se encontraron rutinas para este usuario";
       return res.status(404).json(response);
     }
   } catch (error) {
-    console.error("Error al obtener la rutina del usuario:", error);
+    console.error("Error al obtener las rutinas del usuario:", error);
     next(error);
-    return res.status(500).json({ message: "Error al obtener la rutina." });
+    return res.status(500).json({ message: "Error al obtener las rutinas." });
   }
 };
 
+
+
 // Actualizar la rutina de un usuario
 export const updateRoutineDayStatus = async (req: Request, res: Response, next: NextFunction) => {
-  const { selected_days, start_date, end_date, current_date } = req.body;  // Días seleccionados, fecha de inicio, fecha final y fecha actual enviados desde el frontend
+  const { selected_days, start_date, end_date, current_date } = req.body;
 
   const response = { message: "", error: false };
 
@@ -211,7 +195,7 @@ export const updateRoutineDayStatus = async (req: Request, res: Response, next: 
     const { headers } = req;
     const token = headers["x-access-token"];
     const decode = token && verify(`${token}`, SECRET);
-    const userId = (<any>(<unknown>decode)).userId;  // Obtenemos el userId desde el token
+    const userId = (<any>(<unknown>decode)).userId;
 
     if (!selected_days || selected_days.length === 0) {
       response.error = true;
@@ -220,9 +204,9 @@ export const updateRoutineDayStatus = async (req: Request, res: Response, next: 
     }
 
     // Convertir las fechas de inicio, final y actual a objetos Date
-    const startDate = new Date(start_date);  // Fecha de inicio proporcionada
-    const endDate = new Date(end_date);  // Fecha final proporcionada
-    const currentDate = new Date(current_date);  // Fecha actual para actualizar la rutina
+    const startDate = new Date(start_date);
+    const endDate = new Date(end_date);
+    const currentDate = new Date(current_date);
 
     // Obtener las rutinas ya existentes para este usuario
     const [existingRoutinesRows] = await pool.execute(
@@ -247,7 +231,7 @@ export const updateRoutineDayStatus = async (req: Request, res: Response, next: 
       return res.status(201).json({
         start_date: formatDateWithSlash(startDate),
         end_date: formatDateWithSlash(endDate),
-        routine: adapterRoutineDays(newRoutineData),  // Usamos el adaptador para devolver los días
+        routine: adapterRoutineDays(newRoutineData),
       });
     } else {
       response.error = true;
@@ -262,12 +246,12 @@ export const updateRoutineDayStatus = async (req: Request, res: Response, next: 
 };
 // Eliminar un día de la rutina
 export const deleteRoutineDay = async (req: Request, res: Response, next: NextFunction) => {
-  const { error } = deleteRoutineDto.validate(req.body);  // Validación con Joi
+  const { error } = deleteRoutineDto.validate(req.body);
   if (error) {
     return res.status(400).json({ error: true, message: error.details[0].message });
   }
 
-  const { day, date } = req.body;  // Día y fecha que se eliminará
+  const { day, date } = req.body;
 
   const { headers } = req;
   const token = headers["x-access-token"];
