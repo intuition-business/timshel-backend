@@ -289,11 +289,10 @@ export const getRoutinesSaved = async (
   }
 };
 
-// Función para convertir la fecha
 const convertDate = (date: string): string => {
-  const [day, month, year] = date.split('/'); // Asumiendo que el formato es DD/MM/YYYY
-  const formattedDate = new Date(`${year}-${month}-${day}`); // Crear un objeto Date en formato YYYY-MM-DD
-  return formattedDate.toISOString().split('T')[0]; // Convertir a YYYY-MM-DD
+  const [day, month, year] = date.split('/');
+  const formattedDate = new Date(`${year}-${month}-${day}`);
+  return formattedDate.toISOString().split('T')[0];
 };
 
 export const routinesSaved = async (
@@ -358,14 +357,13 @@ export const routinesSaved = async (
     try {
       await connection.beginTransaction();
 
-      // 1. Buscar y actualizar el estado en la tabla 'user_routine'
       const [rows]: any = await connection.execute(
         "SELECT id, status FROM user_routine WHERE date = ? AND status = 'pending'",
         [formattedFecha]
       );
 
       if (rows.length > 0) {
-        const { id } = rows[0]; // Obtener el id del registro encontrado
+        const { id } = rows[0];
 
         // Actualizar el estado de la rutina a 'approved'
         const [updateResult]: any = await connection.execute(
