@@ -289,6 +289,12 @@ export const getRoutinesSaved = async (
   }
 };
 
+// Función para convertir la fecha
+const convertDate = (date: string): string => {
+  const [day, month, year] = date.split('/'); // Asumiendo que el formato es DD/MM/YYYY
+  const formattedDate = new Date(`${year}-${month}-${day}`); // Crear un objeto Date en formato YYYY-MM-DD
+  return formattedDate.toISOString().split('T')[0]; // Convertir a YYYY-MM-DD
+};
 
 export const routinesSaved = async (
   req: Request,
@@ -310,6 +316,10 @@ export const routinesSaved = async (
     }
 
     const { fecha_rutina, rutina } = body;
+
+    // Convertir la fecha a formato adecuado
+    const formattedFecha = convertDate(fecha_rutina);
+
     const { routine_name, exercises } = rutina;
 
     if (!routine_name) {
@@ -340,7 +350,6 @@ export const routinesSaved = async (
 
     const rutinaId = uuidv4();
     console.log(`UUID generado para rutina_id: ${rutinaId}`);
-    // ------------------------------------------
 
     let totalInsertedExercises = 0;
     const insertedExerciseResults = [];
@@ -348,6 +357,30 @@ export const routinesSaved = async (
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
+
+      // 1. Buscar y actualizar el estado en la tabla 'user_routine'
+      const [rows]: any = await connection.execute(
+        "SELECT id, status FROM user_routine WHERE date = ? AND status = 'pending'",
+        [formattedFecha]
+      );
+
+      if (rows.length > 0) {
+        const { id } = rows[0]; // Obtener el id del registro encontrado
+
+        // Actualizar el estado de la rutina a 'approved'
+        const [updateResult]: any = await connection.execute(
+          "UPDATE user_routine SET status = ? WHERE id = ?",
+          ['completed', id]
+        );
+
+        if (updateResult.affectedRows > 0) {
+          console.log(`Estado de la rutina para la fecha ${formattedFecha} actualizado a 'approved'.`);
+        } else {
+          console.error(`No se pudo actualizar el estado de la rutina para la fecha ${formattedFecha}`);
+        }
+      } else {
+        console.log(`No se encontró una rutina pendiente para la fecha ${formattedFecha}`);
+      }
 
       for (const exercise of validExercises) {
         const { exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed } = exercise;
@@ -359,7 +392,7 @@ export const routinesSaved = async (
         const [exerciseInsertResult]: any = await connection.execute(
           "INSERT INTO complete_rutina (fecha_rutina, user_id, routine_name, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed, rutina_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           [
-            fecha_rutina,
+            formattedFecha,
             userId,
             routine_name,
             exercise_name,
@@ -373,7 +406,6 @@ export const routinesSaved = async (
           ]
         );
 
-        console.log(`Resultado de inserción de ejercicio '${exercise_name}':`, exerciseInsertResult);
 
         if (exerciseInsertResult && exerciseInsertResult.insertId) {
           totalInsertedExercises++;
