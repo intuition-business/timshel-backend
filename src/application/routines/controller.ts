@@ -85,10 +85,10 @@ export const generateRoutinesIa = async (
 
     let daysData;
     if (userRoutineRows.length === 0) {
-      daysData = generateDefaultRoutineDays(); // Llamamos a una función que genera los días predeterminados
+      daysData = generateDefaultRoutineDays();
       console.log("Días generados por defecto:", daysData);
     } else {
-      daysData = userRoutineRows; // Usamos los días guardados en la base de datos
+      daysData = userRoutineRows;
       console.log("Días obtenidos de la base de datos:", daysData);
     }
 
@@ -101,7 +101,7 @@ export const generateRoutinesIa = async (
     const personData = adapter(rows?.[0]);
 
     // Modificamos el prompt para incluir los días específicos
-    let prompt = await readFiles(personData, daysData);  // Ahora se pasan los días aquí
+    let prompt = await readFiles(personData, daysData);
     console.log("Prompt generado para OpenAI:", prompt);
 
     // Llamamos a la IA para generar la rutina
@@ -109,7 +109,7 @@ export const generateRoutinesIa = async (
 
     // Validamos si la respuesta de OpenAI es válida
     if (response?.choices?.[0]?.message?.content) {
-      console.log("Respuesta completa de OpenAI:", response); // Log para depuración
+      console.log("Respuesta completa de OpenAI:", response);
 
       let parsed;
       try {
@@ -121,9 +121,9 @@ export const generateRoutinesIa = async (
 
       console.log("Respuesta completa parseada de OpenAI:", parsed);
 
-      // Verificamos que parsed tenga la propiedad 'training_plan' y que sea un array
-      if (parsed && Array.isArray(parsed.training_plan)) {
-        const trainingPlan = parsed.training_plan;
+      // Verificamos que parsed tenga la propiedad 'workouts' y que sea un array
+      if (parsed && Array.isArray(parsed.workouts)) {
+        const trainingPlan = parsed.workouts;
 
         // Asociamos las fechas con la rutina generada
         trainingPlan.forEach((day: any, index: number) => {
@@ -131,7 +131,8 @@ export const generateRoutinesIa = async (
           day.fecha = dateData ? dateData.date : null;
         });
 
-        const trainingPlanJson = JSON.stringify(trainingPlan);
+        // Guardar en la DB
+        const trainingPlanJson = JSON.stringify(trainingPlan); // Convertir a string si usas TEXT; si usas JSON, usa el objeto directamente
 
         // Insertar o actualizar el registro
         await pool.execute(
@@ -139,11 +140,16 @@ export const generateRoutinesIa = async (
           [userId, trainingPlanJson, trainingPlanJson]
         );
 
+        // Obtener el ID del registro (para INSERT o UPDATE)
         const [result]: any = await pool.execute(
           "SELECT id FROM user_training_plans WHERE user_id = ?",
           [userId]
         );
         const routineId = result?.[0]?.id;
+
+        if (!routineId) {
+          throw new Error("No se pudo obtener el ID del registro");
+        }
 
         console.log("Plan de entrenamiento guardado en la DB para userId:", userId, "con routineId:", routineId);
 
@@ -156,7 +162,7 @@ export const generateRoutinesIa = async (
         });
         return;
       } else {
-        console.error("La propiedad 'training_plan' no es un array:", parsed);
+        console.error("La propiedad 'workouts' no es un array:", parsed);
         res.json({
           response: "",
           error: true,
