@@ -121,10 +121,9 @@ export const generateRoutinesIa = async (
 
       console.log("Respuesta completa parseada de OpenAI:", parsed);
 
-      // Verificamos que parsed tenga la propiedad 'workouts' y que sea un array
-      if (parsed && Array.isArray(parsed.workouts)) {
-        const trainingPlan = parsed.workouts;
-
+      // Verificamos que parsed tenga la propiedad 'workouts' o 'training_plan' y que sea un array
+      const trainingPlan = parsed.workouts || parsed.training_plan;
+      if (parsed && Array.isArray(trainingPlan)) {
         // Asociamos las fechas con la rutina generada
         trainingPlan.forEach((day: any, index: number) => {
           const dateData = daysData[index];
@@ -162,7 +161,7 @@ export const generateRoutinesIa = async (
         });
         return;
       } else {
-        console.error("La propiedad 'workouts' no es un array:", parsed);
+        console.error("La propiedad 'workouts' o 'training_plan' no es un array:", parsed);
         res.json({
           response: "",
           error: true,
@@ -190,7 +189,6 @@ export const generateRoutinesIa = async (
     next(error);
   }
 };
-
 // Función para manejar errores de parseo
 function handleParseError(parseError: unknown, res: Response) {
   if (parseError instanceof Error) {
