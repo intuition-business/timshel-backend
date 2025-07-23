@@ -131,20 +131,28 @@ export const generateRoutinesIa = async (
           day.fecha = dateData ? dateData.date : null;
         });
 
-        // Guardamos el archivo generado
-        const userDirPath = path.join(__dirname, `data/${userId}`);
-        await fs.mkdir(userDirPath, { recursive: true });
+        const trainingPlanJson = JSON.stringify(trainingPlan);
 
-        const pathFilePrompt = path.join(userDirPath, "plan_entrenamiento.json");
-        await fs.writeFile(pathFilePrompt, JSON.stringify(trainingPlan, null, 2), "utf-8");
+        // Insertar o actualizar el registro
+        await pool.execute(
+          "INSERT INTO user_training_plans (user_id, training_plan) VALUES (?, ?) ON DUPLICATE KEY UPDATE training_plan = ?",
+          [userId, trainingPlanJson, trainingPlanJson]
+        );
 
-        console.log("Documento guardado en:", pathFilePrompt);
+        const [result]: any = await pool.execute(
+          "SELECT id FROM user_training_plans WHERE user_id = ?",
+          [userId]
+        );
+        const routineId = result?.[0]?.id;
+
+        console.log("Plan de entrenamiento guardado en la DB para userId:", userId, "con routineId:", routineId);
 
         res.json({
           response: "Documento generado.",
           error: false,
           message: "Documento generado.",
-          path_file: pathFilePrompt,
+          routine_id: routineId,
+          user_id: userId
         });
         return;
       } else {
