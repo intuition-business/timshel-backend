@@ -25,6 +25,22 @@ export const getRoutines = async (
   res: Response,
   next: NextFunction
 ) => {
+  const filePath = path.join(__dirname, "training_plan.json");
+  try {
+    const data = await fs.readFile(filePath, "utf8");
+    res.json(JSON.parse(data)); // Express automáticamente establece el Content-Type a application/json y envía el JSON
+  } catch (error) {
+    console.error("Error al leer el archivo JSON:", error);
+    //res.status(500).send("Error interno del servidor al leer el archivo JSON.");
+    next(error);
+  }
+};
+
+export const getGeneratedRoutinesIa = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
@@ -82,31 +98,6 @@ export const getRoutines = async (
       message: "Ocurrió un error al obtener el plan de entrenamiento.",
       details: error
     });
-    next(error);
-  }
-};
-export const getGeneratedRoutinesIa = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const { headers } = req;
-  const token = headers["x-access-token"];
-  const decode = token && verify(`${token}`, SECRET);
-  const userId = (<any>(<unknown>decode)).userId;
-
-  // const filePath = path.join(
-  //   __dirname,
-  //   `data/${userId}/plan_entrenamiento.json`
-  // );
-
-  const filePath = `/usr/src/app/src/application/routines/data/${userId}/plan_entrenamiento.json`;
-  try {
-    const data = await fs.readFile(filePath, "utf8");
-    res.json(JSON.parse(data)); // Express automáticamente establece el Content-Type a application/json y envía el JSON
-  } catch (error) {
-    console.error("Error al leer el archivo JSON:", error);
-    //res.status(500).send("Error interno del servidor al leer el archivo JSON.");
     next(error);
   }
 };
