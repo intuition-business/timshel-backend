@@ -25,17 +25,66 @@ export const getRoutines = async (
   res: Response,
   next: NextFunction
 ) => {
-  const filePath = path.join(__dirname, "training_plan.json");
+  const { headers } = req;
+  const token = headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (<any>(<unknown>decode)).userId;
+
   try {
-    const data = await fs.readFile(filePath, "utf8");
-    res.json(JSON.parse(data)); // Express automáticamente establece el Content-Type a application/json y envía el JSON
+    // Obtener el plan de entrenamiento desde la base de datos
+    const [planRows]: any = await pool.execute(
+      "SELECT training_plan FROM user_training_plans WHERE user_id = ?",
+      [userId]
+    );
+
+    if (planRows.length === 0) {
+      res.status(404).json({
+        response: "",
+        error: true,
+        message: "No se encontró un plan de entrenamiento para este usuario."
+      });
+      return;
+    }
+
+    let trainingPlan = JSON.parse(planRows[0].training_plan);
+
+    // Obtener los días y estados desde la tabla user_routine
+    const [routineRows]: any = await pool.execute(
+      "SELECT date, status FROM user_routine WHERE user_id = ? ORDER BY date",
+      [userId]
+    );
+
+    // Crear un mapa de fechas a estados para fácil acceso
+    const statusMap: { [key: string]: string } = {};
+    routineRows.forEach((row: any) => {
+      // Normalizar la fecha a ISO sin hora para comparación (asumiendo que las fechas en training_plan son ISO completas)
+      const normalizedDate = new Date(row.date).toISOString().split('T')[0];
+      statusMap[normalizedDate] = row.status;
+    });
+
+    // Integrar los estados en el trainingPlan
+    trainingPlan = trainingPlan.map((day: any) => {
+      // Normalizar la fecha del día en trainingPlan
+      const normalizedDayDate = day.fecha ? new Date(day.fecha).toISOString().split('T')[0] : null;
+      const status = normalizedDayDate ? statusMap[normalizedDayDate] || 'pending' : 'pending'; // Estado por defecto si no existe
+      return {
+        ...day,
+        status // Agregar el campo status a cada día
+      };
+    });
+
+    res.json(trainingPlan);
   } catch (error) {
-    console.error("Error al leer el archivo JSON:", error);
-    //res.status(500).send("Error interno del servidor al leer el archivo JSON.");
+    console.error("Error al obtener el plan de entrenamiento:", error);
+    res.status(500).json({
+      response: "",
+      error: true,
+      message: "Ocurrió un error al obtener el plan de entrenamiento.",
+      details: error
+    });
     next(error);
   }
 };
-
 export const getGeneratedRoutinesIa = async (
   req: Request,
   res: Response,
