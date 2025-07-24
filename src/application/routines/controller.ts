@@ -40,7 +40,7 @@ export const getGeneratedRoutinesIa = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
@@ -49,7 +49,7 @@ export const getGeneratedRoutinesIa = async (
   try {
     // Obtener el plan de entrenamiento desde la base de datos
     const [planRows]: any = await pool.execute(
-      "SELECT training_plan FROM user_training_plans WHERE user_id = ?",
+      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ?",
       [userId]
     );
 
@@ -62,7 +62,35 @@ export const getGeneratedRoutinesIa = async (
       return;
     }
 
-    let trainingPlan = JSON.parse(planRows[0].training_plan);
+    let trainingPlan;
+    if (typeof planRows[0].training_plan === "string") {
+      // Si es TEXT, parsear el string a JSON
+      try {
+        trainingPlan = JSON.parse(planRows[0].training_plan);
+      } catch (parseError) {
+        console.error("Error al parsear training_plan:", parseError);
+        res.status(500).json({
+          response: "",
+          error: true,
+          message: "El plan de entrenamiento tiene un formato inválido."
+        });
+        return;
+      }
+    } else {
+      // Si es JSON, ya es un objeto
+      trainingPlan = planRows[0].training_plan;
+    }
+
+    // Validar que trainingPlan es un array
+    if (!Array.isArray(trainingPlan)) {
+      console.error("training_plan no es un array:", trainingPlan);
+      res.status(500).json({
+        response: "",
+        error: true,
+        message: "El plan de entrenamiento no es un array válido."
+      });
+      return;
+    }
 
     // Obtener los días y estados desde la tabla user_routine
     const [routineRows]: any = await pool.execute(
@@ -70,35 +98,44 @@ export const getGeneratedRoutinesIa = async (
       [userId]
     );
 
-    // Crear un mapa de fechas a estados para fácil acceso
+    // Crear un mapa de fechas a estados
     const statusMap: { [key: string]: string } = {};
     routineRows.forEach((row: any) => {
-      // Normalizar la fecha a ISO sin hora para comparación (asumiendo que las fechas en training_plan son ISO completas)
-      const normalizedDate = new Date(row.date).toISOString().split('T')[0];
-      statusMap[normalizedDate] = row.status;
+      // Normalizar la fecha a ISO sin hora para comparación
+      const normalizedDate = new Date(row.date).toISOString().split("T")[0];
+      // Validar que el estado pertenece al ENUM
+      if (["pending", "completed", "in-progress"].includes(row.status)) {
+        statusMap[normalizedDate] = row.status;
+      }
     });
 
     // Integrar los estados en el trainingPlan
     trainingPlan = trainingPlan.map((day: any) => {
       // Normalizar la fecha del día en trainingPlan
-      const normalizedDayDate = day.fecha ? new Date(day.fecha).toISOString().split('T')[0] : null;
-      const status = normalizedDayDate ? statusMap[normalizedDayDate] || 'pending' : 'pending'; // Estado por defecto si no existe
+      const normalizedDayDate = day.fecha ? new Date(day.fecha).toISOString().split("T")[0] : null;
+      const status = normalizedDayDate ? statusMap[normalizedDayDate] || "pending" : "pending";
       return {
         ...day,
         status // Agregar el campo status a cada día
       };
     });
 
-    res.json(trainingPlan);
-  } catch (error) {
+    res.json({
+      response: trainingPlan,
+      error: false,
+      message: "Plan de entrenamiento obtenido con éxito.",
+      routine_id: planRows[0].id,
+      user_id: userId
+    });
+  } catch (error: any) {
     console.error("Error al obtener el plan de entrenamiento:", error);
     res.status(500).json({
       response: "",
       error: true,
       message: "Ocurrió un error al obtener el plan de entrenamiento.",
-      details: error
+      details: error.message
     });
-    next(error);
+
   }
 };
 
