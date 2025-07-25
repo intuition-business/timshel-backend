@@ -20,7 +20,7 @@ interface Exercise {
   series_completed: { reps: number, load: number, breakTime: number }[];  // Definimos las series completadas como un arreglo de objetos
 }
 
-/* export const getRoutines = async (
+export const getRoutines = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -34,7 +34,7 @@ interface Exercise {
     //res.status(500).send("Error interno del servidor al leer el archivo JSON.");
     next(error);
   }
-}; */
+};
 
 export const getGeneratedRoutinesIa = async (
   req: Request,
@@ -395,10 +395,8 @@ export const getRoutineByDate = async (
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
 
-    // Cambiar para obtener fecha_rutina de query params
     const { fecha_rutina } = req.query;
 
-    // Validar que la fecha se haya pasado correctamente
     if (!fecha_rutina) {
       res.status(400).json({
         error: true,
@@ -494,7 +492,6 @@ export const routinesSaved = async (
 
     const { fecha_rutina, rutina } = body;
 
-    // Convertir la fecha a formato adecuado
     const formattedFecha = convertDate(fecha_rutina);
 
     const { routine_name, exercises } = rutina;
@@ -526,7 +523,6 @@ export const routinesSaved = async (
     }
 
     const rutinaId = uuidv4();
-    console.log(`UUID generado para rutina_id: ${rutinaId}`);
 
     let totalInsertedExercises = 0;
     const insertedExerciseResults = [];
