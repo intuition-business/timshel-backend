@@ -5,6 +5,7 @@ import {
     getGeneratedRoutinesIa,
     getRoutinesSaved,
     routinesSaved,
+    getRoutineByDate,
 } from "../../application/routines/controller";
 import { verifyToken } from "../../middleware/jwtVerify";
 
@@ -186,14 +187,47 @@ const router = Router();
  *         description: "Error interno del servidor."
  */
 
-router.get("/routinesSaved", verifyToken, getRoutinesSaved); // Obtener rutinas guardadas
+/**
+ * @swagger
+ * /api/routines/routinesByDate:
+ *   get:
+ *     summary: "Obtener las rutinas guardadas de un usuario por fecha"
+ *     tags: [RoutineNew]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: fecha_rutina
+ *         required: true
+ *         description: "Fecha de la rutina en formato dd/mm/yyyy."
+ *         schema:
+ *           type: string
+ *           example: "23/07/2025"
+ *     responses:
+ *       200:
+ *         description: "Rutinas obtenidas exitosamente para la fecha proporcionada."
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/routine-response'
+ *       400:
+ *         description: "Fecha de rutina es requerida."
+ *       404:
+ *         description: "No se encontraron rutinas para la fecha proporcionada."
+ *       500:
+ *         description: "Error interno del servidor."
+ */
 
-router.post("/routinesSave", verifyToken, routinesSaved); // Guardar rutina
+router.get("/routinesSaved", verifyToken, getRoutinesSaved);
 
-router.get("/", verifyToken, getRoutines); // Obtener rutinas generales
+router.post("/routinesSave", verifyToken, routinesSaved);
 
-router.post("/ia", verifyToken, generateRoutinesIa); // Generar rutina mediante IA
+router.get("/routinesByDate", verifyToken, getRoutineByDate);
 
-router.get("/ia", verifyToken, getGeneratedRoutinesIa); // Obtener rutinas generadas por IA
+router.get("/", verifyToken, getRoutines);
+
+router.post("/ia", verifyToken, generateRoutinesIa);
+
+router.get("/ia", verifyToken, getGeneratedRoutinesIa);
 
 export default router;
