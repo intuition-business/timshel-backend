@@ -20,7 +20,7 @@ interface Exercise {
   series_completed: { reps: number, load: number, breakTime: number }[];  // Definimos las series completadas como un arreglo de objetos
 }
 
-export const getRoutines = async (
+/* export const getRoutines = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -34,7 +34,7 @@ export const getRoutines = async (
     //res.status(500).send("Error interno del servidor al leer el archivo JSON.");
     next(error);
   }
-};
+}; */
 
 export const getGeneratedRoutinesIa = async (
   req: Request,
@@ -382,6 +382,95 @@ const convertDate = (date: string): string => {
   const [day, month, year] = date.split('/');
   const formattedDate = new Date(`${year}-${month}-${day}`);
   return formattedDate.toISOString().split('T')[0];
+};
+
+export const getRoutineByDate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { headers } = req;
+    const token = headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    // Cambiar para obtener fecha_rutina de query params
+    const { fecha_rutina } = req.query;
+
+    // Validar que la fecha se haya pasado correctamente
+    if (!fecha_rutina) {
+      res.status(400).json({
+        error: true,
+        message: "Fecha de rutina es requerida",
+      });
+      return;
+    }
+
+    const formattedFecha = convertDate(fecha_rutina as string);
+
+    const [rows]: any = await pool.execute(
+      "SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed FROM complete_rutina WHERE user_id = ? AND fecha_rutina = ? ORDER BY fecha_rutina DESC, rutina_id, exercise_name",
+      [userId, formattedFecha]
+    );
+
+    if (rows.length > 0) {
+      const routinesMap = new Map();
+
+      for (const item of rows) {
+        let seriesCompletedParsed = item.series_completed;
+
+        if (typeof seriesCompletedParsed === 'string') {
+          try {
+            seriesCompletedParsed = JSON.parse(seriesCompletedParsed);
+          } catch (jsonError) {
+            console.error(`Error parsing series_completed for exercise ${item.exercise_name}:`, jsonError);
+            seriesCompletedParsed = [];
+          }
+        }
+
+        const routineKey = item.rutina_id;
+
+        if (!routinesMap.has(routineKey)) {
+          routinesMap.set(routineKey, {
+            fecha_rutina: item.fecha_rutina,
+            rutina_id: item.rutina_id,
+            routine_name: item.routine_name,
+            exercises: [],
+          });
+        }
+
+        const routine = routinesMap.get(routineKey);
+        routine.exercises.push({
+          exercise_name: item.exercise_name,
+          description: item.description,
+          thumbnail_url: item.thumbnail_url,
+          video_url: item.video_url,
+          liked: item.liked,
+          liked_reason: item.liked_reason,
+          series_completed: seriesCompletedParsed,
+        });
+      }
+
+      const responseData = Array.from(routinesMap.values());
+
+      res.status(200).json({
+        error: false,
+        message: "Rutina guardada para la fecha proporcionada",
+        response: responseData,
+      });
+      return;
+    }
+
+    res.status(404).json({
+      error: true,
+      response: undefined,
+      message: "No se encontraron rutinas para la fecha proporcionada",
+    });
+  } catch (error) {
+    console.error("Error al obtener rutina por fecha:", error);
+    next(error);
+  }
 };
 
 export const routinesSaved = async (
