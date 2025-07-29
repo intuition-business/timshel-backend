@@ -471,6 +471,7 @@ export const getRoutineByDate = async (
   }
 };
 
+
 export const getRoutineByExerciseName = async (
   req: Request,
   res: Response,
@@ -494,19 +495,19 @@ export const getRoutineByExerciseName = async (
 
     let formattedFecha: string | null = null;
     if (fecha_rutina) {
-      formattedFecha = convertDate(fecha_rutina as string); // Assuming convertDate handles formats like DD/MM/YYYY
+      formattedFecha = convertDate(fecha_rutina as string); // Assuming convertDate handles DD/MM/YYYY
     }
 
     let query = `
       SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed 
       FROM complete_rutina 
-      WHERE user_id = ? AND exercise_name = ?
+      WHERE user_id = ? AND LOWER(exercise_name) LIKE LOWER(?)
     `;
-    let params: any[] = [userId, exercise_name];
+    let params: any[] = [userId, `%${exercise_name}%`];
 
     if (routine_name) {
-      query += " AND routine_name = ?";
-      params.push(routine_name);
+      query += " AND LOWER(routine_name) LIKE LOWER(?)";
+      params.push(`%${routine_name}%`);
     }
 
     if (formattedFecha) {
@@ -610,6 +611,7 @@ export const getRoutineByExerciseName = async (
     next(error);
   }
 };
+
 
 export const routinesSaved = async (
   req: Request,
