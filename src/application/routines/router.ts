@@ -6,6 +6,7 @@ import {
   getRoutinesSaved,
   routinesSaved,
   getRoutineByDate,
+  getRoutineByExerciseName,
 } from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";
 
@@ -16,6 +17,7 @@ router.post("/ia", verifyToken, generateRoutinesIa);
 router.get("/ia", verifyToken, getGeneratedRoutinesIa);
 router.get("/routinesSaved", verifyToken, getRoutinesSaved);
 router.get("/routinesByDate", verifyToken, getRoutineByDate);
+router.get("/routinesByExerciseName", verifyToken, getRoutineByExerciseName);
 router.post("/routinesSave", verifyToken, routinesSaved);
 
 
