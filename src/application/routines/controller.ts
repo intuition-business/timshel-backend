@@ -471,6 +471,146 @@ export const getRoutineByDate = async (
   }
 };
 
+export const getRoutineByExerciseName = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { headers } = req;
+    const token = headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    const { exercise_name, fecha_rutina, routine_name } = req.query;
+
+    if (!exercise_name) {
+      res.status(400).json({
+        error: true,
+        message: "Nombre del ejercicio es requerido",
+      });
+      return;
+    }
+
+    let formattedFecha: string | null = null;
+    if (fecha_rutina) {
+      formattedFecha = convertDate(fecha_rutina as string); // Assuming convertDate handles formats like DD/MM/YYYY
+    }
+
+    let query = `
+      SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed 
+      FROM complete_rutina 
+      WHERE user_id = ? AND exercise_name = ?
+    `;
+    let params: any[] = [userId, exercise_name];
+
+    if (routine_name) {
+      query += " AND routine_name = ?";
+      params.push(routine_name);
+    }
+
+    if (formattedFecha) {
+      query += " AND fecha_rutina = ?";
+      params.push(formattedFecha);
+    }
+
+    query += " ORDER BY fecha_rutina DESC, rutina_id, exercise_name";
+
+    const [rows]: any = await pool.execute(query, params);
+
+    if (rows.length > 0) {
+      const datesMap = new Map();
+
+      for (const item of rows) {
+        let seriesCompletedParsed = item.series_completed;
+
+        if (typeof seriesCompletedParsed === 'string') {
+          try {
+            seriesCompletedParsed = JSON.parse(seriesCompletedParsed);
+          } catch (jsonError) {
+            console.error(`Error parsing series_completed for exercise ${item.exercise_name}:`, jsonError);
+            seriesCompletedParsed = [];
+          }
+        }
+
+        const dateKey = item.fecha_rutina;
+        const routineKey = item.rutina_id;
+
+        if (!datesMap.has(dateKey)) {
+          datesMap.set(dateKey, {
+            fecha_rutina: dateKey,
+            routines: new Map(),
+          });
+        }
+
+        const dateEntry = datesMap.get(dateKey);
+
+        if (!dateEntry.routines.has(routineKey)) {
+          dateEntry.routines.set(routineKey, {
+            rutina_id: routineKey,
+            routine_name: item.routine_name,
+            exercises: [],
+          });
+        }
+
+        const routine = dateEntry.routines.get(routineKey);
+        routine.exercises.push({
+          exercise_name: item.exercise_name,
+          description: item.description,
+          thumbnail_url: item.thumbnail_url,
+          video_url: item.video_url,
+          liked: item.liked,
+          liked_reason: item.liked_reason,
+          series_completed: seriesCompletedParsed,
+        });
+      }
+
+      const responseData = Array.from(datesMap.values()).map((dateEntry: any) => ({
+        fecha_rutina: dateEntry.fecha_rutina,
+        routines: Array.from(dateEntry.routines.values()),
+      }));
+
+      let message = "Rutinas encontradas con el ejercicio especificado";
+      if (routine_name) {
+        message += " en la rutina especificada";
+      }
+      if (formattedFecha) {
+        message = "Rutina encontrada para la fecha y ejercicio especificado";
+        if (routine_name) {
+          message += " en la rutina especificada";
+        }
+      }
+
+      res.status(200).json({
+        error: false,
+        message,
+        response: formattedFecha ? responseData[0]?.routines || [] : responseData,
+      });
+      return;
+    }
+
+    let notFoundMessage = "No se encontraron rutinas con el ejercicio especificado";
+    if (routine_name) {
+      notFoundMessage += " en la rutina especificada";
+    }
+    if (formattedFecha) {
+      notFoundMessage = "No se encontró la rutina con el ejercicio especificado en la fecha proporcionada";
+      if (routine_name) {
+        notFoundMessage += " en la rutina especificada";
+      }
+    }
+
+    res.status(404).json({
+      error: true,
+      response: undefined,
+      message: notFoundMessage,
+    });
+  } catch (error) {
+    console.error("Error al obtener rutina por nombre de ejercicio:", error);
+    next(error);
+  }
+};
+
 export const routinesSaved = async (
   req: Request,
   res: Response,
