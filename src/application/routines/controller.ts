@@ -585,7 +585,7 @@ export const getRoutineByExerciseName = async (
       res.status(200).json({
         error: false,
         message,
-        response: formattedFecha ? responseData[0]?.routines || [] : responseData,
+        response: responseData,
       });
       return;
     }
@@ -611,7 +611,6 @@ export const getRoutineByExerciseName = async (
     next(error);
   }
 };
-
 
 export const routinesSaved = async (
   req: Request,
