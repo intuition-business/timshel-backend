@@ -145,14 +145,10 @@ export const generateRoutinesIa = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    console.log("Iniciando la generación de rutina con IA...");
-
     const { headers } = req;
     const token = headers["x-access-token"];
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
-
-    console.log("Token decodificado. userId:", userId);
 
     // Consultamos los días seleccionados por el usuario
     const [userRoutineRows]: any = await pool.execute(
@@ -163,10 +159,8 @@ export const generateRoutinesIa = async (
     let daysData;
     if (userRoutineRows.length === 0) {
       daysData = generateDefaultRoutineDays();
-      console.log("Días generados por defecto:", daysData);
     } else {
       daysData = userRoutineRows;
-      console.log("Días obtenidos de la base de datos:", daysData);
     }
 
     // Consulta para obtener los datos del usuario desde la tabla 'formulario'
@@ -179,15 +173,12 @@ export const generateRoutinesIa = async (
 
     // Modificamos el prompt para incluir los días específicos
     let prompt = await readFiles(personData, daysData);
-    console.log("Prompt generado para OpenAI:", prompt);
 
     // Llamamos a la IA para generar la rutina
     const { response, error } = await getOpenAI(prompt);
 
     // Validamos si la respuesta de OpenAI es válida
     if (response?.choices?.[0]?.message?.content) {
-      console.log("Respuesta completa de OpenAI:", response);
-
       let parsed;
       try {
         parsed = JSON.parse(response.choices[0].message.content || "");
@@ -195,8 +186,6 @@ export const generateRoutinesIa = async (
         handleParseError(parseError, res);
         return;
       }
-
-      console.log("Respuesta completa parseada de OpenAI:", parsed);
 
       // Verificamos que parsed tenga la propiedad 'workouts' o 'training_plan' y que sea un array
       const trainingPlan = parsed.workouts || parsed.training_plan;
@@ -226,8 +215,6 @@ export const generateRoutinesIa = async (
         if (!routineId) {
           throw new Error("No se pudo obtener el ID del registro");
         }
-
-        console.log("Plan de entrenamiento guardado en la DB para userId:", userId, "con routineId:", routineId);
 
         res.json({
           response: "Documento generado.",
