@@ -44,13 +44,19 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
 
     startDate.setHours(0, 0, 0, 0);
 
-    const start_date_formatted = formatDateWithSlash(startDate);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
 
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 30);
+    let effectiveStart = new Date(Math.max(startDate.getTime(), now.getTime()));
+
+    const endDate = new Date(effectiveStart);
+    endDate.setDate(effectiveStart.getDate() + 30);
+
+    const start_date_formatted = formatDateWithSlash(effectiveStart);
+
     const end_date_formatted = formatDateWithSlash(endDate);
 
-    const routineData = await generateGlobalRoutine(selected_days, startDate, endDate);
+    const routineData = await generateGlobalRoutine(selected_days, effectiveStart, endDate);
 
     const duplicates = [];
     for (const item of routineData) {
@@ -71,7 +77,7 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
     }
 
     const query = "INSERT INTO user_routine (user_id, day, date, start_date, end_date) VALUES ?";
-    const [result]: any = await pool.query(query, [routineData.map(item => [userId, item.day, item.date, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]])]);
+    const [result]: any = await pool.query(query, [routineData.map(item => [userId, item.day, item.date, effectiveStart.toISOString().split('T')[0], endDate.toISOString().split('T')[0]])]);
 
     if (result) {
       response.message = "Rutina generada exitosamente";
@@ -98,48 +104,40 @@ const generateGlobalRoutine = (selectedDays: string[], startDate: Date, endDate:
   const routine: { day: string; date: string }[] = [];
   const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  // Vamos a usar un set para asegurarnos de que no haya días duplicados
-  const datesSet = new Set();
+  const dayMap = {
+    'domingo': 'Sunday',
+    'lunes': 'Monday',
+    'martes': 'Tuesday',
+    'miercoles': 'Wednesday',
+    'jueves': 'Thursday',
+    'viernes': 'Friday',
+    'sabado': 'Saturday',
+    'sunday': 'Sunday',
+    'monday': 'Monday',
+    'tuesday': 'Tuesday',
+    'wednesday': 'Wednesday',
+    'thursday': 'Thursday',
+    'friday': 'Friday',
+    'saturday': 'Saturday',
+  };
 
-  // Generamos las fechas de rutina durante 4 semanas (30 días)
+  const normalizedSelectedDays = new Set(selectedDays.map(day => dayMap[day.toLowerCase() as keyof typeof dayMap]));
+
   let currentDate = new Date(startDate);
 
-  // En cada iteración se genera el día correspondiente
   while (currentDate <= endDate) {
-    selectedDays.forEach(day => {
-      const trainingDay = getNextTrainingDay(day, currentDate, 0);  // El 0 indica la semana inicial
-
-      // Comprobamos si la fecha ya fue añadida antes de agregarla
-      if (!datesSet.has(trainingDay.toISOString().split('T')[0]) && trainingDay <= endDate) {
-        routine.push({
-          day: day,
-          date: trainingDay.toISOString().split('T')[0],
-        });
-
-        datesSet.add(trainingDay.toISOString().split('T')[0]);
-      }
-    });
-
+    const dayIndex = currentDate.getDay();
+    const dayName = daysOfWeek[dayIndex];
+    if (normalizedSelectedDays.has(dayName)) {
+      routine.push({
+        day: dayName,
+        date: currentDate.toISOString().split('T')[0],
+      });
+    }
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
   return routine;
-};
-
-// Función para obtener el siguiente día de entrenamiento basado en el día de la semana
-const getNextTrainingDay = (day: string, startDate: Date, week: number) => {
-  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const targetDayIndex = daysOfWeek.indexOf(day);
-
-  const dayOfWeek = new Date(startDate);
-  let daysToAdd = targetDayIndex - dayOfWeek.getDay() + week * 7;
-
-  if (daysToAdd <= 0) {
-    daysToAdd += 7;
-  }
-  dayOfWeek.setDate(dayOfWeek.getDate() + daysToAdd);
-
-  return dayOfWeek;
 };
 
 export const getRoutineByUserId = async (req: Request, res: Response, next: NextFunction) => {
@@ -282,4 +280,3 @@ export const deleteRoutineDay = async (req: Request, res: Response, next: NextFu
     return res.status(500).json({ message: "Error al eliminar el día de la rutina." });
   }
 };
-
