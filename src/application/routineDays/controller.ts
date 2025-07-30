@@ -150,7 +150,7 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
 
   try {
     const [rows] = await pool.execute(
-      "SELECT day, date, start_date, end_date, status FROM user_routine WHERE user_id = ?",
+      "SELECT day, date, start_date, end_date, status FROM user_routine WHERE user_id = ? ORDER BY date ASC",
       [userId]
     );
 
@@ -180,8 +180,6 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
     return res.status(500).json({ message: "Error al obtener las rutinas." });
   }
 };
-
-
 
 // Actualizar la rutina de un usuario
 export const updateRoutineDayStatus = async (req: Request, res: Response, next: NextFunction) => {
