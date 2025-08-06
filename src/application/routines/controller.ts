@@ -299,7 +299,10 @@ export const getRoutinesSaved = async (
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
 
-    // Selecciona todos los campos necesarios para reconstruir la rutina y sus ejercicios
+    // Start a transaction
+    await pool.query("START TRANSACTION");
+
+    // Fetch routines from complete_rutina
     const [rows]: any = await pool.execute(
       "SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed FROM complete_rutina WHERE user_id = ? ORDER BY fecha_rutina DESC, rutina_id, exercise_name",
       [userId]
@@ -307,17 +310,19 @@ export const getRoutinesSaved = async (
 
     if (rows.length > 0) {
       const routinesMap = new Map();
+      const datesToUpdate = new Set<string>();
 
+      // Process rows and collect unique fecha_rutina values
       for (const item of rows) {
-        let seriesCompletedParsed = item.series_completed; // Asigna directamente si es JSON
+        let seriesCompletedParsed = item.series_completed;
 
-        // Si 'series_completed' no es un JSON válido, asignamos un arreglo vacío
+        // Parse series_completed if it's a string
         if (typeof seriesCompletedParsed === 'string') {
           try {
-            seriesCompletedParsed = JSON.parse(seriesCompletedParsed); // Solo parsear si es string
+            seriesCompletedParsed = JSON.parse(seriesCompletedParsed);
           } catch (jsonError) {
             console.error(`Error parsing series_completed for exercise ${item.exercise_name}:`, jsonError);
-            seriesCompletedParsed = [];  // Si hay error, asignamos un arreglo vacío
+            seriesCompletedParsed = [];
           }
         }
 
@@ -342,17 +347,39 @@ export const getRoutinesSaved = async (
           liked_reason: item.liked_reason,
           series_completed: seriesCompletedParsed,
         });
+
+        // Collect fecha_rutina for status update
+        datesToUpdate.add(item.fecha_rutina);
       }
+
+      // Update user_routine status to 'completed' for each unique fecha_rutina
+      for (const date of datesToUpdate) {
+        const updateQuery = `
+          UPDATE user_routine
+          SET status = 'completed'
+          WHERE user_id = ? AND date = ?
+        `;
+        const [updateResult]: any = await pool.execute(updateQuery, [userId, date]);
+        if (updateResult.affectedRows === 0) {
+          console.warn(`No user_routine found for user_id=${userId}, date=${date}`);
+        }
+      }
+
+      // Commit transaction
+      await pool.query("COMMIT");
 
       const responseData = Array.from(routinesMap.values());
 
       res.status(200).json({
         error: false,
-        message: "Rutinas guardadas",
+        message: "Rutinas guardadas y estados actualizados",
         response: responseData,
       });
       return;
     }
+
+    // Commit transaction even if no rows (no updates needed)
+    await pool.query("COMMIT");
 
     res.status(404).json({
       error: true,
@@ -360,8 +387,14 @@ export const getRoutinesSaved = async (
       message: "No se encontraron rutinas guardadas",
     });
   } catch (error) {
+    // Rollback on error
+    await pool.query("ROLLBACK");
     console.error("Error al obtener rutinas guardadas:", error);
     next(error);
+    res.status(500).json({
+      error: true,
+      message: "Error al obtener rutinas guardadas",
+    });
   }
 };
 
