@@ -204,9 +204,9 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
 
     const routineRows = rows as Array<{
       day: string;
-      date: string | Date;
-      start_date: string | Date;
-      end_date: string | Date;
+      date: string | Date | null;
+      start_date: string | Date | null;
+      end_date: string | Date | null;
       status: string;
       routine_start_time: string;
       routine_end_time: string;
@@ -214,16 +214,28 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
 
     if (routineRows.length > 0) {
       const formattedRows = routineRows.map((row) => {
-        // Convert date fields to strings if they are Date objects
-        const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-        const startDateStr = row.start_date instanceof Date ? row.start_date.toISOString().split('T')[0] : row.start_date;
-        const endDateStr = row.end_date instanceof Date ? row.end_date.toISOString().split('T')[0] : row.end_date;
+        // Convert to strings if Date objects
+        const dateStr = row.date instanceof Date ? getLocalDateString(row.date) : row.date;
+        const startDateStr = row.start_date instanceof Date ? getLocalDateString(row.start_date) : row.start_date;
+        const endDateStr = row.end_date instanceof Date ? getLocalDateString(row.end_date) : row.end_date;
+
+        // Parse and format, with validation
+        const formatOrInvalid = (dateStr: string | null): string => {
+          if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            return 'Invalid Date';
+          }
+          const dateObj = new Date(dateStr); // Directly parse YYYY-MM-DD
+          if (isNaN(dateObj.getTime())) {
+            return 'Invalid Date';
+          }
+          return formatDateWithSlash(dateObj);
+        };
 
         return {
           ...row,
-          date: formatDateWithSlash(new Date(dateStr.split('-').reverse().join('-'))),
-          start_date: formatDateWithSlash(new Date(startDateStr.split('-').reverse().join('-'))),
-          end_date: formatDateWithSlash(new Date(endDateStr.split('-').reverse().join('-'))),
+          date: formatOrInvalid(dateStr),
+          start_date: formatOrInvalid(startDateStr),
+          end_date: formatOrInvalid(endDateStr),
           status: row.status,
         };
       });
