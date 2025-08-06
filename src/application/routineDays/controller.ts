@@ -12,19 +12,40 @@ interface Routine {
   start_date: string;
   end_date: string;
   status: string;
+  routine_start_time: string;
+  routine_end_time: string;
 }
 // Función para formatear las fechas a "DD/MM/YYYY"
 const formatDateWithSlash = (date: Date) => {
-  const day = date.getDate().toString().padStart(2, '0'); // Día con 2 dígitos
-  const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Mes con 2 dígitos (sumamos 1 porque los meses empiezan en 0)
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const year = date.getFullYear();
 
-  return `${day}/${month}/${year}`; // Formato "DD/MM/YYYY"
+  return `${day}/${month}/${year}`;
+};
+
+// Función para obtener la fecha en formato "YYYY-MM-DD" usando componentes locales
+const getLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const isValidTimeFormat = (time: string): boolean => {
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  return timeRegex.test(time);
+};
+
+const isTimeAfter = (time1: string, time2: string): boolean => {
+  const [h1, m1] = time1.split(':').map(Number);
+  const [h2, m2] = time2.split(':').map(Number);
+  return h1 > h2 || (h1 === h2 && m1 > m2);
 };
 
 // Ajustamos el código de creación de la rutina
 export const createRoutine = async (req: Request, res: Response, next: NextFunction) => {
-  const { selected_days, start_date } = req.body;  // Días seleccionados y fecha de inicio enviados desde el frontend
+  const { selected_days, start_date, routine_start_time, routine_end_time, current_user_time } = req.body;
 
   const response = { message: "", error: false };
 
@@ -40,23 +61,40 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json(response);
     }
 
-    const startDate = new Date(start_date.split("/").reverse().join("-"));
+    if (!isValidTimeFormat(routine_start_time) || !isValidTimeFormat(routine_end_time) || !isValidTimeFormat(current_user_time)) {
+      response.error = true;
+      response.message = "Formato de hora inválido (debe ser HH:MM).";
+      return res.status(400).json(response);
+    }
 
-    startDate.setHours(0, 0, 0, 0);
+    if (isTimeAfter(routine_start_time, routine_end_time)) {
+      response.error = true;
+      response.message = "La hora de inicio debe ser anterior a la hora de fin.";
+      return res.status(400).json(response);
+    }
+
+    // Parsear start_date como fecha local
+    const [dayStr, monthStr, yearStr] = start_date.split('/');
+    const day = parseInt(dayStr, 10);
+    const month = parseInt(monthStr, 10);
+    const year = parseInt(yearStr, 10);
+    const startDate = new Date(year, month - 1, day); // Crea fecha en 00:00 local
 
     const now = new Date();
-    now.setHours(0, 0, 0, 0);
+    now.setHours(0, 0, 0, 0); // 00:00 local hoy
 
-    let effectiveStart = new Date(Math.max(startDate.getTime(), now.getTime()));
+    const effectiveStart = new Date(Math.max(startDate.getTime(), now.getTime()));
 
     const endDate = new Date(effectiveStart);
     endDate.setDate(effectiveStart.getDate() + 30);
 
     const start_date_formatted = formatDateWithSlash(effectiveStart);
-
     const end_date_formatted = formatDateWithSlash(endDate);
 
-    const routineData = await generateGlobalRoutine(selected_days, effectiveStart, endDate);
+    // Obtener todayStr como fecha local YYYY-MM-DD
+    const todayStr = getLocalDateString(new Date());
+
+    const routineData = generateGlobalRoutine(selected_days, effectiveStart, endDate, routine_start_time, routine_end_time, current_user_time, todayStr);
 
     const duplicates = [];
     for (const item of routineData) {
@@ -72,12 +110,15 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
 
     if (duplicates.length > 0) {
       response.error = true;
-      response.message = `Ya existe una rutina para los siguientes días: ${duplicates.map(item => `${item.day} ${formatDateWithSlash(new Date(item.date))}`).join(", ")}`;
+      response.message = `Ya existe una rutina para los siguientes días: ${duplicates.map(item => `${item.day} ${formatDateWithSlash(new Date(item.date.split('-').reverse().join('-')))}`).join(", ")}`;
       return res.status(400).json(response);
     }
 
-    const query = "INSERT INTO user_routine (user_id, day, date, start_date, end_date) VALUES ?";
-    const [result]: any = await pool.query(query, [routineData.map(item => [userId, item.day, item.date, effectiveStart.toISOString().split('T')[0], endDate.toISOString().split('T')[0]])]);
+    const startDateStr = getLocalDateString(effectiveStart);
+    const endDateStr = getLocalDateString(endDate);
+
+    const query = "INSERT INTO user_routine (user_id, day, date, start_date, end_date, routine_start_time, routine_end_time) VALUES ?";
+    const [result]: any = await pool.query(query, [routineData.map(item => [userId, item.day, item.date, startDateStr, endDateStr, item.routine_start_time, item.routine_end_time])]);
 
     if (result) {
       response.message = "Rutina generada exitosamente";
@@ -100,8 +141,8 @@ export const createRoutine = async (req: Request, res: Response, next: NextFunct
 
 
 // Genera las fechas de la rutina
-const generateGlobalRoutine = (selectedDays: string[], startDate: Date, endDate: Date) => {
-  const routine: { day: string; date: string }[] = [];
+const generateGlobalRoutine = (selectedDays: string[], startDate: Date, endDate: Date, routine_start_time: string, routine_end_time: string, current_user_time: string, currentDateStr: string) => {
+  const routine: { day: string; date: string; routine_start_time: string; routine_end_time: string }[] = [];
   const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   const dayMap = {
@@ -128,11 +169,18 @@ const generateGlobalRoutine = (selectedDays: string[], startDate: Date, endDate:
   while (currentDate <= endDate) {
     const dayIndex = currentDate.getDay();
     const dayName = daysOfWeek[dayIndex];
+    const dateStr = getLocalDateString(currentDate);
     if (normalizedSelectedDays.has(dayName)) {
-      routine.push({
-        day: dayName,
-        date: currentDate.toISOString().split('T')[0],
-      });
+      if (dateStr === currentDateStr && isTimeAfter(current_user_time, routine_start_time)) {
+        // skip
+      } else {
+        routine.push({
+          day: dayName,
+          date: dateStr,
+          routine_start_time,
+          routine_end_time,
+        });
+      }
     }
     currentDate.setDate(currentDate.getDate() + 1);
   }
@@ -146,25 +194,39 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
 
-  const response = { message: "", error: false, data: [] as Routine[] };  // Especificamos que 'data' es un array de 'Routine'
+  const response = { message: "", error: false, data: [] as Routine[] };
 
   try {
     const [rows] = await pool.execute(
-      "SELECT day, date, start_date, end_date, status FROM user_routine WHERE user_id = ? ORDER BY date ASC",
+      "SELECT day, date, start_date, end_date, status, routine_start_time, routine_end_time FROM user_routine WHERE user_id = ? ORDER BY date ASC",
       [userId]
     );
 
-    const routineRows = rows as Array<{ day: string; date: string; start_date: string; end_date: string; status: string }>;
+    const routineRows = rows as Array<{
+      day: string;
+      date: string | Date;
+      start_date: string | Date;
+      end_date: string | Date;
+      status: string;
+      routine_start_time: string;
+      routine_end_time: string;
+    }>;
 
     if (routineRows.length > 0) {
-      // Convertimos las fechas a formato "DD/MM/YYYY" antes de devolverlas
-      const formattedRows = routineRows.map((row: any) => ({
-        ...row,
-        date: formatDateWithSlash(new Date(row.date)),
-        start_date: formatDateWithSlash(new Date(row.start_date)),
-        end_date: formatDateWithSlash(new Date(row.end_date)),
-        status: row.status
-      }));
+      const formattedRows = routineRows.map((row) => {
+        // Convert date fields to strings if they are Date objects
+        const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+        const startDateStr = row.start_date instanceof Date ? row.start_date.toISOString().split('T')[0] : row.start_date;
+        const endDateStr = row.end_date instanceof Date ? row.end_date.toISOString().split('T')[0] : row.end_date;
+
+        return {
+          ...row,
+          date: formatDateWithSlash(new Date(dateStr.split('-').reverse().join('-'))),
+          start_date: formatDateWithSlash(new Date(startDateStr.split('-').reverse().join('-'))),
+          end_date: formatDateWithSlash(new Date(endDateStr.split('-').reverse().join('-'))),
+          status: row.status,
+        };
+      });
 
       response.data = formattedRows;
       response.message = "Rutinas obtenidas exitosamente";
@@ -183,7 +245,7 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
 
 // Actualizar la rutina de un usuario
 export const updateRoutineDayStatus = async (req: Request, res: Response, next: NextFunction) => {
-  const { selected_days, start_date, end_date, current_date } = req.body;
+  const { selected_days, start_date, end_date, current_date, routine_start_time, routine_end_time, current_user_time } = req.body;
 
   const response = { message: "", error: false };
 
@@ -199,28 +261,34 @@ export const updateRoutineDayStatus = async (req: Request, res: Response, next: 
       return res.status(400).json(response);
     }
 
-    // Convertir las fechas de inicio, final y actual a objetos Date
-    const startDate = new Date(start_date);
-    const endDate = new Date(end_date);
-    const currentDate = new Date(current_date);
+    // Convertir las fechas de inicio, final y actual a objetos Date locales
+    const [sDay, sMonth, sYear] = start_date.split('/');
+    const startDate = new Date(parseInt(sYear), parseInt(sMonth) - 1, parseInt(sDay));
+
+    const [eDay, eMonth, eYear] = end_date.split('/');
+    const endDate = new Date(parseInt(eYear), parseInt(eMonth) - 1, parseInt(eDay));
+
+    const [cDay, cMonth, cYear] = current_date.split('/');
+    const currentDate = new Date(parseInt(cYear), parseInt(cMonth) - 1, parseInt(cDay));
+
+    const currentDateStr = getLocalDateString(currentDate);
 
     // Obtener las rutinas ya existentes para este usuario
     const [existingRoutinesRows] = await pool.execute(
       "SELECT day, date FROM user_routine WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date",
-      [userId, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]
+      [userId, getLocalDateString(startDate), getLocalDateString(endDate)]
     ) as [Array<{ day: string; date: string }>, any];
     const existingRoutines = existingRoutinesRows as Array<{ day: string; date: string }>;
 
-
-    // Creamos un set con las fechas existentes para no duplicarlas
     const existingDatesSet = new Set(existingRoutines.map(item => item.date));
 
-    // Generamos nuevas fechas para los días seleccionados
-    const newRoutineData = await generateGlobalRoutine(selected_days, startDate, endDate);
+    const newRoutineData = generateGlobalRoutine(selected_days, startDate, endDate, routine_start_time, routine_end_time, current_user_time, currentDateStr);
 
-    // Insertamos las nuevas fechas en la base de datos
-    const query = "INSERT INTO user_routine (user_id, day, date, start_date, end_date) VALUES ?";
-    const [result]: any = await pool.query(query, [newRoutineData.map(item => [userId, item.day, item.date, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]])]);
+    const startDateStr = getLocalDateString(startDate);
+    const endDateStr = getLocalDateString(endDate);
+
+    const query = "INSERT INTO user_routine (user_id, day, date, start_date, end_date, routine_start_time, routine_end_time) VALUES ?";
+    const [result]: any = await pool.query(query, [newRoutineData.map(item => [userId, item.day, item.date, startDateStr, endDateStr, item.routine_start_time, item.routine_end_time])]);
 
     if (result) {
       response.message = "Rutina actualizada exitosamente";
