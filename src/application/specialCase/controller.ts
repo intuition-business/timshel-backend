@@ -5,6 +5,13 @@ import pool from "../../config/db";
 import { v4 as uuidv4 } from 'uuid';
 import { adapterUserInfo } from "./adapter";
 
+// Función para convertir fecha de DD/MM/YYYY a YYYY-MM-DD
+const convertDate = (date: string): string => {
+  const [day, month, year] = date.split('/');
+  const formattedDate = new Date(`${year}-${month}-${day}`);
+  return formattedDate.toISOString().split('T')[0];
+};
+
 export const generateLightRoutine = async (
   req: Request,
   res: Response,
@@ -19,19 +26,20 @@ export const generateLightRoutine = async (
     // Paso 1: Adaptar la data recibida del front
     const adaptedData = adapterUserInfo(body);
 
+    // Convertir current_user_date de DD/MM/YYYY a YYYY-MM-DD
+    const formattedDate = convertDate(adaptedData.current_user_date);
+
     // Paso 2: Guardar en una nueva tabla 'user_routine_failures' para control
     const failureId = uuidv4();
     await pool.execute(
       "INSERT INTO user_routine_failures (id, user_id, reason, description, current_user_date, current_user_time) VALUES (?, ?, ?, ?, ?, ?)",
-      [failureId, userId, adaptedData.reason, adaptedData.description, adaptedData.current_user_date, adaptedData.current_user_time]
+      [failureId, userId, adaptedData.reason, adaptedData.description, formattedDate, adaptedData.current_user_time + ':00']
     );
 
-    // Nuevo Paso 3: Identificar días pendientes de 'user_routine'
-    // Filtramos por date >= current_user_date (asumiendo formato YYYY-MM-DD)
-    // Si tienes un campo 'estado' en user_routine, agrégalo al WHERE (ej: AND estado = 'pendiente')
+    // Paso 3: Identificar días pendientes de 'user_routine'
     const [userRoutineRows]: any = await pool.execute(
-      "SELECT day, date FROM user_routine WHERE user_id = ? AND date >= ? ORDER BY date",
-      [userId, adaptedData.current_user_date]
+      "SELECT day, date FROM user_routine WHERE user_id = ? AND date >= ? AND status = 'pending' ORDER BY date",
+      [userId, formattedDate]
     );
 
     if (userRoutineRows.length === 0) {
@@ -45,10 +53,10 @@ export const generateLightRoutine = async (
       return;
     }
 
-    // Extraer las fechas pendientes
+    // Extraer las fechas pendientes (YYYY-MM-DD)
     const pendingDates = userRoutineRows.map((row: any) => row.date);
 
-    // Nuevo Paso 4: Obtener la rutina original de 'user_training_plans'
+    // Paso 4: Obtener la rutina original de 'user_training_plans'
     const [trainingPlanRows]: any = await pool.execute(
       "SELECT training_plan FROM user_training_plans WHERE user_id = ?",
       [userId]
@@ -59,14 +67,17 @@ export const generateLightRoutine = async (
     }
 
     const originalTrainingPlan = JSON.parse(trainingPlanRows[0].training_plan);
-    const workouts = originalTrainingPlan.workouts || originalTrainingPlan.training_plan; // Basado en tu controlador principal
+    const workouts = originalTrainingPlan; // Array directo
 
     if (!Array.isArray(workouts)) {
       throw new Error("La rutina original no es un array válido.");
     }
 
-    // Filtrar solo los workouts para fechas pendientes
-    const pendingWorkouts = workouts.filter((workout: any) => pendingDates.includes(workout.fecha));
+    // Convertir fechas ISO a YYYY-MM-DD para comparación
+    const pendingWorkouts = workouts.filter((workout: any) => {
+      const workoutDate = new Date(workout.fecha).toISOString().split('T')[0];
+      return pendingDates.includes(workoutDate);
+    });
 
     if (pendingWorkouts.length === 0) {
       res.json({
@@ -79,64 +90,82 @@ export const generateLightRoutine = async (
       return;
     }
 
-    // Nuevo Paso 5: Ajustar la rutina leve (rule-based: reducir series, aumentar descanso)
-    // Ejemplos de reglas: series * 0.75 (mínimo 1), descanso + 60s
-    // Ajustar basado en 'reason' o 'description' (ej: si 'injury', reducir más)
+    // Paso 5: Ajustar la rutina leve (rule-based)
     const lightWorkouts = pendingWorkouts.map((workout: any) => {
-      const adjustedExercises = workout.exercises.map((exercise: any) => { // Usando tu interface Exercise
-        let seriesReducidas = Math.max(1, Math.floor(exercise.series_completed.length * 0.75)); // Asumiendo series_completed es el array de series
-        let descansoAumentado = exercise.series_completed.map((serie: any) => ({
-          ...serie,
-          breakTime: serie.breakTime + 60 // Aumentar 60s base
-        }));
+      const adjustedExercises = workout.ejercicios.map((exercise: any) => {
+        const seriesCount = exercise.Esquema.Series;
+        // Declarar descansoAumentado fuera del map de series
+        let descansoAumentado = parseFloat(exercise.Esquema.Descanso) + 0.5; // +0.5 minutos base
 
-        // Ajustes adicionales por reason
-        if (adaptedData.reason === 'injury') {
-          seriesReducidas = Math.max(1, Math.floor(exercise.series_completed.length * 0.5)); // Reducir más si lesión
-          descansoAumentado = descansoAumentado.map((serie: any) => ({
-            ...serie,
-            breakTime: serie.breakTime + 30 // +30s extra
-          }));
-        } else if (adaptedData.reason === 'sickness') {
-          // Otros ajustes si es sickness, etc.
-        }
+        // Ajustar Reps y carga, mantener Series
+        let adjustedSeries = exercise.Esquema["Detalle series"].map((serie: any) => {
+          let repsReducidos = Math.max(1, Math.floor(serie.Reps * 0.75));
+          let cargaReducida = serie.carga === "Bodyweight" ? "Bodyweight" : Math.max(0, Math.floor(serie.carga * 0.75));
+
+          if (adaptedData.reason === 'injury') {
+            repsReducidos = Math.max(1, Math.floor(serie.Reps * 0.5));
+            cargaReducida = serie.carga === "Bodyweight" ? "Bodyweight" : Math.max(0, Math.floor(serie.carga * 0.5));
+            descansoAumentado += 0.5; // +0.5 minutos extra
+          } else if (adaptedData.reason === 'sickness') {
+            // Opcional: Ajustes para sickness
+            repsReducidos = Math.max(1, Math.floor(serie.Reps * 0.7));
+            cargaReducida = serie.carga === "Bodyweight" ? "Bodyweight" : Math.max(0, Math.floor(serie.carga * 0.7));
+            descansoAumentado += 0.3; // +0.3 minutos para sickness
+          }
+
+          return {
+            Reps: repsReducidos,
+            carga: cargaReducida
+          };
+        });
 
         return {
           ...exercise,
-          series_completed: descansoAumentado.slice(0, seriesReducidas) // Reducir el array de series si es necesario
+          Esquema: {
+            ...exercise.Esquema,
+            Series: seriesCount,
+            // cspell:ignore Descanso
+            Descanso: descansoAumentado.toString(),
+            "Detalle series": adjustedSeries
+          }
         };
       });
 
       return {
         ...workout,
-        exercises: adjustedExercises
+        ejercicios: adjustedExercises
       };
     });
 
-    // Nuevo Paso 6: Guardar la rutina leve (ej: actualizar user_training_plans o crear nueva tabla)
-    // Aquí actualizamos el mismo registro, reemplazando solo los workouts pendientes
-    const updatedWorkouts = workouts.map((workout: any) =>
-      pendingDates.includes(workout.fecha) ? lightWorkouts.find((lw: any) => lw.fecha === workout.fecha) : workout
-    );
+    // Paso 6: Guardar la rutina leve
+    const updatedWorkouts = workouts.map((workout: any) => {
+      const workoutDate = new Date(workout.fecha).toISOString().split('T')[0];
+      return pendingDates.includes(workoutDate)
+        ? lightWorkouts.find((lw: any) => new Date(lw.fecha).toISOString().split('T')[0] === workoutDate)
+        : workout;
+    });
 
-    const updatedTrainingPlanJson = JSON.stringify({ workouts: updatedWorkouts }); // Ajusta si usas 'training_plan'
+    const updatedTrainingPlanJson = JSON.stringify(updatedWorkouts);
 
     await pool.execute(
-      "UPDATE user_training_plans SET training_plan = ? WHERE user_id = ?",
+      "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
       [updatedTrainingPlanJson, userId]
     );
 
-    // Opcional: Actualizar estado en user_routine si agregas un campo 'estado'
-    // await pool.execute("UPDATE user_routine SET estado = 'leve_generada' WHERE user_id = ? AND date IN (?)", [userId, pendingDates]);
+    // Paso 7: Actualizar status en user_routine
+    await pool.execute(
+      "UPDATE user_routine SET status = 'leve_generada' WHERE user_id = ? AND date IN (?)",
+      [userId, pendingDates]
+    );
 
-    // Paso 7: Responder con la rutina leve generada (solo los días ajustados)
+    // Paso 8: Responder con la rutina leve generada
     res.json({
       response: "Rutina leve generada exitosamente.",
       error: false,
       message: `Información de fallo guardada y rutina ajustada por ${adaptedData.reason}.`,
       failure_id: failureId,
       user_id: userId,
-      light_workouts: lightWorkouts // Solo retornar los ajustados
+      light_workouts: lightWorkouts
     });
   } catch (error) {
     console.error("Error al procesar la rutina leve:", error);

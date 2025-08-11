@@ -9,8 +9,9 @@ import { formRouter } from "../application/forms";
 import { routinesRouter } from "../application/routines";
 import { profileRouter } from "../application/profile";
 import { routineRouter } from "../application/routineDays";
+import { specialCaseRouter } from "../application/specialCase";
 
-const { sendOtp, validateOtp, register, login, google, forms, getRoutines, profile, routineDays } =
+const { sendOtp, validateOtp, register, login, google, forms, getRoutines, profile, routineDays, specialCases } =
   path;
 
 const router = (app: Application) => {
@@ -25,6 +26,7 @@ const router = (app: Application) => {
   app.use(getRoutines, routinesRouter);
   app.use(profile, profileRouter);
   app.use(routineDays, routineRouter);
+  app.use(specialCases, specialCaseRouter);
 
 };
 
