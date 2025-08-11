@@ -12,4 +12,5 @@ export interface PathProps {
   getRoutines: string;
   profile: string;
   routineDays: string;
+  specialCases: string;
 }
