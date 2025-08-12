@@ -20,6 +20,16 @@ const addDays = (date: Date, days: number): string => {
   return newDate.toISOString();
 };
 
+// Función para validar si un string es un JSON válido
+const isValidJson = (str: string): boolean => {
+  try {
+    JSON.parse(str);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const generateLightRoutine = async (
   req: Request,
   res: Response,
@@ -59,7 +69,7 @@ export const generateLightRoutine = async (
 
     if (userRoutineRows.length === 0) {
       console.log('Paso 3: No se encontraron días pendientes para user_id:', userId, 'y fecha >=', formattedDate);
-      res.json({
+      res.status(200).json({
         response: "No hay días pendientes para ajustar.",
         error: false,
         message: "Información de fallo guardada, pero no se generó rutina leve.",
@@ -82,16 +92,60 @@ export const generateLightRoutine = async (
 
     if (trainingPlanRows.length === 0) {
       console.log('Paso 4: No se encontró rutina para user_id:', userId);
-      throw new Error("No se encontró rutina original para el usuario.");
+      res.status(404).json({
+        response: "",
+        error: true,
+        message: "No se encontró rutina original para el usuario.",
+        failure_id: failureId,
+        user_id: userId
+      });
+      return;
     }
 
-    const originalTrainingPlan = JSON.parse(trainingPlanRows[0].training_plan);
-    const workouts = originalTrainingPlan; // Array directo
-    console.log('Paso 4: Workouts parseados:', workouts);
+    const trainingPlanRaw = trainingPlanRows[0].training_plan;
+    console.log('Paso 4: Contenido crudo de training_plan:', trainingPlanRaw);
 
+    if (!isValidJson(trainingPlanRaw)) {
+      console.log('Paso 4: training_plan no es un JSON válido:', trainingPlanRaw);
+      res.status(400).json({
+        response: "",
+        error: true,
+        message: "El formato de training_plan en la base de datos es inválido.",
+        failure_id: failureId,
+        user_id: userId,
+        details: `Contenido de training_plan: ${trainingPlanRaw}`
+      });
+      return;
+    }
+
+    let originalTrainingPlan;
+    try {
+      originalTrainingPlan = JSON.parse(trainingPlanRaw);
+      console.log('Paso 4: Workouts parseados:', originalTrainingPlan);
+    } catch (parseError: any) {
+      console.log('Paso 4: Error al parsear training_plan:', parseError.message);
+      res.status(400).json({
+        response: "",
+        error: true,
+        message: "Error al parsear el training_plan de la base de datos.",
+        failure_id: failureId,
+        user_id: userId,
+        details: parseError.message
+      });
+      return;
+    }
+
+    const workouts = originalTrainingPlan; // Array directo
     if (!Array.isArray(workouts)) {
       console.log('Paso 4: training_plan no es un array:', originalTrainingPlan);
-      throw new Error("La rutina original no es un array válido.");
+      res.status(400).json({
+        response: "",
+        error: true,
+        message: "La rutina original no es un array válido.",
+        failure_id: failureId,
+        user_id: userId
+      });
+      return;
     }
 
     // Convertir fechas ISO a YYYY-MM-DD para comparación
@@ -105,7 +159,7 @@ export const generateLightRoutine = async (
 
     if (pendingWorkouts.length === 0) {
       console.log('Paso 4: No se encontraron coincidencias entre pendingDates y workouts.fecha');
-      res.json({
+      res.status(200).json({
         response: "No se encontraron workouts para los días pendientes.",
         error: false,
         message: "Información de fallo guardada, pero no se generó rutina leve.",
@@ -144,7 +198,14 @@ export const generateLightRoutine = async (
 
       if (!response?.choices?.[0]?.message?.content) {
         console.log('Paso 5: No se recibió respuesta de OpenAI');
-        throw new Error("No se generó respuesta de OpenAI.");
+        res.status(500).json({
+          response: "",
+          error: true,
+          message: "No se generó respuesta de OpenAI.",
+          failure_id: failureId,
+          user_id: userId
+        });
+        return;
       }
 
       let aiAdjustments;
@@ -160,7 +221,14 @@ export const generateLightRoutine = async (
           aiAdjustments.restIncreaseMinutes < 0.5 || aiAdjustments.restIncreaseMinutes > 1
         ) {
           console.log('Paso 5: Formato de ajustes de la IA inválido:', aiAdjustments);
-          throw new Error("Formato de ajustes de la IA inválido.");
+          res.status(400).json({
+            response: "",
+            error: true,
+            message: "Formato de ajustes de la IA inválido.",
+            failure_id: failureId,
+            user_id: userId
+          });
+          return;
         }
 
         repsReductionPercentage = aiAdjustments.repsReductionPercentage;
@@ -169,11 +237,13 @@ export const generateLightRoutine = async (
         console.log('Paso 5: Ajustes de IA aplicados:', { repsReductionPercentage, loadReductionPercentage, restIncreaseMinutes });
       } catch (parseError: any) {
         console.log('Paso 5: Error al parsear respuesta de OpenAI:', parseError.message);
-        res.json({
+        res.status(400).json({
           response: "",
           error: true,
           message: "Error al parsear la respuesta de la IA.",
-          details: parseError.message,
+          failure_id: failureId,
+          user_id: userId,
+          details: parseError.message
         });
         return;
       }
@@ -243,7 +313,7 @@ export const generateLightRoutine = async (
 
     if (updatedLightWorkouts.length === 0) {
       console.log('Paso 7: No hay workouts válidos dentro del período de la rutina');
-      res.json({
+      res.status(200).json({
         response: "No hay workouts válidos dentro del período de la rutina.",
         error: false,
         message: "Información de fallo guardada, pero no se generó rutina leve.",
@@ -280,7 +350,7 @@ export const generateLightRoutine = async (
     console.log('Paso 9: user_routine actualizado con status = leve_generada para fechas:', pendingDates);
 
     // Paso 10: Responder con la rutina leve generada
-    res.json({
+    res.status(200).json({
       response: "Rutina leve generada exitosamente.",
       error: false,
       message: `Información de fallo guardada y rutina ajustada por ${adaptedData.reason}.`,
@@ -291,12 +361,11 @@ export const generateLightRoutine = async (
     console.log('Paso 10: Respuesta enviada:', { light_workouts: updatedLightWorkouts });
   } catch (error: any) {
     console.error('Error en generateLightRoutine:', error);
-    res.json({
+    res.status(500).json({
       response: "",
       error: true,
       message: "Ocurrió un error al generar la rutina leve.",
-      details: error.message,
+      details: error.message
     });
-    next(error);
   }
 };
