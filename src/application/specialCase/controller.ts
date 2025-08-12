@@ -113,7 +113,7 @@ export const generateLightRoutine = async (
         message: "El formato de training_plan en la base de datos es inválido.",
         failure_id: failureId,
         user_id: userId,
-        details: `Contenido de training_plan: ${trainingPlanRaw}. Verifique la fuente de datos en user_training_plans (id: ${trainingPlanRows[0].id}).`
+        details: `Contenido de training_plan: ${trainingPlanRaw}. Verifique la fuente de datos en user_training_plans (id: ${trainingPlanRows[0].id}). Asegúrese de que el proceso que guarda training_plan use JSON.stringify() correctamente.`
       });
       return;
     }
@@ -343,11 +343,15 @@ export const generateLightRoutine = async (
     console.log('Paso 8: user_training_plans actualizado');
 
     // Paso 9: Actualizar status en user_routine
-    await pool.execute(
-      "UPDATE user_routine SET status = 'leve_generada' WHERE user_id = ? AND date IN (?)",
-      [userId, pendingDates]
-    );
-    console.log('Paso 9: user_routine actualizado con status = leve_generada para fechas:', pendingDates);
+    if (pendingDates.length > 0) {
+      const placeholders = pendingDates.map(() => '?').join(', ');
+      const query = `UPDATE user_routine SET status = 'leve_generada' WHERE user_id = ? AND date IN (${placeholders})`;
+      console.log('Paso 9: Ejecutando consulta:', query, 'con parámetros:', [userId, ...pendingDates]);
+      await pool.execute(query, [userId, ...pendingDates]);
+      console.log('Paso 9: user_routine actualizado con status = leve_generada para fechas:', pendingDates);
+    } else {
+      console.log('Paso 9: No hay fechas pendientes para actualizar en user_routine');
+    }
 
     // Paso 10: Responder con la rutina leve generada
     res.status(200).json({
