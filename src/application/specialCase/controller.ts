@@ -105,8 +105,29 @@ export const generateLightRoutine = async (
     const trainingPlanRaw = trainingPlanRows[0].training_plan;
     console.log('Paso 4: Contenido crudo de training_plan:', trainingPlanRaw);
 
-    if (!isValidJson(trainingPlanRaw)) {
-      console.log('Paso 4: training_plan no es un JSON válido:', trainingPlanRaw);
+    let originalTrainingPlan;
+    // Intentar usar el JSON ya parseado de trainingPlanRows si está disponible
+    if (Array.isArray(trainingPlanRows[0].training_plan)) {
+      originalTrainingPlan = trainingPlanRows[0].training_plan;
+      console.log('Paso 4: Usando training_plan ya parseado de trainingPlanRows:', JSON.stringify(originalTrainingPlan, null, 2));
+    } else if (typeof trainingPlanRaw === 'string' && isValidJson(trainingPlanRaw)) {
+      try {
+        originalTrainingPlan = JSON.parse(trainingPlanRaw);
+        console.log('Paso 4: Workouts parseados desde trainingPlanRaw:', JSON.stringify(originalTrainingPlan, null, 2));
+      } catch (parseError: any) {
+        console.log('Paso 4: Error al parsear training_plan:', parseError.message);
+        res.status(400).json({
+          response: "",
+          error: true,
+          message: "Error al parsear el training_plan de la base de datos.",
+          failure_id: failureId,
+          user_id: userId,
+          details: `Contenido de training_plan: ${trainingPlanRaw}. Verifique la fuente de datos en user_training_plans (id: ${trainingPlanRows[0].id}). Asegúrese de que el proceso que guarda training_plan use JSON.stringify() correctamente.`
+        });
+        return;
+      }
+    } else {
+      console.log('Paso 4: training_plan no es un JSON válido ni un array:', trainingPlanRaw);
       res.status(400).json({
         response: "",
         error: true,
@@ -114,23 +135,6 @@ export const generateLightRoutine = async (
         failure_id: failureId,
         user_id: userId,
         details: `Contenido de training_plan: ${trainingPlanRaw}. Verifique la fuente de datos en user_training_plans (id: ${trainingPlanRows[0].id}). Asegúrese de que el proceso que guarda training_plan use JSON.stringify() correctamente.`
-      });
-      return;
-    }
-
-    let originalTrainingPlan;
-    try {
-      originalTrainingPlan = JSON.parse(trainingPlanRaw);
-      console.log('Paso 4: Workouts parseados:', JSON.stringify(originalTrainingPlan, null, 2));
-    } catch (parseError: any) {
-      console.log('Paso 4: Error al parsear training_plan:', parseError.message);
-      res.status(400).json({
-        response: "",
-        error: true,
-        message: "Error al parsear el training_plan de la base de datos.",
-        failure_id: failureId,
-        user_id: userId,
-        details: parseError.message
       });
       return;
     }
