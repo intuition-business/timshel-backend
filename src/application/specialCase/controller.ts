@@ -37,7 +37,7 @@ export const generateLightRoutine = async (
 ): Promise<void> => {
   try {
     const { headers, body } = req;
-    console.log('Paso 1: Procesando request con body:', body);
+    console.log('Paso 1: Procesando request con body:', JSON.stringify(body, null, 2));
     const token = headers["x-access-token"];
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
@@ -45,7 +45,7 @@ export const generateLightRoutine = async (
 
     // Paso 1: Adaptar la data recibida del front
     const adaptedData = adapterUserInfo(body);
-    console.log('Paso 1: Datos adaptados:', adaptedData);
+    console.log('Paso 1: Datos adaptados:', JSON.stringify(adaptedData, null, 2));
 
     // Convertir current_user_date de DD/MM/YYYY a YYYY-MM-DD
     const formattedDate = convertDate(adaptedData.current_user_date);
@@ -65,7 +65,7 @@ export const generateLightRoutine = async (
       "SELECT day, date FROM user_routine WHERE user_id = ? AND date >= ? AND status = 'pending' ORDER BY date",
       [userId, formattedDate]
     );
-    console.log('Paso 3: Días pendientes de user_routine:', userRoutineRows);
+    console.log('Paso 3: Días pendientes de user_routine:', JSON.stringify(userRoutineRows, null, 2));
 
     if (userRoutineRows.length === 0) {
       console.log('Paso 3: No se encontraron días pendientes para user_id:', userId, 'y fecha >=', formattedDate);
@@ -85,10 +85,10 @@ export const generateLightRoutine = async (
 
     // Paso 4: Obtener la rutina original de 'user_training_plans'
     const [trainingPlanRows]: any = await pool.execute(
-      "SELECT training_plan FROM user_training_plans WHERE user_id = ?",
+      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ?",
       [userId]
     );
-    console.log('Paso 4: Datos de user_training_plans:', trainingPlanRows);
+    console.log('Paso 4: Datos de user_training_plans:', JSON.stringify(trainingPlanRows, null, 2));
 
     if (trainingPlanRows.length === 0) {
       console.log('Paso 4: No se encontró rutina para user_id:', userId);
@@ -113,7 +113,7 @@ export const generateLightRoutine = async (
         message: "El formato de training_plan en la base de datos es inválido.",
         failure_id: failureId,
         user_id: userId,
-        details: `Contenido de training_plan: ${trainingPlanRaw}`
+        details: `Contenido de training_plan: ${trainingPlanRaw}. Verifique la fuente de datos en user_training_plans (id: ${trainingPlanRows[0].id}).`
       });
       return;
     }
@@ -121,7 +121,7 @@ export const generateLightRoutine = async (
     let originalTrainingPlan;
     try {
       originalTrainingPlan = JSON.parse(trainingPlanRaw);
-      console.log('Paso 4: Workouts parseados:', originalTrainingPlan);
+      console.log('Paso 4: Workouts parseados:', JSON.stringify(originalTrainingPlan, null, 2));
     } catch (parseError: any) {
       console.log('Paso 4: Error al parsear training_plan:', parseError.message);
       res.status(400).json({
@@ -137,7 +137,7 @@ export const generateLightRoutine = async (
 
     const workouts = originalTrainingPlan; // Array directo
     if (!Array.isArray(workouts)) {
-      console.log('Paso 4: training_plan no es un array:', originalTrainingPlan);
+      console.log('Paso 4: training_plan no es un array:', JSON.stringify(originalTrainingPlan, null, 2));
       res.status(400).json({
         response: "",
         error: true,
@@ -155,7 +155,7 @@ export const generateLightRoutine = async (
       console.log(`Paso 4: Comparando workout.fecha: ${workoutDate} con pendingDates: ${isPending}`);
       return isPending;
     });
-    console.log('Paso 4: Workouts pendientes filtrados:', pendingWorkouts);
+    console.log('Paso 4: Workouts pendientes filtrados:', JSON.stringify(pendingWorkouts, null, 2));
 
     if (pendingWorkouts.length === 0) {
       console.log('Paso 4: No se encontraron coincidencias entre pendingDates y workouts.fecha');
@@ -211,7 +211,7 @@ export const generateLightRoutine = async (
       let aiAdjustments;
       try {
         aiAdjustments = JSON.parse(response.choices[0].message.content);
-        console.log('Paso 5: Respuesta de OpenAI:', aiAdjustments);
+        console.log('Paso 5: Respuesta de OpenAI:', JSON.stringify(aiAdjustments, null, 2));
         if (
           typeof aiAdjustments.repsReductionPercentage !== 'number' ||
           typeof aiAdjustments.loadReductionPercentage !== 'number' ||
@@ -220,7 +220,7 @@ export const generateLightRoutine = async (
           aiAdjustments.loadReductionPercentage < 25 || aiAdjustments.loadReductionPercentage > 50 ||
           aiAdjustments.restIncreaseMinutes < 0.5 || aiAdjustments.restIncreaseMinutes > 1
         ) {
-          console.log('Paso 5: Formato de ajustes de la IA inválido:', aiAdjustments);
+          console.log('Paso 5: Formato de ajustes de la IA inválido:', JSON.stringify(aiAdjustments, null, 2));
           res.status(400).json({
             response: "",
             error: true,
@@ -286,7 +286,7 @@ export const generateLightRoutine = async (
         ejercicios: adjustedExercises
       };
     });
-    console.log('Paso 6: Rutina leve generada:', lightWorkouts);
+    console.log('Paso 6: Rutina leve generada:', JSON.stringify(lightWorkouts, null, 2));
 
     // Paso 7: Actualizar fechas a partir de current_user_date
     lightWorkouts.sort((a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
@@ -309,7 +309,7 @@ export const generateLightRoutine = async (
         });
       }
     });
-    console.log('Paso 7: Workouts con fechas actualizadas:', updatedLightWorkouts);
+    console.log('Paso 7: Workouts con fechas actualizadas:', JSON.stringify(updatedLightWorkouts, null, 2));
 
     if (updatedLightWorkouts.length === 0) {
       console.log('Paso 7: No hay workouts válidos dentro del período de la rutina');
@@ -334,7 +334,7 @@ export const generateLightRoutine = async (
     });
 
     const updatedTrainingPlanJson = JSON.stringify(updatedWorkouts);
-    console.log('Paso 8: JSON actualizado para user_training_plans:', updatedTrainingPlanJson);
+    console.log('Paso 8: JSON actualizado para user_training_plans:', JSON.stringify(updatedTrainingPlanJson, null, 2));
 
     await pool.execute(
       "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
@@ -358,7 +358,7 @@ export const generateLightRoutine = async (
       user_id: userId,
       light_workouts: updatedLightWorkouts
     });
-    console.log('Paso 10: Respuesta enviada:', { light_workouts: updatedLightWorkouts });
+    console.log('Paso 10: Respuesta enviada:', JSON.stringify({ light_workouts: updatedLightWorkouts }, null, 2));
   } catch (error: any) {
     console.error('Error en generateLightRoutine:', error);
     res.status(500).json({
