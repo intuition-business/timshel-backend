@@ -20,17 +20,17 @@ const isValidJson = (str: string): boolean => {
     return false;
   }
 };
-// Nueva función helper para mapear day string a weekday number (0=Domingo, 1=Lunes, etc.)
+// Nueva función helper para mapear day string a weekday number (0=Sunday, 1=Monday, etc.) - Actualizado para inglés
 const dayToWeekday = (day: string): number => {
   const map: { [key: string]: number } = {
-    'Domingo': 0,
-    'Lunes': 1,
-    'Martes': 2,
-    'Miércoles': 3,
-    'Jueves': 4,
-    'Viernes': 5,
-    'Sábado': 6
-    // Agrega más si day está en otro idioma o formato
+    'Sunday': 0,
+    'Monday': 1,
+    'Tuesday': 2,
+    'Wednesday': 3,
+    'Thursday': 4,
+    'Friday': 5,
+    'Saturday': 6
+    // Si está en español u otro, agrega: 'Lunes': 1, 'Martes': 2, etc.
   };
   return map[day] ?? -1; // -1 si no coincide, para depuración
 };
@@ -45,13 +45,22 @@ const getTrainingWeekdays = (rows: any[]): number[] => {
 };
 // Nueva función helper para generar N fechas futuras coincidiendo con weekdays, empezando desde una fecha dada
 const generateNewDates = (startDateStr: string, count: number, weekdays: number[]): string[] => {
+  if (weekdays.length === 0) {
+    throw new Error('No se pueden generar fechas: patrón de días de entrenamiento vacío (verifique campo "day" en user_routine).');
+  }
   const newDates: string[] = [];
   let currentDate = new Date(startDateStr);
-  while (newDates.length < count) {
+  let safetyCounter = 0; // Safeguard contra loop infinito
+  const maxIterations = 365 * 2; // Límite: max 2 años para generar fechas
+  while (newDates.length < count && safetyCounter < maxIterations) {
     if (weekdays.includes(currentDate.getDay())) {
       newDates.push(currentDate.toISOString().split('T')[0]);
     }
     currentDate.setDate(currentDate.getDate() + 1); // Avanzar un día
+    safetyCounter++;
+  }
+  if (newDates.length < count) {
+    throw new Error(`No se pudieron generar ${count} fechas: patrón de días insuficiente o loop excedido (weekdays: ${weekdays}).`);
   }
   return newDates;
 };
