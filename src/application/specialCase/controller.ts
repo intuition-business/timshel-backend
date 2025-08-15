@@ -5,14 +5,12 @@ import pool from "../../config/db";
 import { v4 as uuidv4 } from 'uuid';
 import { adapterUserInfo } from "./adapter";
 import { getOpenAI } from "../../infrastructure/openIA";
-
 // Función para convertir fecha de DD/MM/YYYY a YYYY-MM-DD
 const convertDate = (date: string): string => {
   const [day, month, year] = date.split('/');
   const formattedDate = new Date(`${year}-${month}-${day}`);
   return formattedDate.toISOString().split('T')[0];
 };
-
 // Función para validar si un string es un JSON válido
 const isValidJson = (str: string): boolean => {
   try {
@@ -22,7 +20,27 @@ const isValidJson = (str: string): boolean => {
     return false;
   }
 };
-
+// Nueva función helper para obtener weekdays únicos de fechas (0=Domingo, 1=Lunes, etc.)
+const getTrainingWeekdays = (dates: string[]): number[] => {
+  const weekdays = new Set<number>();
+  dates.forEach(dateStr => {
+    const date = new Date(dateStr);
+    weekdays.add(date.getDay());
+  });
+  return Array.from(weekdays);
+};
+// Nueva función helper para generar N fechas futuras coincidiendo con weekdays
+const generateNewDates = (startDateStr: string, count: number, weekdays: number[]): string[] => {
+  const newDates: string[] = [];
+  let currentDate = new Date(startDateStr);
+  while (newDates.length < count) {
+    currentDate.setDate(currentDate.getDate() + 1); // Avanzar un día
+    if (weekdays.includes(currentDate.getDay())) {
+      newDates.push(currentDate.toISOString().split('T')[0]);
+    }
+  }
+  return newDates;
+};
 export const generateLightRoutine = async (
   req: Request,
   res: Response,
@@ -35,15 +53,12 @@ export const generateLightRoutine = async (
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
     console.log('Paso 1: userId extraído del token:', userId);
-
     // Paso 1: Adaptar la data recibida del front
     const adaptedData = adapterUserInfo(body);
     console.log('Paso 1: Datos adaptados:', JSON.stringify(adaptedData, null, 2));
-
     // Convertir current_user_date de DD/MM/YYYY a YYYY-MM-DD
     const formattedDate = convertDate(adaptedData.current_user_date);
     console.log('Paso 1: Fecha formateada:', formattedDate);
-
     // Paso 2: Guardar en una nueva tabla 'user_routine_failures' para control
     const failureId = uuidv4();
     console.log('Paso 2: Generando failureId:', failureId);
@@ -52,16 +67,14 @@ export const generateLightRoutine = async (
       [failureId, userId, adaptedData.reason, adaptedData.description, formattedDate, adaptedData.current_user_time + ':00']
     );
     console.log('Paso 2: Datos guardados en user_routine_failures');
-
-    // Paso 3: Identificar días pendientes de 'user_routine' a partir de current_user_date
+    // Paso 3: Identificar días pendientes de 'user_routine' (todos pending, sin filtro inicial)
     const [userRoutineRows]: any = await pool.execute(
-      "SELECT day, date FROM user_routine WHERE user_id = ? AND date >= ? AND status = 'pending' ORDER BY date",
-      [userId, formattedDate]
+      "SELECT day, date FROM user_routine WHERE user_id = ? AND status = 'pending' ORDER BY date",
+      [userId]
     );
     console.log('Paso 3: Días pendientes de user_routine:', JSON.stringify(userRoutineRows, null, 2));
-
     if (userRoutineRows.length === 0) {
-      console.log('Paso 3: No se encontraron días pendientes para user_id:', userId, 'y fecha >=', formattedDate);
+      console.log('Paso 3: No se encontraron días pendientes para user_id:', userId);
       res.status(200).json({
         response: "No hay días pendientes para ajustar.",
         error: false,
@@ -71,18 +84,38 @@ export const generateLightRoutine = async (
       });
       return;
     }
-
-    // Extraer las fechas pendientes (YYYY-MM-DD)
-    const pendingDates = userRoutineRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
-    console.log('Paso 3: Fechas pendientes extraídas:', pendingDates);
-
+    // Separar pasados y futuros
+    const pastPendingRows = userRoutineRows.filter((row: any) => new Date(row.date).toISOString().split('T')[0] < formattedDate);
+    const futurePendingRows = userRoutineRows.filter((row: any) => new Date(row.date).toISOString().split('T')[0] >= formattedDate);
+    // Cambiar status a 'failed' solo para pasados
+    for (const row of pastPendingRows) {
+      await pool.execute(
+        "UPDATE user_routine SET status = 'failed' WHERE user_id = ? AND date = ?",
+        [userId, row.date]
+      );
+    }
+    console.log('Paso 3: Status actualizado a "failed" para', pastPendingRows.length, 'días pasados pendientes');
+    // Contar N = días pasados pendientes (fallados)
+    const numPastFailed = pastPendingRows.length;
+    // Extraer todas las fechas de user_routine para inferir weekdays de entrenamiento
+    const allDates = userRoutineRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
+    const trainingWeekdays = getTrainingWeekdays(allDates);
+    console.log('Paso 3: Días de la semana de entrenamiento inferidos:', trainingWeekdays);
+    // Generar N nuevas fechas al final, coincidiendo con weekdays, empezando desde formattedDate
+    const newFailedDates = numPastFailed > 0 ? generateNewDates(formattedDate, numPastFailed, trainingWeekdays) : [];
+    console.log('Paso 3: Nuevas fechas generadas para fallados pasados:', newFailedDates);
+    // pendingDates: fechas futuras + nuevas para fallados
+    const pendingDates = [
+      ...futurePendingRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]),
+      ...newFailedDates
+    ];
+    console.log('Paso 3: Fechas pendientes actualizadas (futuras + nuevas para fallados):', pendingDates);
     // Paso 4: Obtener la rutina original de 'user_training_plans'
     const [trainingPlanRows]: any = await pool.execute(
       "SELECT id, training_plan FROM user_training_plans WHERE user_id = ?",
       [userId]
     );
     console.log('Paso 4: Datos de user_training_plans:', JSON.stringify(trainingPlanRows, null, 2));
-
     if (trainingPlanRows.length === 0) {
       console.log('Paso 4: No se encontró rutina para user_id:', userId);
       res.status(404).json({
@@ -94,10 +127,8 @@ export const generateLightRoutine = async (
       });
       return;
     }
-
     const trainingPlanRaw = trainingPlanRows[0].training_plan;
     console.log('Paso 4: Contenido crudo de training_plan:', trainingPlanRaw);
-
     let originalTrainingPlan;
     // Intentar usar el JSON ya parseado de trainingPlanRows si está disponible
     if (Array.isArray(trainingPlanRows[0].training_plan)) {
@@ -131,7 +162,6 @@ export const generateLightRoutine = async (
       });
       return;
     }
-
     const workouts = originalTrainingPlan; // Array directo
     if (!Array.isArray(workouts)) {
       console.log('Paso 4: training_plan no es un array:', JSON.stringify(originalTrainingPlan, null, 2));
@@ -144,17 +174,22 @@ export const generateLightRoutine = async (
       });
       return;
     }
-
-    // Paso 5: Filtrar workouts pendientes a partir de current_user_date
+    // Paso 5: Filtrar workouts pendientes a partir de pendingDates actualizadas
+    // También recolectar workouts de fechas falladas pasadas para reutilizarlos más tarde
+    const pastFailedDates = pastPendingRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
+    const pastFailedWorkouts = workouts.filter((workout: any) => {
+      const workoutDate = new Date(workout.fecha).toISOString().split('T')[0];
+      return pastFailedDates.includes(workoutDate);
+    });
+    console.log('Paso 5: Workouts de fechas falladas pasadas recolectados:', JSON.stringify(pastFailedWorkouts, null, 2));
     const pendingWorkouts = workouts.filter((workout: any) => {
       const workoutDate = new Date(workout.fecha).toISOString().split('T')[0];
-      const isPending = pendingDates.includes(workoutDate);
+      const isPending = pendingDates.includes(workoutDate); // Ahora usa pendingDates con nuevas fechas
       console.log(`Paso 5: Comparando workout.fecha: ${workoutDate} con pendingDates: ${isPending}`);
       return isPending;
     });
     console.log('Paso 5: Workouts pendientes filtrados:', JSON.stringify(pendingWorkouts, null, 2));
-
-    if (pendingWorkouts.length === 0) {
+    if (pendingWorkouts.length === 0 && pastFailedWorkouts.length === 0) {
       console.log('Paso 5: No se encontraron coincidencias entre pendingDates y workouts.fecha');
       res.status(200).json({
         response: "No se encontraron workouts para los días pendientes.",
@@ -165,22 +200,18 @@ export const generateLightRoutine = async (
       });
       return;
     }
-
     // Paso 6: Obtener ajustes de la IA o usar reglas fijas
     let repsReductionPercentage = 25; // Valores por defecto para rule-based
     let loadReductionPercentage = 25;
     let restIncreaseMinutes = 0.5;
-
     if (adaptedData.reason !== 'lack_of_time') {
       // Consultar a la IA para recomendaciones de ajustes
       const prompt = `
         Basado en el motivo de fallo "${adaptedData.reason}" y la descripción "${adaptedData.description}", determina los ajustes para una rutina de entrenamiento leve. La rutina contiene ejercicios como sentadillas, press de banca, planchas, etc., cada uno con un número de series, repeticiones, carga, y tiempo de descanso.
-
         Proporciona los siguientes valores para generar una versión leve:
         - Porcentaje de reducción para las repeticiones (25-50%, según la severidad).
         - Porcentaje de reducción para la carga (25-50%, según la severidad, si no es "Bodyweight").
         - Minutos a aumentar en el tiempo de descanso (0.5-1 minuto, según la severidad).
-
         Devuelve solo un JSON con la estructura:
         {
           "repsReductionPercentage": number,
@@ -190,9 +221,7 @@ export const generateLightRoutine = async (
         Sin texto adicional.
       `;
       console.log('Paso 6: Enviando prompt a OpenAI:', prompt);
-
       const { response } = await getOpenAI(prompt);
-
       if (!response?.choices?.[0]?.message?.content) {
         console.log('Paso 6: No se recibió respuesta de OpenAI');
         res.status(500).json({
@@ -204,7 +233,6 @@ export const generateLightRoutine = async (
         });
         return;
       }
-
       let aiAdjustments;
       try {
         aiAdjustments = JSON.parse(response.choices[0].message.content);
@@ -227,7 +255,6 @@ export const generateLightRoutine = async (
           });
           return;
         }
-
         repsReductionPercentage = aiAdjustments.repsReductionPercentage;
         loadReductionPercentage = aiAdjustments.loadReductionPercentage;
         restIncreaseMinutes = aiAdjustments.restIncreaseMinutes;
@@ -247,7 +274,6 @@ export const generateLightRoutine = async (
     } else {
       console.log('Paso 6: Usando reglas fijas para lack_of_time:', { repsReductionPercentage, loadReductionPercentage, restIncreaseMinutes });
     }
-
     // Paso 7: Generar la rutina leve
     let lightWorkouts;
     if (adaptedData.reason === 'lack_of_time') {
@@ -259,19 +285,16 @@ export const generateLightRoutine = async (
         const adjustedExercises = workout.ejercicios.map((exercise: any) => {
           const seriesCount = exercise.Esquema.Series; // Mantener Series sin cambios
           let descansoAumentado = parseFloat(exercise.Esquema.Descanso) + restIncreaseMinutes;
-
           let adjustedSeries = exercise.Esquema["Detalle series"].map((serie: any) => {
             let repsReducidos = Math.max(1, Math.floor(serie.Reps * (1 - repsReductionPercentage / 100)));
             let cargaReducida = serie.carga === "Bodyweight"
               ? "Bodyweight"
               : Math.max(0, Math.floor(serie.carga * (1 - loadReductionPercentage / 100)));
-
             return {
               Reps: repsReducidos,
               carga: cargaReducida
             };
           });
-
           return {
             ...exercise,
             Esquema: {
@@ -282,24 +305,58 @@ export const generateLightRoutine = async (
             }
           };
         });
-
         return {
           ...workout,
           ejercicios: adjustedExercises
         };
       });
     }
-    console.log('Paso 7: Rutina leve generada:', JSON.stringify(lightWorkouts, null, 2));
-
+    // Ajustar también los workouts de fallados pasados (aplicar mismos ajustes leves)
+    const lightPastFailedWorkouts = adaptedData.reason === 'lack_of_time'
+      ? pastFailedWorkouts.map((workout: any) => ({ ...workout }))
+      : pastFailedWorkouts.map((workout: any) => {
+        const adjustedExercises = workout.ejercicios.map((exercise: any) => {
+          const seriesCount = exercise.Esquema.Series;
+          let descansoAumentado = parseFloat(exercise.Esquema.Descanso) + restIncreaseMinutes;
+          let adjustedSeries = exercise.Esquema["Detalle series"].map((serie: any) => {
+            let repsReducidos = Math.max(1, Math.floor(serie.Reps * (1 - repsReductionPercentage / 100)));
+            let cargaReducida = serie.carga === "Bodyweight"
+              ? "Bodyweight"
+              : Math.max(0, Math.floor(serie.carga * (1 - loadReductionPercentage / 100)));
+            return {
+              Reps: repsReducidos,
+              carga: cargaReducida
+            };
+          });
+          return {
+            ...exercise,
+            Esquema: {
+              ...exercise.Esquema,
+              Series: seriesCount,
+              Descanso: descansoAumentado.toString(),
+              "Detalle series": adjustedSeries
+            }
+          };
+        });
+        return {
+          ...workout,
+          ejercicios: adjustedExercises
+        };
+      });
+    console.log('Paso 7: Rutina leve generada (incluyendo fallados pasados):', JSON.stringify([...lightWorkouts, ...lightPastFailedWorkouts], null, 2));
     // Paso 8: Mantener fechas originales de los workouts pendientes
     const updatedLightWorkouts = lightWorkouts.filter((workout: any) => {
       const workoutDate = new Date(workout.fecha);
       const endDate = userRoutineRows[0]?.end_date ? new Date(userRoutineRows[0].end_date) : null;
       return !endDate || workoutDate <= endDate;
     });
-    console.log('Paso 8: Workouts con fechas originales:', JSON.stringify(updatedLightWorkouts, null, 2));
-
-    if (updatedLightWorkouts.length === 0) {
+    // Filtrar también fallados pasados (aunque sus fechas nuevas ya son futuras)
+    const updatedLightPastFailedWorkouts = lightPastFailedWorkouts.filter((workout: any) => {
+      // Nota: Como asignaremos fechas nuevas más adelante, aquí solo filtramos por estructura
+      return true; // Asumimos que las nuevas fechas estarán dentro del período
+    });
+    console.log('Paso 8: Workouts con fechas originales (pendientes) y fallados filtrados:', JSON.stringify([...updatedLightWorkouts, ...updatedLightPastFailedWorkouts], null, 2));
+    if (updatedLightWorkouts.length === 0 && updatedLightPastFailedWorkouts.length === 0) {
       console.log('Paso 8: No hay workouts válidos dentro del período de la rutina');
       res.status(200).json({
         response: "No hay workouts válidos dentro del período de la rutina.",
@@ -310,9 +367,14 @@ export const generateLightRoutine = async (
       });
       return;
     }
-
     // Paso 9: Crear una nueva rutina sin modificar la original
-    const newTrainingPlan = [...workouts];
+    let newTrainingPlan = [...workouts];
+    // Eliminar workouts de fechas falladas pasadas antiguas
+    newTrainingPlan = newTrainingPlan.filter((w: any) => {
+      const wDate = new Date(w.fecha).toISOString().split('T')[0];
+      return !pastFailedDates.includes(wDate);
+    });
+    // Actualizar/reemplazar workouts pendientes existentes (futuros)
     updatedLightWorkouts.forEach((lightWorkout: any) => {
       const workoutDate = new Date(lightWorkout.fecha).toISOString().split('T')[0];
       const index = newTrainingPlan.findIndex((w: any) => new Date(w.fecha).toISOString().split('T')[0] === workoutDate);
@@ -322,15 +384,23 @@ export const generateLightRoutine = async (
         newTrainingPlan.push(lightWorkout);
       }
     });
-    console.log('Paso 9: Nueva rutina generada:', JSON.stringify(newTrainingPlan, null, 2));
-
+    // Agregar workouts de fallados pasados al final con nuevas fechas
+    updatedLightPastFailedWorkouts.forEach((lightWorkout: any, index: number) => {
+      const newDate = newFailedDates[index];
+      if (newDate) {
+        newTrainingPlan.push({
+          ...lightWorkout,
+          fecha: newDate // Asignar nueva fecha
+        });
+      }
+    });
+    console.log('Paso 9: Nueva rutina generada (con fallados al final y fechas nuevas):', JSON.stringify(newTrainingPlan, null, 2));
     // Guardar la nueva rutina en una nueva tabla (o actualizar user_training_plans si es necesario)
     await pool.execute(
       "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
       [JSON.stringify(newTrainingPlan), userId]
     );
     console.log('Paso 9: user_training_plans actualizado con nueva rutina');
-
     // Paso 10: Responder con la rutina leve generada
     res.status(200).json({
       response: "Rutina leve generada exitosamente.",
@@ -338,9 +408,9 @@ export const generateLightRoutine = async (
       message: `Información de fallo guardada y rutina ajustada por ${adaptedData.reason}.`,
       failure_id: failureId,
       user_id: userId,
-      light_workouts: updatedLightWorkouts
+      light_workouts: [...updatedLightWorkouts, ...updatedLightPastFailedWorkouts.map((w, i) => ({ ...w, fecha: newFailedDates[i] }))]
     });
-    console.log('Paso 10: Respuesta enviada:', JSON.stringify({ light_workouts: updatedLightWorkouts }, null, 2));
+    console.log('Paso 10: Respuesta enviada:', JSON.stringify({ light_workouts: [...updatedLightWorkouts, ...updatedLightPastFailedWorkouts.map((w, i) => ({ ...w, fecha: newFailedDates[i] }))] }, null, 2));
   } catch (error: any) {
     console.error('Error en generateLightRoutine:', error);
     res.status(500).json({
