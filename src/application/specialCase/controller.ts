@@ -29,7 +29,7 @@ const getTrainingWeekdays = (dates: string[]): number[] => {
   });
   return Array.from(weekdays);
 };
-// Nueva función helper para generar N fechas futuras coincidiendo con weekdays
+// Nueva función helper para generar N fechas futuras coincidiendo con weekdays, empezando desde una fecha dada
 const generateNewDates = (startDateStr: string, count: number, weekdays: number[]): string[] => {
   const newDates: string[] = [];
   let currentDate = new Date(startDateStr);
@@ -101,10 +101,13 @@ export const generateLightRoutine = async (
     const allDates = userRoutineRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
     const trainingWeekdays = getTrainingWeekdays(allDates);
     console.log('Paso 3: Días de la semana de entrenamiento inferidos:', trainingWeekdays);
-    // Generar N nuevas fechas al final, coincidiendo con weekdays, empezando desde formattedDate
-    const newFailedDates = numPastFailed > 0 ? generateNewDates(formattedDate, numPastFailed, trainingWeekdays) : [];
-    console.log('Paso 3: Nuevas fechas generadas para fallados pasados:', newFailedDates);
-    // pendingDates: fechas futuras + nuevas para fallados
+    // Encontrar la última fecha existente (max date)
+    const maxDateStr = allDates.reduce((max: any, date: any) => date > max ? date : max, allDates[0]);
+    console.log('Paso 3: Última fecha existente en la rutina:', maxDateStr);
+    // Generar N nuevas fechas al final, coincidiendo con weekdays, empezando DESDE la última fecha existente
+    const newFailedDates = numPastFailed > 0 ? generateNewDates(maxDateStr, numPastFailed, trainingWeekdays) : [];
+    console.log('Paso 3: Nuevas fechas generadas para fallados pasados (a partir de la última existente):', newFailedDates);
+    // pendingDates: fechas futuras + nuevas para fallados (solo para filtrado inicial)
     const pendingDates = [
       ...futurePendingRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]),
       ...newFailedDates
@@ -175,13 +178,13 @@ export const generateLightRoutine = async (
       return;
     }
     // Paso 5: Filtrar workouts pendientes a partir de pendingDates actualizadas
-    // También recolectar workouts de fechas falladas pasadas para reutilizarlos más tarde
+    // También recolectar workouts de fechas falladas pasadas para reutilizarlos más tarde (en orden original)
     const pastFailedDates = pastPendingRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
     const pastFailedWorkouts = workouts.filter((workout: any) => {
       const workoutDate = new Date(workout.fecha).toISOString().split('T')[0];
       return pastFailedDates.includes(workoutDate);
-    });
-    console.log('Paso 5: Workouts de fechas falladas pasadas recolectados:', JSON.stringify(pastFailedWorkouts, null, 2));
+    }).sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()); // Mantener orden original de fallados
+    console.log('Paso 5: Workouts de fechas falladas pasadas recolectados (en orden original):', JSON.stringify(pastFailedWorkouts, null, 2));
     const pendingWorkouts = workouts.filter((workout: any) => {
       const workoutDate = new Date(workout.fecha).toISOString().split('T')[0];
       const isPending = pendingDates.includes(workoutDate); // Ahora usa pendingDates con nuevas fechas
@@ -311,7 +314,7 @@ export const generateLightRoutine = async (
         };
       });
     }
-    // Ajustar también los workouts de fallados pasados (aplicar mismos ajustes leves)
+    // Ajustar también los workouts de fallados pasados (aplicar mismos ajustes leves, en orden original)
     const lightPastFailedWorkouts = adaptedData.reason === 'lack_of_time'
       ? pastFailedWorkouts.map((workout: any) => ({ ...workout }))
       : pastFailedWorkouts.map((workout: any) => {
@@ -350,10 +353,10 @@ export const generateLightRoutine = async (
       const endDate = userRoutineRows[0]?.end_date ? new Date(userRoutineRows[0].end_date) : null;
       return !endDate || workoutDate <= endDate;
     });
-    // Filtrar también fallados pasados (aunque sus fechas nuevas ya son futuras)
+    // Filtrar también fallados pasados (aunque sus fechas nuevas ya son futuras, al final)
     const updatedLightPastFailedWorkouts = lightPastFailedWorkouts.filter((workout: any) => {
       // Nota: Como asignaremos fechas nuevas más adelante, aquí solo filtramos por estructura
-      return true; // Asumimos que las nuevas fechas estarán dentro del período
+      return true; // Asumimos que las nuevas fechas extenderán el período si es necesario
     });
     console.log('Paso 8: Workouts con fechas originales (pendientes) y fallados filtrados:', JSON.stringify([...updatedLightWorkouts, ...updatedLightPastFailedWorkouts], null, 2));
     if (updatedLightWorkouts.length === 0 && updatedLightPastFailedWorkouts.length === 0) {
@@ -374,7 +377,7 @@ export const generateLightRoutine = async (
       const wDate = new Date(w.fecha).toISOString().split('T')[0];
       return !pastFailedDates.includes(wDate);
     });
-    // Actualizar/reemplazar workouts pendientes existentes (futuros)
+    // Actualizar/reemplazar workouts pendientes existentes (futuros, manteniendo fechas originales)
     updatedLightWorkouts.forEach((lightWorkout: any) => {
       const workoutDate = new Date(lightWorkout.fecha).toISOString().split('T')[0];
       const index = newTrainingPlan.findIndex((w: any) => new Date(w.fecha).toISOString().split('T')[0] === workoutDate);
@@ -384,17 +387,19 @@ export const generateLightRoutine = async (
         newTrainingPlan.push(lightWorkout);
       }
     });
-    // Agregar workouts de fallados pasados al final con nuevas fechas
+    // Agregar workouts de fallados pasados AL FINAL con nuevas fechas (corridas secuencialmente después de la última)
     updatedLightPastFailedWorkouts.forEach((lightWorkout: any, index: number) => {
       const newDate = newFailedDates[index];
       if (newDate) {
         newTrainingPlan.push({
           ...lightWorkout,
-          fecha: newDate // Asignar nueva fecha
+          fecha: newDate // Asignar nueva fecha corrida
         });
       }
     });
-    console.log('Paso 9: Nueva rutina generada (con fallados al final y fechas nuevas):', JSON.stringify(newTrainingPlan, null, 2));
+    // Ordenar el newTrainingPlan por fecha ascendente para consistencia cronológica (mantiene orden original tanto como posible)
+    newTrainingPlan.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+    console.log('Paso 9: Nueva rutina generada (con fallados al final, fechas corridas y orden cronológico):', JSON.stringify(newTrainingPlan, null, 2));
     // Guardar la nueva rutina en una nueva tabla (o actualizar user_training_plans si es necesario)
     await pool.execute(
       "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
@@ -408,9 +413,9 @@ export const generateLightRoutine = async (
       message: `Información de fallo guardada y rutina ajustada por ${adaptedData.reason}.`,
       failure_id: failureId,
       user_id: userId,
-      light_workouts: [...updatedLightWorkouts, ...updatedLightPastFailedWorkouts.map((w, i) => ({ ...w, fecha: newFailedDates[i] }))]
+      light_workouts: [...updatedLightWorkouts, ...updatedLightPastFailedWorkouts.map((w, i) => ({ ...w, fecha: newFailedDates[i] }))].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
     });
-    console.log('Paso 10: Respuesta enviada:', JSON.stringify({ light_workouts: [...updatedLightWorkouts, ...updatedLightPastFailedWorkouts.map((w, i) => ({ ...w, fecha: newFailedDates[i] }))] }, null, 2));
+    console.log('Paso 10: Respuesta enviada:', JSON.stringify({ light_workouts: [...updatedLightWorkouts, ...updatedLightPastFailedWorkouts.map((w, i) => ({ ...w, fecha: newFailedDates[i] }))].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()) }, null, 2));
   } catch (error: any) {
     console.error('Error en generateLightRoutine:', error);
     res.status(500).json({
