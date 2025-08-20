@@ -13,4 +13,5 @@ export interface PathProps {
   profile: string;
   routineDays: string;
   specialCases: string;
+  routineExercises: string;
 }

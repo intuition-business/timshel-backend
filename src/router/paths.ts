@@ -14,5 +14,6 @@ export const Path: PathProps = {
   getRoutines: "/api/routines",
   specialCases: "/api/special-cases",
   routineDays: "/api/routine-days",
+  routineExercises: "/api/routine-exercises",
   profile: "/api/profile",
 };
