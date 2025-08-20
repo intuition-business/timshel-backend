@@ -6,6 +6,7 @@ import { adapterExercises } from "./adapter";
 import { createExerciseDto, getExerciseDto, updateExerciseDto, deleteExerciseDto } from "./dto"; // Importamos los DTOs
 
 interface Exercise {
+  id: number;
   category: string;
   exercise: string;
   description: string;
@@ -87,10 +88,11 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
     }
 
     const [rows] = await pool.execute(
-      "SELECT category, exercise, description FROM exercises ORDER BY category ASC, exercise ASC"
+      "SELECT id, category, exercise, description FROM exercises ORDER BY category ASC, exercise ASC"
     );
 
     const exerciseRows = rows as Array<{
+      id: number;
       category: string;
       exercise: string;
       description: string;
@@ -138,11 +140,12 @@ export const getExercisesByCategory = async (req: Request, res: Response, next: 
     }
 
     const [rows] = await pool.execute(
-      "SELECT category, exercise, description FROM exercises WHERE category = ? ORDER BY exercise ASC",
+      "SELECT id, category, exercise, description FROM exercises WHERE category = ? ORDER BY exercise ASC",
       [category.toString().toUpperCase()]
     );
 
     const exerciseRows = rows as Array<{
+      id: number;
       category: string;
       exercise: string;
       description: string;
