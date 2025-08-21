@@ -34,7 +34,7 @@ export const readFiles = async (personData: any, daysData: any) => {
   }>;
 
   // Formateamos los datos como un string CSV similar al original
-  let ejerciciosCsv = "Categoria;Ejercicio;Descripción\n"; // Encabezado
+  let ejerciciosCsv = "Categoria;Ejercicio;Descripción\n";
   exerciseRows.forEach((row) => {
     // Escapamos comillas y manejamos saltos de línea si es necesario
     const desc = row.description.replace(/"/g, '""').replace(/\n/g, ' ');
