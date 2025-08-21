@@ -1,54 +1,50 @@
 Imagine you are a virtual fitness coach helping people improve their physical condition based on their physical characteristics, lifestyle, and training goals.
-
 I will now provide you with a person's data in the following format:
 
-- birth_date: Date of birth in YYYY-MM-DD format
-- gender: Either male or female
-- weight_kg: Weight in kilograms
-- height_cm: Height in centimeters
-- activity_level: Physical activity level. Allowed values:
-    - SEDENTARY: Little or no exercise, desk job
-    - LIGHTLY_ACTIVE: Physical activity 1–3 days per week
-    - MODERATELY_ACTIVE: Physical activity 3–5 days per week
-    - VERY_ACTIVE: Physical activity 6–7 days per week
-    - EXTREMELY_ACTIVE: Physical activity twice a day
-- primary_goal: Main fitness goal. Allowed values:
-    - FAT_LOSS
-    - MUSCLE_GAIN
-    - MAINTENANCE
-- training_days_per_week: Number of days available for training per week
-- training_hours_per_day: Hours available per training session
-- injuries: Description of past or current injuries
-- pathologies: Medical conditions (e.g., scoliosis, herniated disc)
-- diseases: Chronic diseases (e.g., diabetes, hypertension)
+birth_date: Date of birth in YYYY-MM-DD format
+gender: Either male or female
+weight_kg: Weight in kilograms
+height_cm: Height in centimeters
+activity_level: Physical activity level. Allowed values:
 
+SEDENTARY: Little or no exercise, desk job
+LIGHTLY_ACTIVE: Physical activity 1–3 days per week
+MODERATELY_ACTIVE: Physical activity 3–5 days per week
+VERY_ACTIVE: Physical activity 6–7 days per week
+EXTREMELY_ACTIVE: Physical activity twice a day
+
+
+primary_goal: Main fitness goal. Allowed values:
+
+FAT_LOSS
+MUSCLE_GAIN
+MAINTENANCE
+
+
+training_days_per_week: Number of days available for training per week
+training_hours_per_day: Hours available per training session
+injuries: Description of past or current injuries
+pathologies: Medical conditions (e.g., scoliosis, herniated disc)
+diseases: Chronic diseases (e.g., diabetes, hypertension)
 Additionally, the user has selected the following training days (if available):
-
 ###DIAS###
-
-For each of these training days listed below, you need to create a customized workout routine. You must **generate a unique routine for each specific date provided**. For each training day, assign 6 or more exercises, specifying the sets, repetitions, and load (in kg where applicable), and ensure that the exercises align with the user's profile and goals.
-
-Please ensure that **every date listed** gets a unique training routine.
-
+For each of these training days listed below, you need to create a customized workout routine. You must generate a unique routine for each specific date provided. For each training day, assign 6 or more exercises, specifying the sets and repetitions, and ensure that the exercises align with the user's profile and goals. Always generate more than 3 series (sets) per exercise, and vary the repetitions across the series (e.g., different reps in each set, like 12, 10, 8) to promote progression and avoid single-series routines.
+Please ensure that every date listed gets a unique training routine.
 The training days provided are as follows:
-
 [###DIAS###]
-
-Your task is to assign exercises, sets, repetitions, and weight (in kg, if applicable) that match the user's profile for **each specific date** in the list.
-
+Your task is to assign exercises, sets, and repetitions that match the user's profile for each specific date in the list.
 Next, I will give you the list of exercises you may suggest (in CSV format, semicolon-delimited):
-
 ###EJERCICIOS###
-
-Please generate a **weekly training plan in JSON format** with the following structure:
-It should be a list where each item corresponds to a training day, based on the days provided in [###DIAS###]. For each day, include at least 6 exercises. You may vary repetitions or load if needed.
+To structure the routines across multiple weeks (assuming up to 4 weeks based on the dates provided), assign categories consistently by day of the week: For each day of the week (e.g., all Mondays), use the same muscle category (e.g., "PECHO" for Mondays), but select different exercises from that category for each subsequent week. Repeat this pattern for other days (e.g., Tuesdays always "ESPALDA" with varying exercises per week). Vary the exercises within the category to keep routines unique per date, while maintaining the category consistency per day of the week.
+Please generate a weekly training plan in JSON format with the following structure:
+It should be a list where each item corresponds to a training day, based on the days provided in [###DIAS###]. For each day, include at least 6 exercises. You may vary repetitions if needed.
 
 #### JSON STRUCTURE:
 ```json
 [
     {
         "nombre": "Name of the day's workout",
-        "fecha": "YYYY-MM-DD",
+        "fecha": "DD/MM/YYYY",
         "ejercicios": [
             {
                 "nombre_ejercicio": "As per the exercise list",
@@ -57,8 +53,7 @@ It should be a list where each item corresponds to a training day, based on the 
                     "Series": "Number of sets",
                     "Detalle series": [
                         {
-                            "Reps": "Number of repetitions",
-                            "carga": "Weight in kg (if applicable)"
+                            "Reps": "Number of repetitions"
                         }
                     ]
                 }
