@@ -171,8 +171,9 @@ export const generateRoutinesIa = async (
 
     const personData = adapter(rows?.[0]);
 
-    // Modificamos el prompt para incluir los días específicos
-    let prompt = await readFiles(personData, daysData);
+    // Generar los primeros 3 días sincronamente
+    const firstThreeDays = daysData.slice(0, 3);
+    let prompt = await readFiles(personData, firstThreeDays);
 
     // Llamamos a la IA para generar la rutina
     const { response, error } = await getOpenAI(prompt);
@@ -192,12 +193,12 @@ export const generateRoutinesIa = async (
       if (parsed && Array.isArray(trainingPlan)) {
         // Asociamos las fechas con la rutina generada
         trainingPlan.forEach((day: any, index: number) => {
-          const dateData = daysData[index];
+          const dateData = firstThreeDays[index];
           day.fecha = dateData ? dateData.date : null;
         });
 
-        // Guardar en la DB
-        const trainingPlanJson = JSON.stringify(trainingPlan); // Convertir a string si usas TEXT; si usas JSON, usa el objeto directamente
+        // Guardar los primeros 3 días en la DB (parcial)
+        const trainingPlanJson = JSON.stringify(trainingPlan);
 
         // Insertar o actualizar el registro
         await pool.execute(
@@ -223,6 +224,31 @@ export const generateRoutinesIa = async (
           routine_id: routineId,
           user_id: userId
         });
+
+        // Generar el resto en segundo plano
+        setImmediate(async () => {
+          try {
+            const fullPrompt = await readFiles(personData, daysData);
+            const { response: fullResponse } = await getOpenAI(fullPrompt);
+            let parsedFull = JSON.parse(fullResponse?.choices[0].message.content || "");
+            const fullTrainingPlan = parsedFull.workouts || parsedFull.training_plan;
+            if (Array.isArray(fullTrainingPlan)) {
+              fullTrainingPlan.forEach((day: any, index: number) => {
+                const dateData = daysData[index];
+                day.fecha = dateData ? dateData.date : null;
+              });
+              const fullTrainingPlanJson = JSON.stringify(fullTrainingPlan);
+              await pool.execute(
+                "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+                [fullTrainingPlanJson, userId]
+              );
+              console.log('Rutina completa generada y guardada para user_id:', userId);
+            }
+          } catch (bgError) {
+            console.error('Error en generación de rutina completa en segundo plano:', bgError);
+          }
+        });
+
         return;
       } else {
         console.error("La propiedad 'workouts' o 'training_plan' no es un array:", parsed);
@@ -280,10 +306,10 @@ function generateDefaultRoutineDays() {
   const defaultDays = ['Monday', 'Wednesday', 'Friday'];
   return defaultDays.map((day, index) => {
     let nextDate = new Date(currentDate);
-    nextDate.setDate(currentDate.getDate() + (index * 2)); // Sumamos 2 días por cada día de la semana
+    nextDate.setDate(currentDate.getDate() + (index * 2));
     return {
       day: day,
-      date: nextDate.toISOString().split('T')[0], // Formato: YYYY-MM-DD
+      date: nextDate.toISOString().split('T')[0],
     };
   });
 }
