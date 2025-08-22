@@ -189,7 +189,7 @@ export const generateRoutinesIa = async (
       }
 
       // Verificamos que parsed tenga la propiedad 'workouts' o 'training_plan' y que sea un array
-      const trainingPlan = parsed.workouts || parsed.training_plan;
+      let trainingPlan = parsed.workouts || parsed.training_plan || parsed.workout_plan; // Manejar variaciones
       if (parsed && Array.isArray(trainingPlan)) {
         // Asociamos las fechas con la rutina generada
         trainingPlan.forEach((day: any, index: number) => {
@@ -198,7 +198,7 @@ export const generateRoutinesIa = async (
         });
 
         // Guardar los primeros 3 días en la DB (parcial)
-        const trainingPlanJson = JSON.stringify(trainingPlan);
+        const trainingPlanJson = JSON.stringify(trainingPlan); // Convertir a string si usas TEXT; si usas JSON, usa el objeto directamente
 
         // Insertar o actualizar el registro
         await pool.execute(
@@ -231,7 +231,7 @@ export const generateRoutinesIa = async (
             const fullPrompt = await readFiles(personData, daysData);
             const { response: fullResponse } = await getOpenAI(fullPrompt);
             let parsedFull = JSON.parse(fullResponse?.choices[0].message.content || "");
-            const fullTrainingPlan = parsedFull.workouts || parsedFull.training_plan;
+            let fullTrainingPlan = parsedFull.workouts || parsedFull.training_plan || parsedFull.workout_plan;
             if (Array.isArray(fullTrainingPlan)) {
               fullTrainingPlan.forEach((day: any, index: number) => {
                 const dateData = daysData[index];
@@ -306,10 +306,10 @@ function generateDefaultRoutineDays() {
   const defaultDays = ['Monday', 'Wednesday', 'Friday'];
   return defaultDays.map((day, index) => {
     let nextDate = new Date(currentDate);
-    nextDate.setDate(currentDate.getDate() + (index * 2));
+    nextDate.setDate(currentDate.getDate() + (index * 2)); // Sumamos 2 días por cada día de la semana
     return {
       day: day,
-      date: nextDate.toISOString().split('T')[0],
+      date: nextDate.toISOString().split('T')[0], // Formato: YYYY-MM-DD
     };
   });
 }
