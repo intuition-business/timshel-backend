@@ -5,12 +5,14 @@ import pool from "../../config/db";
 import { v4 as uuidv4 } from 'uuid';
 import { adapterUserInfo } from "./adapter";
 import { getOpenAI } from "../../infrastructure/openIA";
+
 // Función para convertir fecha de DD/MM/YYYY a YYYY-MM-DD
 const convertDate = (date: string): string => {
   const [day, month, year] = date.split('/');
   const formattedDate = new Date(`${year}-${month}-${day}`);
   return formattedDate.toISOString().split('T')[0];
 };
+
 // Función para validar si un string es un JSON válido
 const isValidJson = (str: string): boolean => {
   try {
@@ -20,6 +22,7 @@ const isValidJson = (str: string): boolean => {
     return false;
   }
 };
+
 // Nueva función helper para mapear day string a weekday number (0=Sunday, 1=Monday, etc.) - Actualizado para inglés
 const dayToWeekday = (day: string): number => {
   const map: { [key: string]: number } = {
@@ -34,6 +37,7 @@ const dayToWeekday = (day: string): number => {
   };
   return map[day] ?? -1; // -1 si no coincide, para depuración
 };
+
 // Nueva función helper para obtener weekdays únicos de 'day' fields
 const getTrainingWeekdays = (rows: any[]): number[] => {
   const weekdays = new Set<number>();
@@ -43,6 +47,7 @@ const getTrainingWeekdays = (rows: any[]): number[] => {
   });
   return Array.from(weekdays);
 };
+
 // Nueva función helper para generar N fechas futuras coincidiendo con weekdays, empezando desde una fecha dada
 const generateNewDates = (startDateStr: string, count: number, weekdays: number[]): string[] => {
   if (weekdays.length === 0) {
@@ -64,6 +69,7 @@ const generateNewDates = (startDateStr: string, count: number, weekdays: number[
   }
   return newDates;
 };
+
 export const generateLightRoutine = async (
   req: Request,
   res: Response,
@@ -226,20 +232,17 @@ export const generateLightRoutine = async (
     }
     // Paso 6: Obtener ajustes de la IA o usar reglas fijas
     let repsReductionPercentage = 25; // Valores por defecto para rule-based
-    let loadReductionPercentage = 25;
     let restIncreaseMinutes = 0.5;
     if (adaptedData.reason !== 'lack_of_time') {
       // Consultar a la IA para recomendaciones de ajustes
       const prompt = `
-        Basado en el motivo de fallo "${adaptedData.reason}" y la descripción "${adaptedData.description}", determina los ajustes para una rutina de entrenamiento leve. La rutina contiene ejercicios como sentadillas, press de banca, planchas, etc., cada uno con un número de series, repeticiones, carga, y tiempo de descanso.
+        Basado en el motivo de fallo "${adaptedData.reason}" y la descripción "${adaptedData.description}", determina los ajustes para una rutina de entrenamiento leve. La rutina contiene ejercicios como sentadillas, press de banca, planchas, etc., cada uno con un número de series, repeticiones, y tiempo de descanso.
         Proporciona los siguientes valores para generar una versión leve:
         - Porcentaje de reducción para las repeticiones (25-50%, según la severidad).
-        - Porcentaje de reducción para la carga (25-50%, según la severidad, si no es "Bodyweight").
         - Minutos a aumentar en el tiempo de descanso (0.5-1 minuto, según la severidad).
         Devuelve solo un JSON con la estructura:
         {
           "repsReductionPercentage": number,
-          "loadReductionPercentage": number,
           "restIncreaseMinutes": number
         }
         Sin texto adicional.
@@ -263,10 +266,8 @@ export const generateLightRoutine = async (
         console.log('Paso 6: Respuesta de OpenAI:', JSON.stringify(aiAdjustments, null, 2));
         if (
           typeof aiAdjustments.repsReductionPercentage !== 'number' ||
-          typeof aiAdjustments.loadReductionPercentage !== 'number' ||
           typeof aiAdjustments.restIncreaseMinutes !== 'number' ||
           aiAdjustments.repsReductionPercentage < 25 || aiAdjustments.repsReductionPercentage > 50 ||
-          aiAdjustments.loadReductionPercentage < 25 || aiAdjustments.loadReductionPercentage > 50 ||
           aiAdjustments.restIncreaseMinutes < 0.5 || aiAdjustments.restIncreaseMinutes > 1
         ) {
           console.log('Paso 6: Formato de ajustes de la IA inválido:', JSON.stringify(aiAdjustments, null, 2));
@@ -280,9 +281,8 @@ export const generateLightRoutine = async (
           return;
         }
         repsReductionPercentage = aiAdjustments.repsReductionPercentage;
-        loadReductionPercentage = aiAdjustments.loadReductionPercentage;
         restIncreaseMinutes = aiAdjustments.restIncreaseMinutes;
-        console.log('Paso 6: Ajustes de IA aplicados:', { repsReductionPercentage, loadReductionPercentage, restIncreaseMinutes });
+        console.log('Paso 6: Ajustes de IA aplicados:', { repsReductionPercentage, restIncreaseMinutes });
       } catch (parseError: any) {
         console.log('Paso 6: Error al parsear respuesta de OpenAI:', parseError.message);
         res.status(400).json({
@@ -296,12 +296,26 @@ export const generateLightRoutine = async (
         return;
       }
     } else {
-      console.log('Paso 6: Usando reglas fijas para lack_of_time:', { repsReductionPercentage, loadReductionPercentage, restIncreaseMinutes });
+      console.log('Paso 6: Usando reglas fijas para lack_of_time:', { repsReductionPercentage, restIncreaseMinutes });
     }
     // Paso 7: Generar rutina leve para futuros (mantener) y fallados pasados (al final)
     let lightFutureWorkouts;
     if (adaptedData.reason === 'lack_of_time') {
-      lightFutureWorkouts = futurePendingWorkouts.map((workout: any) => ({ ...workout }));
+      lightFutureWorkouts = futurePendingWorkouts.map((workout: any) => {
+        const adjustedExercises = workout.ejercicios.map((exercise: any) => ({
+          ...exercise,
+          Esquema: {
+            ...exercise.Esquema,
+            "Detalle series": exercise.Esquema["Detalle series"].map((serie: any) => ({
+              Reps: serie.Reps
+            }))
+          }
+        }));
+        return {
+          ...workout,
+          ejercicios: adjustedExercises
+        };
+      });
     } else {
       lightFutureWorkouts = futurePendingWorkouts.map((workout: any) => {
         const adjustedExercises = workout.ejercicios.map((exercise: any) => {
@@ -309,12 +323,8 @@ export const generateLightRoutine = async (
           let descansoAumentado = parseFloat(exercise.Esquema.Descanso) + restIncreaseMinutes;
           let adjustedSeries = exercise.Esquema["Detalle series"].map((serie: any) => {
             let repsReducidos = Math.max(1, Math.floor(serie.Reps * (1 - repsReductionPercentage / 100)));
-            let cargaReducida = serie.carga === "Bodyweight"
-              ? "Bodyweight"
-              : Math.max(0, Math.floor(serie.carga * (1 - loadReductionPercentage / 100)));
             return {
-              Reps: repsReducidos,
-              carga: cargaReducida
+              Reps: repsReducidos
             };
           });
           return {
@@ -335,7 +345,21 @@ export const generateLightRoutine = async (
     }
     let lightPastFailedWorkouts;
     if (adaptedData.reason === 'lack_of_time') {
-      lightPastFailedWorkouts = pastFailedWorkouts.map((workout: any) => ({ ...workout }));
+      lightPastFailedWorkouts = pastFailedWorkouts.map((workout: any) => {
+        const adjustedExercises = workout.ejercicios.map((exercise: any) => ({
+          ...exercise,
+          Esquema: {
+            ...exercise.Esquema,
+            "Detalle series": exercise.Esquema["Detalle series"].map((serie: any) => ({
+              Reps: serie.Reps
+            }))
+          }
+        }));
+        return {
+          ...workout,
+          ejercicios: adjustedExercises
+        };
+      });
     } else {
       lightPastFailedWorkouts = pastFailedWorkouts.map((workout: any) => {
         const adjustedExercises = workout.ejercicios.map((exercise: any) => {
@@ -343,12 +367,8 @@ export const generateLightRoutine = async (
           let descansoAumentado = parseFloat(exercise.Esquema.Descanso) + restIncreaseMinutes;
           let adjustedSeries = exercise.Esquema["Detalle series"].map((serie: any) => {
             let repsReducidos = Math.max(1, Math.floor(serie.Reps * (1 - repsReductionPercentage / 100)));
-            let cargaReducida = serie.carga === "Bodyweight"
-              ? "Bodyweight"
-              : Math.max(0, Math.floor(serie.carga * (1 - loadReductionPercentage / 100)));
             return {
-              Reps: repsReducidos,
-              carga: cargaReducida
+              Reps: repsReducidos
             };
           });
           return {
