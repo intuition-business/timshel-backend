@@ -48,24 +48,30 @@ const getTrainingWeekdays = (rows: any[]): number[] => {
   return Array.from(weekdays);
 };
 
-// Nueva función helper para generar N fechas futuras coincidiendo con weekdays, empezando desde una fecha dada
+// Versión optimizada de generateNewDates para evitar bucles largos innecesarios
 const generateNewDates = (startDateStr: string, count: number, weekdays: number[]): string[] => {
   if (weekdays.length === 0) {
     throw new Error('No se pueden generar fechas: patrón de días de entrenamiento vacío (verifique campo "day" en user_routine).');
   }
+  const sortedWeekdays = weekdays.sort((a, b) => a - b);
   const newDates: string[] = [];
-  let currentDate = new Date(startDateStr);
-  let safetyCounter = 0; // Safeguard contra loop infinito
-  const maxIterations = 365 * 1; // Límite: max 1 año para generar fechas
-  while (newDates.length < count && safetyCounter < maxIterations) {
-    currentDate.setDate(currentDate.getDate() + 1); // Avanzar un día (empieza después de startDate)
-    if (weekdays.includes(currentDate.getDay())) {
-      newDates.push(currentDate.toISOString().split('T')[0]);
+  let current = new Date(startDateStr);
+  current.setDate(current.getDate() + 1); // Empezar después de startDate
+  while (newDates.length < count) {
+    const currentWeekday = current.getDay();
+    let nextWd = sortedWeekdays.find(wd => wd >= currentWeekday);
+    let daysToAdd: number;
+    if (nextWd !== undefined) {
+      daysToAdd = nextWd - currentWeekday;
+    } else {
+      // Envolver a la siguiente semana
+      nextWd = sortedWeekdays[0];
+      daysToAdd = 7 - currentWeekday + nextWd;
     }
-    safetyCounter++;
-  }
-  if (newDates.length < count) {
-    throw new Error(`No se pudieron generar ${count} fechas: patrón de días insuficiente o loop excedido (weekdays: ${weekdays}).`);
+    current.setDate(current.getDate() + daysToAdd);
+    newDates.push(current.toISOString().split('T')[0]);
+    // Actualizar para el siguiente ciclo (día después del agregado)
+    current.setDate(current.getDate() + 1);
   }
   return newDates;
 };
@@ -96,13 +102,37 @@ export const generateLightRoutine = async (
       [failureId, userId, adaptedData.reason, adaptedData.description, formattedDate, adaptedData.current_user_time + ':00']
     );
     console.log('Paso 2: Datos guardados en user_routine_failures');
-    // Paso 3: Identificar días pendientes de 'user_routine' (todos pending, sin filtro inicial)
-    const [userRoutineRows]: any = await pool.execute(
-      "SELECT day, date FROM user_routine WHERE user_id = ? AND status = 'pending' ORDER BY date",
+    // Paso 3: Obtener metadata eficiente sin fetching todos los rows inicialmente
+    const [distinctDaysRows]: any = await pool.execute(
+      "SELECT DISTINCT day FROM user_routine WHERE user_id = ? AND status = 'pending'",
       [userId]
     );
-    console.log('Paso 3: Días pendientes de user_routine:', JSON.stringify(userRoutineRows, null, 2));
-    if (userRoutineRows.length === 0) {
+    console.log('Paso 3: Días distintos de user_routine:', JSON.stringify(distinctDaysRows, null, 2));
+    const trainingWeekdays = getTrainingWeekdays(distinctDaysRows);
+    console.log('Paso 3: Días de la semana de entrenamiento inferidos del campo "day":', trainingWeekdays);
+
+    const [maxDateRow]: any = await pool.execute(
+      "SELECT MAX(date) as max_date FROM user_routine WHERE user_id = ? AND status = 'pending'",
+      [userId]
+    );
+    const maxDateStr = maxDateRow[0].max_date;
+    console.log('Paso 3: Última fecha existente en la rutina:', maxDateStr);
+
+    const [pastCountRow]: any = await pool.execute(
+      "SELECT COUNT(*) as count FROM user_routine WHERE user_id = ? AND status = 'pending' AND date < ?",
+      [userId, formattedDate]
+    );
+    const numPastFailed = pastCountRow[0].count;
+    console.log('Paso 3: Número de días pasados pendientes:', numPastFailed);
+
+    const [futureCountRow]: any = await pool.execute(
+      "SELECT COUNT(*) as count FROM user_routine WHERE user_id = ? AND status = 'pending' AND date >= ?",
+      [userId, formattedDate]
+    );
+    const numFuturePending = futureCountRow[0].count;
+    console.log('Paso 3: Número de días futuros pendientes:', numFuturePending);
+
+    if (numPastFailed + numFuturePending === 0) {
       console.log('Paso 3: No se encontraron días pendientes para user_id:', userId);
       res.status(200).json({
         response: "No hay días pendientes para ajustar.",
@@ -113,34 +143,48 @@ export const generateLightRoutine = async (
       });
       return;
     }
-    // Separar pasados y futuros
-    const pastPendingRows = userRoutineRows.filter((row: any) => new Date(row.date).toISOString().split('T')[0] < formattedDate);
-    const futurePendingRows = userRoutineRows.filter((row: any) => new Date(row.date).toISOString().split('T')[0] >= formattedDate);
-    // Cambiar status a 'failed' solo para pasados
-    for (const row of pastPendingRows) {
-      await pool.execute(
-        "UPDATE user_routine SET status = 'failed' WHERE user_id = ? AND date = ?",
-        [userId, row.date]
-      );
+
+    const MAX_PAST_FAILED = 60; // Límite razonable para evitar consultas largas
+    if (numPastFailed > MAX_PAST_FAILED) {
+      console.log('Paso 3: Demasiados días pasados pendientes:', numPastFailed);
+      res.status(400).json({
+        response: "",
+        error: true,
+        message: `Demasiados días pendientes pasados (${numPastFailed} > ${MAX_PAST_FAILED}). Contacte soporte para limpieza de datos históricos.`,
+        failure_id: failureId,
+        user_id: userId
+      });
+      return;
     }
-    console.log('Paso 3: Status actualizado a "failed" para', pastPendingRows.length, 'días pasados pendientes');
-    // Obtener weekdays únicos del campo 'day' de TODOS los pending
-    const trainingWeekdays = getTrainingWeekdays(userRoutineRows);
-    console.log('Paso 3: Días de la semana de entrenamiento inferidos del campo "day":', trainingWeekdays);
-    // Contar N = días pasados fallidos
-    const numPastFailed = pastPendingRows.length;
-    // Encontrar la última fecha existente (max date de todos los rows)
-    const allDates = userRoutineRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
-    const maxDateStr = allDates.reduce((max: any, date: any) => date > max ? date : max, allDates[0]);
-    console.log('Paso 3: Última fecha existente en la rutina:', maxDateStr);
-    // Generar N nuevas fechas al final, coincidiendo con weekdays, empezando DESPUÉS de la última fecha existente
+
+    // Fetch listas específicas solo si es necesario (después de checks)
+    const [pastDatesRows]: any = await pool.execute(
+      "SELECT date FROM user_routine WHERE user_id = ? AND status = 'pending' AND date < ? ORDER BY date",
+      [userId, formattedDate]
+    );
+    const pastFailedDates = pastDatesRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
+    console.log('Paso 3: Fechas de días pasados pendientes:', pastFailedDates);
+
+    const [futureDatesRows]: any = await pool.execute(
+      "SELECT date FROM user_routine WHERE user_id = ? AND status = 'pending' AND date >= ? ORDER BY date",
+      [userId, formattedDate]
+    );
+    const futurePendingDates = futureDatesRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
+    console.log('Paso 3: Fechas de días futuros pendientes:', futurePendingDates);
+
+    // Actualizar status a 'failed' para pasados en una sola query eficiente
+    await pool.execute(
+      "UPDATE user_routine SET status = 'failed' WHERE user_id = ? AND status = 'pending' AND date < ?",
+      [userId, formattedDate]
+    );
+    console.log('Paso 3: Status actualizado a "failed" para', numPastFailed, 'días pasados pendientes');
+
+    // Generar N nuevas fechas al final
     const newFailedDates = numPastFailed > 0 ? generateNewDates(maxDateStr, numPastFailed, trainingWeekdays) : [];
     console.log('Paso 3: Nuevas fechas generadas para fallados pasados (después de la última existente):', newFailedDates);
+
     // pendingDates: fechas futuras (originales) + nuevas para fallados (al final)
-    const pendingDates = [
-      ...futurePendingRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]),
-      ...newFailedDates
-    ];
+    const pendingDates = [...futurePendingDates, ...newFailedDates];
     console.log('Paso 3: Fechas pendientes actualizadas (futuras originales + nuevas para fallados al final):', pendingDates);
     // Paso 4: Obtener la rutina original de 'user_training_plans'
     const [trainingPlanRows]: any = await pool.execute(
@@ -207,8 +251,6 @@ export const generateLightRoutine = async (
       return;
     }
     // Paso 5: Filtrar workouts pendientes futuros (mantener originales) y fallados pasados por separado
-    const pastFailedDates = pastPendingRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
-    const futurePendingDates = futurePendingRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
     const pastFailedWorkouts = workouts.filter((workout: any) => {
       const workoutDate = new Date(workout.fecha).toISOString().split('T')[0];
       return pastFailedDates.includes(workoutDate);
