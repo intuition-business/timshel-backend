@@ -23,59 +23,6 @@ const isValidJson = (str: string): boolean => {
   }
 };
 
-// Nueva función helper para mapear day string a weekday number (0=Sunday, 1=Monday, etc.) - Actualizado para inglés
-const dayToWeekday = (day: string): number => {
-  const map: { [key: string]: number } = {
-    'Sunday': 0,
-    'Monday': 1,
-    'Tuesday': 2,
-    'Wednesday': 3,
-    'Thursday': 4,
-    'Friday': 5,
-    'Saturday': 6
-    // Si está en español u otro, agrega: 'Lunes': 1, 'Martes': 2, etc.
-  };
-  return map[day] ?? -1; // -1 si no coincide, para depuración
-};
-
-// Nueva función helper para obtener weekdays únicos de 'day' fields
-const getTrainingWeekdays = (rows: any[]): number[] => {
-  const weekdays = new Set<number>();
-  rows.forEach(row => {
-    const weekday = dayToWeekday(row.day);
-    if (weekday !== -1) weekdays.add(weekday);
-  });
-  return Array.from(weekdays);
-};
-
-// Versión optimizada de generateNewDates para evitar bucles largos innecesarios
-const generateNewDates = (startDateStr: string, count: number, weekdays: number[]): string[] => {
-  if (weekdays.length === 0) {
-    throw new Error('No se pueden generar fechas: patrón de días de entrenamiento vacío (verifique campo "day" en user_routine).');
-  }
-  const sortedWeekdays = weekdays.sort((a, b) => a - b);
-  const newDates: string[] = [];
-  let current = new Date(startDateStr);
-  current.setDate(current.getDate() + 1); // Empezar después de startDate
-  while (newDates.length < count) {
-    const currentWeekday = current.getDay();
-    let nextWd = sortedWeekdays.find(wd => wd >= currentWeekday);
-    let daysToAdd: number;
-    if (nextWd !== undefined) {
-      daysToAdd = nextWd - currentWeekday;
-    } else {
-      // Envolver a la siguiente semana
-      nextWd = sortedWeekdays[0];
-      daysToAdd = 7 - currentWeekday + nextWd;
-    }
-    current.setDate(current.getDate() + daysToAdd);
-    newDates.push(current.toISOString().split('T')[0]);
-    // Actualizar para el siguiente ciclo (día después del agregado)
-    current.setDate(current.getDate() + 1);
-  }
-  return newDates;
-};
-
 export const generateLightRoutine = async (
   req: Request,
   res: Response,
@@ -102,22 +49,7 @@ export const generateLightRoutine = async (
       [failureId, userId, adaptedData.reason, adaptedData.description, formattedDate, adaptedData.current_user_time + ':00']
     );
     console.log('Paso 2: Datos guardados en user_routine_failures');
-    // Paso 3: Obtener metadata eficiente sin fetching todos los rows inicialmente
-    const [distinctDaysRows]: any = await pool.execute(
-      "SELECT DISTINCT day FROM user_routine WHERE user_id = ? AND status = 'pending'",
-      [userId]
-    );
-    console.log('Paso 3: Días distintos de user_routine:', JSON.stringify(distinctDaysRows, null, 2));
-    const trainingWeekdays = getTrainingWeekdays(distinctDaysRows);
-    console.log('Paso 3: Días de la semana de entrenamiento inferidos del campo "day":', trainingWeekdays);
-
-    const [maxDateRow]: any = await pool.execute(
-      "SELECT MAX(date) as max_date FROM user_routine WHERE user_id = ? AND status = 'pending'",
-      [userId]
-    );
-    const maxDateStr = maxDateRow[0].max_date;
-    console.log('Paso 3: Última fecha existente en la rutina:', maxDateStr);
-
+    // Paso 3: Obtener metadata eficiente
     const [pastCountRow]: any = await pool.execute(
       "SELECT COUNT(*) as count FROM user_routine WHERE user_id = ? AND status = 'pending' AND date < ?",
       [userId, formattedDate]
@@ -157,14 +89,14 @@ export const generateLightRoutine = async (
       return;
     }
 
-    // Fetch listas específicas solo si es necesario (después de checks)
-    const [pastDatesRows]: any = await pool.execute(
-      "SELECT date FROM user_routine WHERE user_id = ? AND status = 'pending' AND date < ? ORDER BY date",
+    // Actualizar status a 'failed' para pendientes pasados en una sola query eficiente
+    await pool.execute(
+      "UPDATE user_routine SET status = 'failed' WHERE user_id = ? AND status = 'pending' AND date < ?",
       [userId, formattedDate]
     );
-    const pastFailedDates = pastDatesRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
-    console.log('Paso 3: Fechas de días pasados pendientes:', pastFailedDates);
+    console.log('Paso 3: Status actualizado a "failed" para', numPastFailed, 'días pasados pendientes');
 
+    // Fetch fechas de futuros pendientes si es necesario
     const [futureDatesRows]: any = await pool.execute(
       "SELECT date FROM user_routine WHERE user_id = ? AND status = 'pending' AND date >= ? ORDER BY date",
       [userId, formattedDate]
@@ -172,20 +104,6 @@ export const generateLightRoutine = async (
     const futurePendingDates = futureDatesRows.map((row: any) => new Date(row.date).toISOString().split('T')[0]);
     console.log('Paso 3: Fechas de días futuros pendientes:', futurePendingDates);
 
-    // Actualizar status a 'failed' para pasados en una sola query eficiente
-    await pool.execute(
-      "UPDATE user_routine SET status = 'failed' WHERE user_id = ? AND status = 'pending' AND date < ?",
-      [userId, formattedDate]
-    );
-    console.log('Paso 3: Status actualizado a "failed" para', numPastFailed, 'días pasados pendientes');
-
-    // Generar N nuevas fechas al final
-    const newFailedDates = numPastFailed > 0 ? generateNewDates(maxDateStr, numPastFailed, trainingWeekdays) : [];
-    console.log('Paso 3: Nuevas fechas generadas para fallados pasados (después de la última existente):', newFailedDates);
-
-    // pendingDates: fechas futuras (originales) + nuevas para fallados (al final)
-    const pendingDates = [...futurePendingDates, ...newFailedDates];
-    console.log('Paso 3: Fechas pendientes actualizadas (futuras originales + nuevas para fallados al final):', pendingDates);
     // Paso 4: Obtener la rutina original de 'user_training_plans'
     const [trainingPlanRows]: any = await pool.execute(
       "SELECT id, training_plan FROM user_training_plans WHERE user_id = ?",
@@ -206,7 +124,6 @@ export const generateLightRoutine = async (
     const trainingPlanRaw = trainingPlanRows[0].training_plan;
     console.log('Paso 4: Contenido crudo de training_plan:', trainingPlanRaw);
     let originalTrainingPlan;
-    // Intentar usar el JSON ya parseado de trainingPlanRows si está disponible
     if (Array.isArray(trainingPlanRows[0].training_plan)) {
       originalTrainingPlan = trainingPlanRows[0].training_plan;
       console.log('Paso 4: Usando training_plan ya parseado de trainingPlanRows:', JSON.stringify(originalTrainingPlan, null, 2));
@@ -250,19 +167,14 @@ export const generateLightRoutine = async (
       });
       return;
     }
-    // Paso 5: Filtrar workouts pendientes futuros (mantener originales) y fallados pasados por separado
-    const pastFailedWorkouts = workouts.filter((workout: any) => {
-      const workoutDate = new Date(workout.fecha).toISOString().split('T')[0];
-      return pastFailedDates.includes(workoutDate);
-    }).sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()); // Orden original
+    // Paso 5: Filtrar solo workouts pendientes futuros para posibles ajustes
     const futurePendingWorkouts = workouts.filter((workout: any) => {
       const workoutDate = new Date(workout.fecha).toISOString().split('T')[0];
       return futurePendingDates.includes(workoutDate);
-    }).sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()); // Orden original
-    console.log('Paso 5: Workouts de fallados pasados filtrados:', JSON.stringify(pastFailedWorkouts, null, 2));
-    console.log('Paso 5: Workouts pendientes futuros filtrados (mantener originales):', JSON.stringify(futurePendingWorkouts, null, 2));
-    if (pastFailedWorkouts.length === 0 && futurePendingWorkouts.length === 0) {
-      console.log('Paso 5: No se encontraron workouts para los días pendientes');
+    }).sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+    console.log('Paso 5: Workouts pendientes futuros filtrados:', JSON.stringify(futurePendingWorkouts, null, 2));
+    if (futurePendingWorkouts.length === 0 && numPastFailed === 0) {
+      console.log('Paso 5: No se encontraron workouts relevantes para ajustes');
       res.status(200).json({
         response: "No se encontraron workouts para los días pendientes.",
         error: false,
@@ -272,10 +184,12 @@ export const generateLightRoutine = async (
       });
       return;
     }
-    // Paso 6: Obtener ajustes de la IA o usar reglas fijas
-    let repsReductionPercentage = 25; // Valores por defecto para rule-based
+    // Paso 6: Obtener ajustes solo si la razón es 'injury' o 'enfermedad'
+    let applyAdjustments = false;
+    let repsReductionPercentage = 25; // Valores por defecto
     let restIncreaseMinutes = 0.5;
-    if (adaptedData.reason !== 'lack_of_time') {
+    if (adaptedData.reason === 'injury') {
+      applyAdjustments = true;
       // Consultar a la IA para recomendaciones de ajustes
       const prompt = `
         Basado en el motivo de fallo "${adaptedData.reason}" y la descripción "${adaptedData.description}", determina los ajustes para una rutina de entrenamiento leve. La rutina contiene ejercicios como sentadillas, press de banca, planchas, etc., cada uno con un número de series, repeticiones, y tiempo de descanso.
@@ -338,27 +252,11 @@ export const generateLightRoutine = async (
         return;
       }
     } else {
-      console.log('Paso 6: Usando reglas fijas para lack_of_time:', { repsReductionPercentage, restIncreaseMinutes });
+      console.log('Paso 6: No se aplican ajustes para la razón:', adaptedData.reason);
     }
-    // Paso 7: Generar rutina leve para futuros (mantener) y fallados pasados (al final)
-    let lightFutureWorkouts;
-    if (adaptedData.reason === 'lack_of_time') {
-      lightFutureWorkouts = futurePendingWorkouts.map((workout: any) => {
-        const adjustedExercises = workout.ejercicios.map((exercise: any) => ({
-          ...exercise,
-          Esquema: {
-            ...exercise.Esquema,
-            "Detalle series": exercise.Esquema["Detalle series"].map((serie: any) => ({
-              Reps: serie.Reps
-            }))
-          }
-        }));
-        return {
-          ...workout,
-          ejercicios: adjustedExercises
-        };
-      });
-    } else {
+    // Paso 7: Generar rutina leve solo para futuros si aplica ajustes
+    let lightFutureWorkouts = futurePendingWorkouts;
+    if (applyAdjustments) {
       lightFutureWorkouts = futurePendingWorkouts.map((workout: any) => {
         const adjustedExercises = workout.ejercicios.map((exercise: any) => {
           const seriesCount = exercise.Esquema.Series;
@@ -384,123 +282,54 @@ export const generateLightRoutine = async (
           ejercicios: adjustedExercises
         };
       });
-    }
-    let lightPastFailedWorkouts;
-    if (adaptedData.reason === 'lack_of_time') {
-      lightPastFailedWorkouts = pastFailedWorkouts.map((workout: any) => {
-        const adjustedExercises = workout.ejercicios.map((exercise: any) => ({
-          ...exercise,
-          Esquema: {
-            ...exercise.Esquema,
-            "Detalle series": exercise.Esquema["Detalle series"].map((serie: any) => ({
-              Reps: serie.Reps
-            }))
-          }
-        }));
-        return {
-          ...workout,
-          ejercicios: adjustedExercises
-        };
-      });
+      console.log('Paso 7: Rutina leve generada para futuros:', JSON.stringify(lightFutureWorkouts, null, 2));
     } else {
-      lightPastFailedWorkouts = pastFailedWorkouts.map((workout: any) => {
-        const adjustedExercises = workout.ejercicios.map((exercise: any) => {
-          const seriesCount = exercise.Esquema.Series;
-          let descansoAumentado = parseFloat(exercise.Esquema.Descanso) + restIncreaseMinutes;
-          let adjustedSeries = exercise.Esquema["Detalle series"].map((serie: any) => {
-            let repsReducidos = Math.max(1, Math.floor(serie.Reps * (1 - repsReductionPercentage / 100)));
-            return {
-              Reps: repsReducidos
-            };
-          });
-          return {
-            ...exercise,
-            Esquema: {
-              ...exercise.Esquema,
-              Series: seriesCount,
-              Descanso: descansoAumentado.toString(),
-              "Detalle series": adjustedSeries
-            }
-          };
-        });
-        return {
-          ...workout,
-          ejercicios: adjustedExercises
-        };
-      });
+      console.log('Paso 7: No se generó rutina leve ya que no aplica ajustes para esta razón');
     }
-    console.log('Paso 7: Rutina leve generada para futuros y fallados pasados:', JSON.stringify([...lightFutureWorkouts, ...lightPastFailedWorkouts], null, 2));
-    // Paso 8: Filtrar (asumiendo extensión para nuevas fechas al final)
-    const updatedLightFutureWorkouts = lightFutureWorkouts.filter(() => true); // Mantener todos, fechas originales
-    const updatedLightPastFailedWorkouts = lightPastFailedWorkouts.filter(() => true); // Mantener todos, nuevas fechas al final
-    console.log('Paso 8: Workouts filtrados:', JSON.stringify([...updatedLightFutureWorkouts, ...updatedLightPastFailedWorkouts], null, 2));
-    if (updatedLightFutureWorkouts.length === 0 && updatedLightPastFailedWorkouts.length === 0) {
-      console.log('Paso 8: No hay workouts válidos');
-      res.status(200).json({
-        response: "No hay workouts válidos dentro del período de la rutina.",
-        error: false,
-        message: "Información de fallo guardada, pero no se generó rutina leve.",
-        failure_id: failureId,
-        user_id: userId
-      });
-      return;
-    }
-    // Paso 9: Crear una nueva rutina
+    // Paso 8: Mantener el full training plan
     let newTrainingPlan = [...workouts];
-    // Eliminar workouts de fallados pasados (antiguas)
-    newTrainingPlan = newTrainingPlan.filter((w: any) => {
-      const wDate = new Date(w.fecha).toISOString().split('T')[0];
-      return !pastFailedDates.includes(wDate);
-    });
-    // Reemplazar workouts futuros con versiones leves (manteniendo fechas originales)
-    updatedLightFutureWorkouts.forEach((lightWorkout: any) => {
-      const workoutDate = new Date(lightWorkout.fecha).toISOString().split('T')[0];
-      const index = newTrainingPlan.findIndex((w: any) => new Date(w.fecha).toISOString().split('T')[0] === workoutDate);
-      if (index !== -1) {
-        newTrainingPlan[index] = lightWorkout;
-      } else {
-        newTrainingPlan.push(lightWorkout);
-      }
-    });
-    // Agregar workouts de fallados pasados AL FINAL con nuevas fechas (después de la última existente)
-    updatedLightPastFailedWorkouts.forEach((lightWorkout: any, index: number) => {
-      const newDate = newFailedDates[index];
-      if (newDate) {
-        newTrainingPlan.push({
-          ...lightWorkout,
-          fecha: newDate
-        });
-      }
-    });
-    // Ordenar por fecha ascendente para consistencia
-    newTrainingPlan.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
-    console.log('Paso 9: Nueva rutina generada (futuras respetadas, fallados al final con nuevas fechas):', JSON.stringify(newTrainingPlan, null, 2));
-    // Guardar la nueva rutina
-    await pool.execute(
-      "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
-      [JSON.stringify(newTrainingPlan), userId]
-    );
-    console.log('Paso 9: user_training_plans actualizado con nueva rutina');
-    // Paso 10: Responder con la rutina leve generada
-    const responseLightWorkouts = [
-      ...updatedLightFutureWorkouts,
-      ...updatedLightPastFailedWorkouts.map((w, i) => ({ ...w, fecha: newFailedDates[i] }))
-    ].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+    let updated = false;
+    if (applyAdjustments) {
+      lightFutureWorkouts.forEach((lightWorkout: any) => {
+        const workoutDate = new Date(lightWorkout.fecha).toISOString().split('T')[0];
+        const index = newTrainingPlan.findIndex((w: any) => new Date(w.fecha).toISOString().split('T')[0] === workoutDate);
+        if (index !== -1) {
+          newTrainingPlan[index] = lightWorkout;
+          updated = true;
+        }
+      });
+      // Ordenar por fecha ascendente para consistencia
+      newTrainingPlan.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+      console.log('Paso 8: Nueva rutina completa generada con ajustes en futuros:', JSON.stringify(newTrainingPlan, null, 2));
+    } else {
+      console.log('Paso 8: Rutina completa sin cambios en workouts');
+    }
+    // Paso 9: Actualizar en BD solo si hubo ajustes
+    if (updated) {
+      await pool.execute(
+        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+        [JSON.stringify(newTrainingPlan), userId]
+      );
+      console.log('Paso 9: user_training_plans actualizado con nueva rutina');
+    } else {
+      console.log('Paso 9: No se actualizó user_training_plans ya que no hubo ajustes');
+    }
+    // Paso 10: Responder con la rutina completa
     res.status(200).json({
-      response: "Rutina leve generada exitosamente.",
+      response: applyAdjustments ? "Rutina leve generada exitosamente para futuros." : "Información de fallo guardada sin ajustes en rutina.",
       error: false,
-      message: `Información de fallo guardada y rutina ajustada por ${adaptedData.reason}.`,
+      message: `Información de fallo guardada y estados actualizados por ${adaptedData.reason}.`,
       failure_id: failureId,
       user_id: userId,
-      light_workouts: responseLightWorkouts
+      full_routine: newTrainingPlan
     });
-    console.log('Paso 10: Respuesta enviada:', JSON.stringify({ light_workouts: responseLightWorkouts }, null, 2));
+    console.log('Paso 10: Respuesta enviada con rutina completa:', JSON.stringify({ full_routine: newTrainingPlan }, null, 2));
   } catch (error: any) {
     console.error('Error en generateLightRoutine:', error);
     res.status(500).json({
       response: "",
       error: true,
-      message: "Ocurrió un error al generar la rutina leve.",
+      message: "Ocurrió un error al procesar la rutina.",
       details: error.message
     });
   }
