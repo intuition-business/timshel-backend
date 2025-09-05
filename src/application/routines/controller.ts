@@ -104,7 +104,7 @@ export const getGeneratedRoutinesIa = async (
       // Normalizar la fecha a ISO sin hora para comparación
       const normalizedDate = new Date(row.date).toISOString().split("T")[0];
       // Validar que el estado pertenece al ENUM
-      if (["pending", "completed", "in-progress"].includes(row.status)) {
+      if (["pending", "completed", "failed"].includes(row.status)) {
         statusMap[normalizedDate] = row.status;
       }
     });
