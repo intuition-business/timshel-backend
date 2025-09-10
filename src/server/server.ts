@@ -15,6 +15,8 @@ import {
 import { conectionMysql } from "./../infrastructure/database";
 import { NODE_ENV, PORT, URL } from "../config";
 import { openapiSpecification } from "../infrastructure/swagger";
+import cron from 'node-cron';
+import { renewRoutines } from "../application/routineDays/controller";
 
 const Server = () => {
   const app: Application = express();
@@ -63,6 +65,11 @@ const Server = () => {
         console.log(`NODE_ENV=${NODE_ENV}`);
         console.log(`CORS-enabled web server listening on port ${PORT}`);
         console.log(`Run app in ${URL}:${PORT}`);
+
+        cron.schedule('49 9 * * *', async () => {
+          console.log("Ejecutando renovación de rutinas...");
+          await renewRoutines();
+        });
       });
     } catch (error) {
       console.log("Error:", error);
