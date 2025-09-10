@@ -66,9 +66,11 @@ const Server = () => {
         console.log(`CORS-enabled web server listening on port ${PORT}`);
         console.log(`Run app in ${URL}:${PORT}`);
 
-        cron.schedule('20 18 * * *', async () => {
+        cron.schedule('38 18 * * *', async () => {
           console.log("Ejecutando renovación de rutinas...");
           await renewRoutines();
+        }, {
+          timezone: 'America/Bogota'
         });
       });
     } catch (error) {
