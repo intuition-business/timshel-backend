@@ -439,8 +439,8 @@ export const generateRoutinesIaBackground = async (
 
         // INSERT nuevo (sin ON DUPLICATE)
         await pool.execute(
-          "INSERT INTO user_training_plans (user_id, training_plan, start_date, end_date) VALUES (?, ?, ?, ?)",
-          [userId, trainingPlanJson, startDate, endDate]
+          "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
+          [userId, trainingPlanJson, new Date(), new Date()]
         );
 
         // Obtener el ID del nuevo registro
@@ -453,7 +453,7 @@ export const generateRoutinesIaBackground = async (
           throw new Error("No se pudo obtener el ID del registro");
         }
 
-        console.log('Rutina completa generada y guardada para user_id:', userId, 'en periodo', startDate, '-', endDate);
+        console.log('Rutina completa generada y guardada para user_id:', userId, 'en periodo', startDate, 'a', endDate);
 
         return { error: false, message: "Documento generado.", routine_id: routineId };
       } else {
