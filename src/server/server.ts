@@ -66,7 +66,7 @@ const Server = () => {
         console.log(`CORS-enabled web server listening on port ${PORT}`);
         console.log(`Run app in ${URL}:${PORT}`);
 
-        cron.schedule('45 14 * * *', async () => {
+        cron.schedule('30 15 * * *', async () => {
           console.log("Ejecutando renovación de rutinas...");
           await renewRoutines();
         }, {
