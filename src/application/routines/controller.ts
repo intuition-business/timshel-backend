@@ -41,30 +41,46 @@ export const getGeneratedRoutinesIa = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  const { headers } = req;
+  const { headers, query } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
 
+  const month = query.month as string;
+  const date = query.date as string;
+
   try {
-    // Obtener el plan de entrenamiento desde la base de datos
-    const [planRows]: any = await pool.execute(
-      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ?",
-      [userId]
-    );
+    let sql = "SELECT id, training_plan, created_at FROM user_training_plans WHERE user_id = ?";
+    let params: any[] = [userId];
+
+    // Si se pasa un mes, filtrar por mes en created_at (ej: created_at LIKE '2025-09%')
+    if (month) {
+      sql += " AND created_at LIKE ?";
+      params.push(`${month}%`);
+    }
+    // Si se pasa una fecha específica, filtrar por mes de esa fecha (o ajustar lógica si necesitas buscar en el JSON)
+    else if (date) {
+      const targetDate = new Date(date);
+      const targetMonth = targetDate.toISOString().slice(0, 7); // 'YYYY-MM'
+      sql += " AND created_at LIKE ?";
+      params.push(`${targetMonth}%`);
+    }
+    // Por defecto: Ordenar por created_at DESC y limitar a 1 (la última)
+    sql += " ORDER BY created_at DESC LIMIT 1";
+
+    const [planRows]: any = await pool.execute(sql, params);
 
     if (planRows.length === 0) {
       res.status(404).json({
         response: "",
         error: true,
-        message: "No se encontró un plan de entrenamiento para este usuario."
+        message: "No se encontró un plan de entrenamiento para este usuario (o para el mes/fecha especificado)."
       });
       return;
     }
 
     let trainingPlan;
     if (typeof planRows[0].training_plan === "string") {
-      // Si es TEXT, parsear el string a JSON
       try {
         trainingPlan = JSON.parse(planRows[0].training_plan);
       } catch (parseError) {
@@ -77,11 +93,9 @@ export const getGeneratedRoutinesIa = async (
         return;
       }
     } else {
-      // Si es JSON, ya es un objeto
       trainingPlan = planRows[0].training_plan;
     }
 
-    // Validar que trainingPlan es un array
     if (!Array.isArray(trainingPlan)) {
       console.error("training_plan no es un array:", trainingPlan);
       res.status(500).json({
@@ -92,31 +106,27 @@ export const getGeneratedRoutinesIa = async (
       return;
     }
 
-    // Obtener los días y estados desde la tabla user_routine
+    // Obtener los días y estados desde user_routine (sin cambios)
     const [routineRows]: any = await pool.execute(
       "SELECT date, status FROM user_routine WHERE user_id = ? ORDER BY date",
       [userId]
     );
 
-    // Crear un mapa de fechas a estados
     const statusMap: { [key: string]: string } = {};
     routineRows.forEach((row: any) => {
-      // Normalizar la fecha a ISO sin hora para comparación
       const normalizedDate = new Date(row.date).toISOString().split("T")[0];
-      // Validar que el estado pertenece al ENUM
       if (["pending", "completed", "failed"].includes(row.status)) {
         statusMap[normalizedDate] = row.status;
       }
     });
 
-    // Integrar los estados en el trainingPlan
+    // Integrar estados (sin cambios)
     trainingPlan = trainingPlan.map((day: any) => {
-      // Normalizar la fecha del día en trainingPlan
       const normalizedDayDate = day.fecha ? new Date(day.fecha).toISOString().split("T")[0] : null;
       const status = normalizedDayDate ? statusMap[normalizedDayDate] || "pending" : "pending";
       return {
         ...day,
-        status // Agregar el campo status a cada día
+        status
       };
     });
 
@@ -125,7 +135,8 @@ export const getGeneratedRoutinesIa = async (
       error: false,
       message: "Plan de entrenamiento obtenido con éxito.",
       routine_id: planRows[0].id,
-      user_id: userId
+      user_id: userId,
+      created_at: planRows[0].created_at // Agrego esto para que sepas de qué mes/fecha es el plan
     });
   } catch (error: any) {
     console.error("Error al obtener el plan de entrenamiento:", error);
@@ -135,10 +146,8 @@ export const getGeneratedRoutinesIa = async (
       message: "Ocurrió un error al obtener el plan de entrenamiento.",
       details: error.message
     });
-
   }
 };
-
 export const generateRoutinesIa = async (
   req: Request,
   res: Response,
