@@ -8,7 +8,7 @@ export interface PathProps {
   forgotPassword: string;
   resetPassword: string;
   google: string;
-  forms: string;
+  user: string;
   getRoutines: string;
   profile: string;
   routineDays: string;

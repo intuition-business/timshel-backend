@@ -6,7 +6,10 @@ const gender = Joi.string();
 const weight = Joi.number();
 const height = Joi.number();
 const activity_factor = Joi.string();
-const goal = Joi.string();
+const main_goal = Joi.string();
+const favorite_muscular_group = Joi.string();
+const training_place = Joi.string().valid("gym", "home", "outdoor");
+const age = Joi.number();
 const weekly_availability = Joi.string();
 const hours_per_day = Joi.number();
 const injury = Joi.string();
@@ -26,7 +29,10 @@ export const createFormsDto = Joi.object({
   weight,
   gender,
   activity_factor,
-  goal,
+  main_goal,
+  favorite_muscular_group,
+  training_place,
+  age,
   hours_per_day,
   injury,
   pathology,

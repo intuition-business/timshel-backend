@@ -29,7 +29,9 @@ const router = Router();
  *         - weight
  *         - gender
  *         - activity_factor
- *         - goal
+ *         - main_goal
+ *         - favorite_muscular_group
+ *         - training_place
  *         - hours_per_day
  *         - injury
  *         - pathology
@@ -104,7 +106,9 @@ const router = Router();
  *         weight: 160
  *         gender: Masculino
  *         activity_factor: Mucho xd
- *         goal: perder grasa
+ *         main_goal: perder grasa
+ *         favorite_muscular_group: Pecho
+ *         training_place: gym
  *         hours_per_day: 1
  *         injury: No
  *         pathology: Ninguna
@@ -183,7 +187,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/forms :
+ * /api/user :
  *   post:
  *     summary: retorna unos datos
  *     tags: [Timshell]

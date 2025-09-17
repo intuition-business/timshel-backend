@@ -22,7 +22,9 @@ export const createforms = async (
     weight,
     gender,
     activity_factor,
-    goal,
+    main_goal,
+    favorite_muscular_group,
+    training_place,
     hours_per_day,
     injury,
     pathology,
@@ -65,7 +67,9 @@ export const createforms = async (
         weight,
         gender,
         activity_factor,
-        goal,
+        main_goal,
+        favorite_muscular_group,
+        training_place,
         hours_per_day,
         injury,
         pathology,
@@ -99,7 +103,9 @@ export const createforms = async (
         weight,
         gender,
         activity_factor,
-        goal,
+        main_goal,
+        favorite_muscular_group,
+        training_place,
         hours_per_day,
         injury,
         pathology,
@@ -158,22 +164,19 @@ export const getFormsByUserId = async (
       [user_id || userId]
     );
     response.data = adapterForms(rows);
-    response.message = `Formularios para el usuario con ID ${
-      user_id || userId
-    } obtenidos exitosamente`;
+    response.message = `Formularios para el usuario con ID ${user_id || userId
+      } obtenidos exitosamente`;
     res.status(200).json(response);
   } catch (error) {
     console.error(
-      `Error al obtener los formularios del usuario con ID ${
-        user_id || userId
+      `Error al obtener los formularios del usuario con ID ${user_id || userId
       }:`,
       error
     );
     next(error);
     res.status(500).json({
-      message: `Error al obtener los formularios del usuario con ID ${
-        user_id || userId
-      }`,
+      message: `Error al obtener los formularios del usuario con ID ${user_id || userId
+        }`,
     });
   }
 };
