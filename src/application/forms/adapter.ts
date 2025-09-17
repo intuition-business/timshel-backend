@@ -8,11 +8,11 @@ export const adapterForms = (data: any) => {
       gender: item?.genero,
       weight: item?.peso,
       height: item?.estatura,
-      main_goal: item?.main_goal,//
+      main_goal: item?.objetivo,//
       weekly_availability: item?.actividad_semanal,
       hours_per_day: item?.horas_dia,
       favorite_muscular_group: item?.grupo_muscular_favorito,//
-      training_place: item?.training_place,//
+      training_place: item?.lugar_entrenamiento,//
       age: item?.edad,
 
       activity_factor: item?.factor_actividad,
