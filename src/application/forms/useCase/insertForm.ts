@@ -7,7 +7,9 @@ export const InsertForm = async ({
   age,
   gender,
   activity_factor,
-  goal,
+  main_goal,
+  favorite_muscular_group,
+  training_place,
   hours_per_day,
   injury,
   pathology,
@@ -54,14 +56,19 @@ export const InsertForm = async ({
     queryParams.push(activity_factor);
     values.push("?");
   }
-  if (goal !== undefined) {
+  if (main_goal !== undefined) {
     fieldsToUpdate.push("objetivo ");
-    queryParams.push(goal);
+    queryParams.push(main_goal);
     values.push("?");
   }
-  if (hours_per_day !== undefined) {
-    fieldsToUpdate.push("horas_dia ");
-    queryParams.push(hours_per_day);
+  if (favorite_muscular_group !== undefined) {
+    fieldsToUpdate.push("grupo_muscular_favorito ");
+    queryParams.push(favorite_muscular_group);
+    values.push("?");
+  }
+  if (training_place !== undefined) {
+    fieldsToUpdate.push("lugar_entrenamiento ");
+    queryParams.push(training_place);
     values.push("?");
   }
   if (injury !== undefined) {
