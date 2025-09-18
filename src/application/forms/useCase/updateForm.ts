@@ -7,7 +7,9 @@ export const UpdateForm = async ({
   age,
   gender,
   activity_factor,
-  goal,
+  main_goal,
+  favorite_muscular_group,
+  training_place,
   hours_per_day,
   injury,
   pathology,
@@ -48,9 +50,17 @@ export const UpdateForm = async ({
     fieldsToUpdate.push("factor_actividad = ?");
     queryParams.push(activity_factor);
   }
-  if (goal !== undefined) {
+  if (main_goal !== undefined) {
     fieldsToUpdate.push("objetivo = ?");
-    queryParams.push(goal);
+    queryParams.push(main_goal);
+  }
+  if (favorite_muscular_group !== undefined) {
+    fieldsToUpdate.push("grupo_muscular_favorito = ?");
+    queryParams.push(favorite_muscular_group);
+  }
+  if (training_place !== undefined) {
+    fieldsToUpdate.push("lugar_entrenamiento = ?");
+    queryParams.push(training_place);
   }
   if (hours_per_day !== undefined) {
     fieldsToUpdate.push("horas_dia = ?");
