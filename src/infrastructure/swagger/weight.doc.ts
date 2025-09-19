@@ -1,10 +1,11 @@
 import { Router } from "express";
 import {
-    createRoutine,
-    getRoutineByUserId,
-    updateRoutineDayStatus,
-    deleteRoutineDay,
-} from "../../application/routineDays/controller";  // Importamos los controladores de rutina
+    createWeight,
+    getWeightsByUserId,
+    updateWeight,
+    deleteWeight,
+    getShouldUpdateWeight,
+} from "../../application/weight/controlles";  // Importamos los controladores de peso
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 
 const router = Router();
@@ -20,72 +21,96 @@ const router = Router();
  *       description: "Token de acceso requerido para la autenticación."
  *
  *   schemas:
- *     routine-request:
+ *     create-weight-request:
  *       type: object
  *       required:
- *         - selected_days
- *         - start_date
+ *         - weight
+ *         - date
  *       properties:
- *         selected_days:
+ *         weight:
+ *           type: number
+ *           description: "Peso del usuario en kg"
+ *           example: 70.5
+ *         date:
+ *           type: string
+ *           description: "Fecha del registro en formato DD/MM/YYYY"
+ *           example: "19/09/2025"
+ *
+ *     create-weight-response:
+ *       type: object
+ *       properties:
+ *         weight:
+ *           type: number
+ *           description: "Peso registrado"
+ *         date:
+ *           type: string
+ *           description: "Fecha del registro"
+ *       example:
+ *         weight: 70.5
+ *         date: "19/09/2025"
+ *
+ *     error-response:
+ *       type: object
+ *       required:
+ *         - error
+ *         - message
+ *       properties:
+ *         error:
+ *           type: boolean
+ *           description: "Indica si hubo un error."
+ *         message:
+ *           type: string
+ *           description: "Mensaje de error."
+ *       example:
+ *         error: true
+ *         message: "Ya existe un registro de peso para la fecha 19/09/2025"
+ *
+ *     get-weights-response:
+ *       type: object
+ *       required:
+ *         - message
+ *         - error
+ *         - data
+ *       properties:
+ *         message:
+ *           type: string
+ *           description: "Mensaje de respuesta."
+ *         error:
+ *           type: boolean
+ *           description: "Indica si hubo un error."
+ *         data:
  *           type: array
  *           items:
- *             type: string
- *             description: "Días seleccionados para la rutina"
- *             example: ["Monday", "Wednesday", "Friday"]
- *         start_date:
- *           type: string
- *           description: "Fecha de inicio de la rutina"
- *           example: "2025-07-01"
- *
- *     routine-response:
- *       type: object
- *       required:
- *         - message
- *         - error
- *         - routine
- *       properties:
- *         message:
- *           type: string
- *           description: "Mensaje de respuesta."
- *         error:
- *           type: boolean
- *           description: "Indica si hubo un error."
- *         routine:
- *           type: array
- *           description: "Días y fechas de la rutina generada."
+ *             type: object
+ *             properties:
+ *               weight:
+ *                 type: number
+ *               date:
+ *                 type: string
  *       example:
- *         message: "Rutina generada exitosamente."
+ *         message: "Registros de peso obtenidos exitosamente"
  *         error: false
- *         routine: [
- *           { day: "Monday", date: "2025-07-01" },
- *           { day: "Wednesday", date: "2025-07-03" }
+ *         data: [
+ *           { weight: 70.5, date: "19/09/2025" },
+ *           { weight: 71.0, date: "20/09/2025" }
  *         ]
  *
- *     get-routine-response:
+ *     update-weight-request:
  *       type: object
  *       required:
- *         - message
- *         - error
- *         - routine
+ *         - weight
+ *         - date
  *       properties:
- *         message:
+ *         weight:
+ *           type: number
+ *           description: "Nuevo peso del usuario en kg"
+ *           example: 71.0
+ *         date:
  *           type: string
- *           description: "Mensaje de respuesta."
- *         error:
- *           type: boolean
- *           description: "Indica si hubo un error."
- *         routine:
- *           type: array
- *           description: "Días y fechas de la rutina obtenida."
- *       example:
- *         message: "Rutina obtenida exitosamente."
- *         error: false
- *         routine: [
- *           { day: "Monday", date: "2025-07-01", status: "completed" },
- *           { day: "Wednesday", date: "2025-07-03", status: "pending" }
- *         ]
+ *           description: "Fecha del registro a actualizar en formato DD/MM/YYYY"
+ *           example: "19/09/2025"
  *
- *     update-routine-status-response:
+ *     update-weight-response:
  *       type: object
  *       required:
  *         - message
@@ -98,10 +123,20 @@ const router = Router();
  *           type: boolean
  *           description: "Indica si hubo un error."
  *       example:
- *         message: "Estado del día actualizado exitosamente."
+ *         message: "Registro de peso actualizado exitosamente"
  *         error: false
  *
- *     delete-routine-day-response:
+ *     delete-weight-request:
+ *       type: object
+ *       required:
+ *         - date
+ *       properties:
+ *         date:
+ *           type: string
+ *           description: "Fecha del registro a eliminar en formato DD/MM/YYYY"
+ *           example: "19/09/2025"
+ *
+ *     delete-weight-response:
  *       type: object
  *       required:
  *         - message
@@ -114,23 +149,34 @@ const router = Router();
  *           type: boolean
  *           description: "Indica si hubo un error."
  *       example:
- *         message: "Día de rutina eliminado exitosamente."
+ *         message: "Registro de peso eliminado exitosamente"
  *         error: false
+ *
+ *     should-update-weight-response:
+ *       type: object
+ *       required:
+ *         - should-update
+ *       properties:
+ *         should-update:
+ *           type: boolean
+ *           description: "Indica si el usuario debe actualizar su peso (true si han pasado más de 15 días sin registro)."
+ *       example:
+ *         should-update: true
  */
 
 /**
  * @swagger
  * tags:
- *   name: Routine
- *   description: API para gestión de rutinas de ejercicio
+ *   name: Weight
+ *   description: API para gestión de registros de peso del usuario
  */
 
 /**
  * @swagger
- * /api/routine-days/create:
+ * /api/weights/create:
  *   post:
- *     summary: "Crea una rutina de ejercicios para el usuario"
- *     tags: [Routine]
+ *     summary: "Crea un nuevo registro de peso para el usuario"
+ *     tags: [Weight]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -138,57 +184,57 @@ const router = Router();
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/routine-request'
+ *             $ref: '#/components/schemas/create-weight-request'
  *     responses:
- *       200:
- *         description: "Rutina generada exitosamente"
+ *       201:
+ *         description: "Peso registrado exitosamente"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/routine-response'
+ *               $ref: '#/components/schemas/create-weight-response'
  *       400:
- *         description: "Error al crear la rutina"
+ *         description: "Error al registrar el peso (ej. registro duplicado o datos inválidos)"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/routine-response'
+ *               $ref: '#/components/schemas/error-response'
  *       500:
  *         description: "Error interno del servidor"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/routine-response'
+ *               $ref: '#/components/schemas/error-response'
  *
- * /api/routine-days:
+ * /api/weights:
  *   get:
- *     summary: "Obtiene la rutina del usuario por su ID"
- *     tags: [Routine]
+ *     summary: "Obtiene todos los registros de peso del usuario"
+ *     tags: [Weight]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: "Rutina obtenida exitosamente"
+ *         description: "Registros de peso obtenidos exitosamente"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/get-routine-response'
+ *               $ref: '#/components/schemas/get-weights-response'
  *       404:
- *         description: "No se encontró la rutina del usuario"
+ *         description: "No se encontraron registros de peso"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/get-routine-response'
+ *               $ref: '#/components/schemas/get-weights-response'
  *       500:
  *         description: "Error interno del servidor"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/get-routine-response'
+ *               $ref: '#/components/schemas/get-weights-response'
  *
- * /api/routine-days/update-status:
+ * /api/weights/update:
  *   put:
- *     summary: "Actualiza el estado de un día en la rutina"
- *     tags: [Routine]
+ *     summary: "Actualiza un registro de peso existente"
+ *     tags: [Weight]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -196,83 +242,135 @@ const router = Router();
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/routine-request'
+ *             $ref: '#/components/schemas/update-weight-request'
  *     responses:
  *       200:
- *         description: "Estado del día actualizado exitosamente"
+ *         description: "Registro de peso actualizado exitosamente"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/update-routine-status-response'
+ *               $ref: '#/components/schemas/update-weight-response'
  *       400:
- *         description: "Error al actualizar el estado"
+ *         description: "Error al actualizar (ej. no se encontró el registro)"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/update-routine-status-response'
+ *               $ref: '#/components/schemas/update-weight-response'
  *       500:
  *         description: "Error interno del servidor"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/update-routine-status-response'
+ *               $ref: '#/components/schemas/update-weight-response'
  *
- * /api/routine-days/delete:
+ * /api/weights/delete:
  *   delete:
- *     summary: "Elimina un día de la rutina"
- *     tags: [Routine]
+ *     summary: "Elimina un registro de peso por fecha"
+ *     tags: [Weight]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/delete-weight-request'
  *     responses:
  *       200:
- *         description: "Día de rutina eliminado exitosamente"
+ *         description: "Registro de peso eliminado exitosamente"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/delete-routine-day-response'
- *       404:
- *         description: "No se encontró el día para eliminar"
+ *               $ref: '#/components/schemas/delete-weight-response'
+ *       400:
+ *         description: "Error al eliminar (ej. no se encontró el registro)"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/delete-routine-day-response'
+ *               $ref: '#/components/schemas/delete-weight-response'
  *       500:
  *         description: "Error interno del servidor"
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/delete-routine-day-response'
+ *               $ref: '#/components/schemas/delete-weight-response'
+ *
+ * /api/weights/user-should-update-weight:
+ *   get:
+ *     summary: "Verifica si el usuario debe actualizar su peso (basado en los últimos 15 días)"
+ *     tags: [Weight]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: "Fecha actual en formato DD/MM/YYYY para verificar los últimos 15 días"
+ *         example: "19/09/2025"
+ *     responses:
+ *       200:
+ *         description: "Verificación exitosa"
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/should-update-weight-response'
+ *       400:
+ *         description: "Fecha inválida"
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/error-response'
+ *       500:
+ *         description: "Error interno del servidor"
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/error-response'
  */
 
+// Función para manejar errores asíncronos
 function asyncHandler(fn: any) {
     return function (req: any, res: any, next: any) {
         Promise.resolve(fn(req, res, next)).catch(next);
     };
 }
 
-// Rutas para las rutinas de ejercicio
+// Ruta POST para crear un registro de peso
 router.post(
     "/create",
     verifyToken,  // Verificación de token
-    asyncHandler(createRoutine)  // Controlador para crear la rutina
+    asyncHandler(createWeight)  // Llama a la función del controlador
 );
 
+// Ruta GET para obtener los registros de peso del usuario
+// Este controlador no necesita el user_id en la URL, ya que se obtiene del token
 router.get(
     "/",
     verifyToken,  // Verificación de token
-    asyncHandler(getRoutineByUserId)  // Controlador para obtener la rutina de un usuario
+    asyncHandler(getWeightsByUserId)  // Llama al controlador para obtener los registros de peso
 );
 
+// Ruta PUT para actualizar un registro de peso
 router.put(
-    "/update-status",
+    "/update",
     verifyToken,  // Verificación de token
-    asyncHandler(updateRoutineDayStatus)  // Controlador para actualizar el estado de un día
+    asyncHandler(updateWeight)  // Llama al controlador para actualizar el peso
 );
 
+// Ruta DELETE para eliminar un registro de peso
 router.delete(
     "/delete",
     verifyToken,  // Verificación de token
-    asyncHandler(deleteRoutineDay)  // Controlador para eliminar un día de la rutina
+    asyncHandler(deleteWeight)  // Llama al controlador para eliminar el registro
+);
+
+// Ruta GET para verificar si el usuario debe actualizar su peso
+router.get(
+    "/user-should-update-weight",
+    verifyToken,  // Verificación de token
+    asyncHandler(getShouldUpdateWeight)  // Llama al controlador para verificar actualización de peso
 );
 
 export default router;
