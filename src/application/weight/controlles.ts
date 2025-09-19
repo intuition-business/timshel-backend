@@ -224,3 +224,51 @@ export const deleteWeight = async (req: Request, res: Response, next: NextFuncti
         return res.status(500).json({ message: "Error al eliminar el registro de peso." });
     }
 };
+
+export const getShouldUpdateWeight = async (req: Request, res: Response, next: NextFunction) => {
+    const dateParam = req.query.date as string;
+
+    if (!dateParam || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateParam)) {
+        return res.status(400).json({ error: true, message: "Fecha inválida. Debe estar en formato DD/MM/YYYY." });
+    }
+
+    try {
+        const { headers } = req;
+        const token = headers["x-access-token"];
+        const decode = token && verify(`${token}`, SECRET);
+        const userId = (<any>(<unknown>decode)).userId;
+
+        // Convertir fecha de "DD/MM/YYYY" a objeto Date
+        const [dayStr, monthStr, yearStr] = dateParam.split('/');
+        const providedDate = new Date(parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr));
+
+        if (isNaN(providedDate.getTime())) {
+            return res.status(400).json({ error: true, message: "Fecha inválida." });
+        }
+
+        // Calcular la fecha de 15 días atrás
+        const fifteenDaysAgo = new Date(providedDate);
+        fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+
+        // Formatear fechas a "YYYY-MM-DD" para la consulta
+        const dbProvidedDate = getLocalDateString(providedDate);
+        const dbFifteenDaysAgo = getLocalDateString(fifteenDaysAgo);
+
+        // Consultar si hay registros en los últimos 15 días
+        const [rows] = await pool.execute(
+            "SELECT COUNT(*) as count FROM user_weight WHERE user_id = ? AND date >= ? AND date <= ?",
+            [userId, dbFifteenDaysAgo, dbProvidedDate]
+        );
+
+        const result = rows as Array<{ count: number }>;
+        const count = result[0].count;
+
+        const shouldUpdate = count === 0;
+
+        return res.status(200).json({ "should-update": shouldUpdate });
+    } catch (error) {
+        console.error("Error al verificar si el usuario debe actualizar el peso:", error);
+        next(error);
+        return res.status(500).json({ message: "Error al verificar si el usuario debe actualizar el peso." });
+    }
+};
