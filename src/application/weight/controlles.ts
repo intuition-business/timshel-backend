@@ -272,3 +272,84 @@ export const getShouldUpdateWeight = async (req: Request, res: Response, next: N
         return res.status(500).json({ message: "Error al verificar si el usuario debe actualizar el peso." });
     }
 };
+
+export const getLatestWeightsComparison = async (req: Request, res: Response, next: NextFunction) => {
+    const response = { message: "", error: false, data: { weights: [] as Weight[], comparison: { status: "", difference: 0 } } };
+
+    try {
+        const { headers } = req;
+        const token = headers["x-access-token"];
+        const decode = token && verify(`${token}`, SECRET);
+        const userId = (<any>(<unknown>decode)).userId;
+
+        // Obtener los dos últimos registros de peso ordenados por fecha descendente
+        const [rows] = await pool.execute(
+            "SELECT weight, date FROM user_weight WHERE user_id = ? ORDER BY date DESC LIMIT 2",
+            [userId]
+        );
+
+        const weightRows = rows as Array<{
+            weight: number;
+            date: string | Date | null;
+        }>;
+
+        if (weightRows.length === 0) {
+            response.error = true;
+            response.message = "No se encontraron registros de peso para este usuario";
+            return res.status(404).json(response);
+        }
+
+        const formattedWeights = weightRows.map((row) => {
+            // Convert to strings if Date objects
+            const dateStr = row.date instanceof Date ? getLocalDateString(row.date) : row.date;
+
+            // Parse and format, with validation
+            const formatOrInvalid = (dateStr: string | null): string => {
+                if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                    return 'Invalid Date';
+                }
+                const dateObj = new Date(dateStr); // Directly parse YYYY-MM-DD
+                if (isNaN(dateObj.getTime())) {
+                    return 'Invalid Date';
+                }
+                return formatDateWithSlash(dateObj);
+            };
+
+            return {
+                weight: row.weight,
+                date: formatOrInvalid(dateStr),
+            };
+        });
+
+        response.data.weights = formattedWeights;
+
+        if (weightRows.length < 2) {
+            response.message = "Solo hay un registro de peso, no se puede realizar una comparación";
+            response.data.comparison = { status: "no comparison", difference: 0 };
+            return res.status(200).json(response);
+        }
+
+        // El primer elemento es el más reciente, el segundo es el anterior
+        const latestWeight = weightRows[0].weight;
+        const previousWeight = weightRows[1].weight;
+        const difference = latestWeight - previousWeight;
+
+        let status: string;
+        if (difference > 0) {
+            status = "gained";
+        } else if (difference < 0) {
+            status = "lost";
+        } else {
+            status = "same";
+        }
+
+        response.data.comparison = { status, difference: Math.abs(difference) }; // Usamos valor absoluto para la diferencia mostrada
+        response.message = "Comparación de pesos obtenida exitosamente";
+
+        return res.status(200).json(response);
+    } catch (error) {
+        console.error("Error al obtener la comparación de pesos:", error);
+        next(error);
+        return res.status(500).json({ message: "Error al obtener la comparación de pesos." });
+    }
+};
