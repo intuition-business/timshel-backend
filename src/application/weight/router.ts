@@ -5,6 +5,7 @@ import {
     updateWeight,
     deleteWeight,
     getShouldUpdateWeight,
+    getLatestWeightsComparison,
 } from "./controlles";  // Importamos los controladores de peso
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 
@@ -37,6 +38,13 @@ router.get(
     "/user-should-update-weight",
     verifyToken,  // Verificación de token
     asyncHandler(getShouldUpdateWeight)  // Llama al controlador para verificar actualización de peso
+);
+
+// Ruta GET para obtener la comparación de los dos últimos registros de peso
+router.get(
+    "/latest-comparison",
+    verifyToken,  // Verificación de token
+    asyncHandler(getLatestWeightsComparison)  // Llama al controlador para obtener la comparación de pesos
 );
 
 // Ruta PUT para actualizar un registro de peso
