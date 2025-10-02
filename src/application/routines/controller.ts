@@ -20,6 +20,40 @@ interface Exercise {
   series_completed: { reps: number, load: number, breakTime: number }[];  // Definimos las series completadas como un arreglo de objetos
 }
 
+interface JwtPayload {
+  userId: string;
+}
+
+interface RoutineRow {
+  fecha_rutina: string;
+  routine_name: string;
+  rutina_id: number | string;  // UUID como string
+  exercise_name: string;
+  description: string;
+  thumbnail_url: string;
+  video_url: string;
+  liked: boolean | null;
+  liked_reason: string;
+  series_completed: string | object;
+  last_weight_comparation?: number;  // Nuevo campo agregado
+}
+
+interface Exercise {
+  exercise_name: string;
+  description: string;
+  thumbnail_url: string;
+  video_url: string;
+  liked: boolean | null;
+  liked_reason: string | null;
+  series_completed: { reps: number; load: number; breakTime: number }[]; // Definimos las series completadas como un arreglo de objetos
+  last_weight_comparation: number | null;  // Nuevo campo
+}
+
+interface RoutineResponse {
+  fecha_rutina: string;
+  routines: { rutina_id: number | string; routine_name: string; exercises: Exercise[] }[];
+}
+
 export const getRoutines = async (
   req: Request,
   res: Response,
@@ -380,7 +414,9 @@ export const getRoutinesSaved = async (
           video_url: item.video_url,
           liked: item.liked,
           liked_reason: item.liked_reason,
-          series_completed: seriesCompletedParsed,
+          series_completed: Array.isArray(seriesCompletedParsed)
+            ? seriesCompletedParsed
+            : [],
         });
 
         // Collect fecha_rutina for status update
@@ -533,139 +569,166 @@ export const getRoutineByExerciseName = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { headers } = req;
-    const token = headers["x-access-token"];
-    const decode = token && verify(`${token}`, SECRET);
-    const userId = (<any>(<unknown>decode)).userId;
+    // Autenticación
+    const token = req.headers["x-access-token"] as string;
+    if (!token) {
+      res.status(401).json({ error: true, message: "Token requerido" });
+      return;
+    }
+    let decode: JwtPayload;
+    try {
+      decode = verify(token, SECRET) as JwtPayload;
+    } catch (error) {
+      res.status(401).json({ error: true, message: "Token inválido" });
+      return;
+    }
+    const userId = decode.userId;
 
+    // Validación de entrada
     const { exercise_name, fecha_rutina, routine_name } = req.query;
-
-    if (!exercise_name) {
-      res.status(400).json({
-        error: true,
-        message: "Nombre del ejercicio es requerido",
-      });
+    if (!exercise_name || typeof exercise_name !== "string") {
+      res.status(400).json({ error: true, message: "Nombre del ejercicio es requerido y debe ser una cadena" });
       return;
     }
 
+    // Formato de fecha
     let formattedFecha: string | null = null;
     if (fecha_rutina) {
-      formattedFecha = convertDate(fecha_rutina as string); // Assuming convertDate handles DD/MM/YYYY
+      try {
+        formattedFecha = convertDate(fecha_rutina as string);
+      } catch (error) {
+        res.status(400).json({ error: true, message: "Formato de fecha inválido" });
+        return;
+      }
     }
 
+    // Construcción de consulta
     let query = `
-      SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed 
-      FROM complete_rutina 
+      SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed
+      FROM complete_rutina
       WHERE user_id = ? AND LOWER(exercise_name) LIKE LOWER(?)
     `;
-    let params: any[] = [userId, `%${exercise_name}%`];
-
-    if (routine_name) {
+    const params: (string | number)[] = [userId, `%${exercise_name}%`];
+    if (routine_name && typeof routine_name === "string") {
       query += " AND LOWER(routine_name) LIKE LOWER(?)";
       params.push(`%${routine_name}%`);
     }
-
     if (formattedFecha) {
       query += " AND fecha_rutina = ?";
       params.push(formattedFecha);
     }
+    query += " ORDER BY fecha_rutina DESC, rutina_id, exercise_name LIMIT 100";
 
-    query += " ORDER BY fecha_rutina DESC, rutina_id, exercise_name";
-
+    // Ejecutar consulta
     const [rows]: any = await pool.execute(query, params);
 
+    // Procesar series_completed y calcular avg_load
+    const exerciseGroups = new Map<string, { row: RoutineRow; avg_load: number; fecha: Date; rutina_id: string }[]>();
+
+    for (const item of rows) {
+      let seriesCompletedParsed: any[] = [];
+      if (typeof item.series_completed === "string") {
+        try {
+          seriesCompletedParsed = JSON.parse(item.series_completed);
+        } catch (jsonError) {
+          console.error(`Error al parsear series_completed para el ejercicio ${item.exercise_name}:`, jsonError);
+          seriesCompletedParsed = [];
+        }
+      } else if (Array.isArray(item.series_completed)) {
+        seriesCompletedParsed = item.series_completed;
+      }
+
+      // Calcular avg_load
+      let avg_load = 0;
+      if (Array.isArray(seriesCompletedParsed) && seriesCompletedParsed.length > 0) {
+        const sum_load = seriesCompletedParsed.reduce((acc: number, s: any) => acc + (Number(s.load) || 0), 0);
+        avg_load = sum_load / seriesCompletedParsed.length;
+        // Redondear a 2 decimales para consistencia
+        avg_load = Math.round(avg_load * 100) / 100;
+      }
+
+      // Almacenar series parseadas para usar en la respuesta
+      item.series_completed = seriesCompletedParsed;
+
+      const groupKey = item.exercise_name;
+      if (!exerciseGroups.has(groupKey)) {
+        exerciseGroups.set(groupKey, []);
+      }
+      exerciseGroups.get(groupKey)!.push({
+        row: item,
+        avg_load,
+        fecha: new Date(item.fecha_rutina),
+        rutina_id: item.rutina_id.toString(),
+      });
+    }
+
+    // Calcular last_weight_comparation
+    for (const group of exerciseGroups.values()) {
+      // Ordenar ASC por fecha y rutina_id
+      group.sort((a, b) => {
+        if (a.fecha.getTime() !== b.fecha.getTime()) {
+          return a.fecha.getTime() - b.fecha.getTime();
+        }
+        return a.rutina_id.localeCompare(b.rutina_id);
+      });
+
+      // Asignar diferencias
+      for (let i = 0; i < group.length; i++) {
+        const diff = i === 0 ? 0 : Math.round((group[i].avg_load - group[i - 1].avg_load) * 100) / 100;
+        group[i].row.last_weight_comparation = diff;
+      }
+    }
+
+    // Construir respuesta
     if (rows.length > 0) {
-      const datesMap = new Map();
-
+      const datesMap = new Map<string, { fecha_rutina: string; routines: Map<string, { rutina_id: string; routine_name: string; exercises: Exercise[] }> }>();
       for (const item of rows) {
-        let seriesCompletedParsed = item.series_completed;
-
-        if (typeof seriesCompletedParsed === 'string') {
-          try {
-            seriesCompletedParsed = JSON.parse(seriesCompletedParsed);
-          } catch (jsonError) {
-            console.error(`Error parsing series_completed for exercise ${item.exercise_name}:`, jsonError);
-            seriesCompletedParsed = [];
-          }
-        }
-
         const dateKey = item.fecha_rutina;
-        const routineKey = item.rutina_id;
-
+        const routineKey = item.rutina_id.toString();
         if (!datesMap.has(dateKey)) {
-          datesMap.set(dateKey, {
-            fecha_rutina: dateKey,
-            routines: new Map(),
-          });
+          datesMap.set(dateKey, { fecha_rutina: dateKey, routines: new Map() });
         }
-
-        const dateEntry = datesMap.get(dateKey);
-
+        const dateEntry = datesMap.get(dateKey)!;
         if (!dateEntry.routines.has(routineKey)) {
-          dateEntry.routines.set(routineKey, {
-            rutina_id: routineKey,
-            routine_name: item.routine_name,
-            exercises: [],
-          });
+          dateEntry.routines.set(routineKey, { rutina_id: routineKey, routine_name: item.routine_name, exercises: [] });
         }
-
-        const routine = dateEntry.routines.get(routineKey);
-        routine.exercises.push({
+        dateEntry.routines.get(routineKey)!.exercises.push({
           exercise_name: item.exercise_name,
           description: item.description,
           thumbnail_url: item.thumbnail_url,
           video_url: item.video_url,
           liked: item.liked,
           liked_reason: item.liked_reason,
-          series_completed: seriesCompletedParsed,
+          series_completed: item.series_completed,
+          last_weight_comparation: item.last_weight_comparation ?? 0,
         });
       }
 
-      const responseData = Array.from(datesMap.values()).map((dateEntry: any) => ({
+      const responseData: RoutineResponse[] = Array.from(datesMap.values()).map(dateEntry => ({
         fecha_rutina: dateEntry.fecha_rutina,
         routines: Array.from(dateEntry.routines.values()),
       }));
 
       let message = "Rutinas encontradas con el ejercicio especificado";
-      if (routine_name) {
-        message += " en la rutina especificada";
-      }
-      if (formattedFecha) {
-        message = "Rutina encontrada para la fecha y ejercicio especificado";
-        if (routine_name) {
-          message += " en la rutina especificada";
-        }
-      }
+      if (routine_name) message += " en la rutina especificada";
+      if (formattedFecha) message = `Rutina encontrada para la fecha y ejercicio especificado${routine_name ? " en la rutina especificada" : ""}`;
 
-      res.status(200).json({
-        error: false,
-        message,
-        response: responseData,
-      });
+      res.status(200).json({ error: false, message, response: responseData });
       return;
     }
 
     let notFoundMessage = "No se encontraron rutinas con el ejercicio especificado";
-    if (routine_name) {
-      notFoundMessage += " en la rutina especificada";
-    }
-    if (formattedFecha) {
-      notFoundMessage = "No se encontró la rutina con el ejercicio especificado en la fecha proporcionada";
-      if (routine_name) {
-        notFoundMessage += " en la rutina especificada";
-      }
-    }
+    if (routine_name) notFoundMessage += " en la rutina especificada";
+    if (formattedFecha) notFoundMessage = `No se encontró la rutina con el ejercicio especificado en la fecha proporcionada${routine_name ? " en la rutina especificada" : ""}`;
 
-    res.status(404).json({
-      error: true,
-      response: undefined,
-      message: notFoundMessage,
-    });
+    res.status(404).json({ error: true, message: notFoundMessage, response: [] });
   } catch (error) {
     console.error("Error al obtener rutina por nombre de ejercicio:", error);
     next(error);
   }
 };
+
+
 
 export const routinesSaved = async (
   req: Request,
