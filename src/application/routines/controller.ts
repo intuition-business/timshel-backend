@@ -617,7 +617,7 @@ export const getRoutineByExerciseName = async (
       query += " AND fecha_rutina = ?";
       params.push(formattedFecha);
     }
-    query += " ORDER BY fecha_rutina DESC, rutina_id, exercise_name LIMIT 100";
+    query += " ORDER BY fecha_rutina DESC, rutina_id ASC, exercise_name LIMIT 100";
 
     // Ejecutar consulta
     const [rows]: any = await pool.execute(query, params);
@@ -643,11 +643,10 @@ export const getRoutineByExerciseName = async (
       if (Array.isArray(seriesCompletedParsed) && seriesCompletedParsed.length > 0) {
         const sum_load = seriesCompletedParsed.reduce((acc: number, s: any) => acc + (Number(s.load) || 0), 0);
         avg_load = sum_load / seriesCompletedParsed.length;
-        // Redondear a 2 decimales para consistencia
-        avg_load = Math.round(avg_load * 100) / 100;
+        avg_load = Math.round(avg_load * 100) / 100; // Redondear a 2 decimales
       }
 
-      // Almacenar series parseadas para usar en la respuesta
+      // Almacenar series parseadas
       item.series_completed = seriesCompletedParsed;
 
       const groupKey = item.exercise_name;
@@ -664,18 +663,18 @@ export const getRoutineByExerciseName = async (
 
     // Calcular last_weight_comparation
     for (const group of exerciseGroups.values()) {
-      // Ordenar ASC por fecha y rutina_id
+      // Ordenar DESC por fecha y ASC por rutina_id (como en la respuesta)
       group.sort((a, b) => {
         if (a.fecha.getTime() !== b.fecha.getTime()) {
-          return a.fecha.getTime() - b.fecha.getTime();
+          return b.fecha.getTime() - a.fecha.getTime(); // DESC
         }
-        return a.rutina_id.localeCompare(b.rutina_id);
+        return a.rutina_id.localeCompare(b.rutina_id); // ASC
       });
 
       // Asignar diferencias
       for (let i = 0; i < group.length; i++) {
-        const diff = i === 0 ? 0 : Math.round((group[i].avg_load - group[i - 1].avg_load) * 100) / 100;
-        group[i].row.last_weight_comparation = diff;
+        const diff = i === 0 ? 0 : group[i].avg_load - group[i - 1].avg_load;
+        group[i].row.last_weight_comparation = Math.round(diff * 100) / 100; // Redondear a 2 decimales
       }
     }
 
@@ -727,7 +726,6 @@ export const getRoutineByExerciseName = async (
     next(error);
   }
 };
-
 
 
 export const routinesSaved = async (
