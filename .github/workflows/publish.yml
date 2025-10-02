@@ -12,17 +12,27 @@ jobs:
     runs-on: ubuntu-latest
     services:
       docker:
-        image: docker:20.10.2
+        image: docker:dind
         options: --privileged
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry (GHCR)
-        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login ghcr.io -u ${{ secrets.USER_NAME }} --password-stdin
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.USER_NAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       # Add environment variables to .env
       - name: Add environment variables to .env
