@@ -108,19 +108,22 @@ export const getWarmUps = async (req: Request, res: Response, next: NextFunction
         query += " ORDER BY RAND()";
         if (limit) {
           query += " LIMIT ?";
-          params.push(limit);
+          params.push(String(limit));  // ¡Fix: Convertir a string para evitar el error!
         }
       } else {
         // Si random=false o no, ordenado
         query += " ORDER BY name ASC";
         if (limit) {
           query += " LIMIT ?";
-          params.push(limit);
+          params.push(String(limit));  // ¡Fix: Convertir a string para evitar el error!
         }
       }
     }
 
-    const [rows] = await pool.execute(query, params);
+    // Opcional: Si params está vacío, usa pool.query en lugar de execute para mayor compatibilidad
+    const [rows] = params.length > 0
+      ? await pool.execute(query, params)
+      : await pool.query(query);
 
     const warmUpRows = rows as Array<{
       id: number;
