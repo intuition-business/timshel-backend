@@ -10,6 +10,7 @@ export interface PathProps {
   google: string;
   user: string;
   getRoutines: string;
+  warmUps: string;
   profile: string;
   routineDays: string;
   weight: string;
