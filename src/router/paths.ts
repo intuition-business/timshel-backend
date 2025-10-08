@@ -12,6 +12,7 @@ export const Path: PathProps = {
   google: "/api/auth",
   user: "/api/user",
   getRoutines: "/api/routines",
+  warmUps: "/api/warm-ups",
   specialCases: "/api/special-cases",
   routineDays: "/api/routine-days",
   weight: "/api/weight",

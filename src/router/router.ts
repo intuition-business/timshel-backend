@@ -9,11 +9,12 @@ import { userRouter } from "../application/forms";
 import { routinesRouter } from "../application/routines";
 import { weightRouter } from "../application/weight";
 import { profileRouter } from "../application/profile";
+import { warmUpRouter } from "../application/warm-ups";
 import { routineRouter } from "../application/routineDays";
 import { specialCaseRouter } from "../application/specialCase";
 import { exerciseRouter } from "../application/exercises";
 
-const { sendOtp, validateOtp, register, login, google, user, getRoutines, profile, routineDays, specialCases, routineExercises, weight } =
+const { sendOtp, validateOtp, register, login, google, user, getRoutines, profile, routineDays, specialCases, routineExercises, weight, warmUps } =
   path;
 
 const router = (app: Application) => {
@@ -31,6 +32,7 @@ const router = (app: Application) => {
   app.use(weight, weightRouter);
   app.use(specialCases, specialCaseRouter);
   app.use(routineExercises, exerciseRouter);
+  app.use(warmUps, warmUpRouter);
 
 };
 
