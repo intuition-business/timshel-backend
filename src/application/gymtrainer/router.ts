@@ -6,6 +6,7 @@ import {
   updateTrainer,
   deleteTrainer,
   assignUser,
+  getTrainerById,
 } from "./controller";  // Importamos los controladores de trainers
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 
@@ -30,6 +31,13 @@ router.get(
   "/",
   verifyToken,
   asyncHandler(getTrainers)
+);
+
+// Ruta GET para obtener un entrenador por ID
+router.get(
+  "/:id",
+  verifyToken,
+  asyncHandler(getTrainerById)
 );
 
 // Ruta PUT para actualizar un entrenador
