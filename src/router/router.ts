@@ -2,6 +2,7 @@ import { Application } from "express";
 import { Path as path } from "./paths";
 import { sendOtpRouter } from "./../application/otp/sendOtp";
 import { registerRouter } from "./../application/register";
+import { trainerRouter } from "../application/gymtrainer";
 import { loginRouter } from "../application/login";
 import { validateOTPRouter } from "../application/otp/validateOtp";
 import { GoogleRouter } from "../application/google";
@@ -14,7 +15,7 @@ import { routineRouter } from "../application/routineDays";
 import { specialCaseRouter } from "../application/specialCase";
 import { exerciseRouter } from "../application/exercises";
 
-const { sendOtp, validateOtp, register, login, google, user, getRoutines, profile, routineDays, specialCases, routineExercises, weight, warmUps } =
+const { sendOtp, validateOtp, register, login, google, user, getRoutines, trainers, profile, routineDays, specialCases, routineExercises, weight, warmUps } =
   path;
 
 const router = (app: Application) => {
@@ -23,6 +24,7 @@ const router = (app: Application) => {
   app.use(login, loginRouter);
   app.use(google, GoogleRouter);
   app.use(user, userRouter);
+  app.use(trainers, trainerRouter);
 
   // app.use(validateData, validateData);
   app.use(validateOtp, validateOTPRouter);
