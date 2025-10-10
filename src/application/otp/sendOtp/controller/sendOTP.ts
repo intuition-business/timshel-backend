@@ -22,11 +22,12 @@ export const sendOTP = async (
 
   // Validar si se proporciona un valor inválido
   if (platform && !["mobile", "web"].includes(platform)) {
-    return res.status(400).json({
+    res.status(400).json({
       message: "Platform inválido (debe ser mobile o web)",
       error: true,
       date,
     });
+    return;
   }
 
   const otp = generateOTPEmail(6);
@@ -54,18 +55,19 @@ export const sendOTP = async (
       // Validación: si es web, verificar si es entrenador
       if (effectivePlatform === "web") {
         if (!thereIsUser || thereIsUser.rol !== "entrenador") { // Ajusta 'rol' según tu modelo (ej. if (thereIsUser.entrenador_id === 0))
-          return res.status(403).json({
+          res.status(403).json({
             message: "Acceso denegado: Solo entrenadores pueden acceder al dashboard web",
             error: true,
             date,
           });
+          return;
         }
       }
 
       response = await sendWithEmail(email, otp, name);
       if (!response.error) {
         const createDB = await services.create(otpData, thereIsUser);
-        res?.status(200).json({ ...response, user_id: createDB?.user_id });
+        res.status(200).json({ ...response, user_id: createDB?.user_id });
         return;
       }
 
@@ -78,8 +80,8 @@ export const sendOTP = async (
     } catch (error) {
       console.log("Error: ", error);
       next(error);
+      return;
     }
-    return;
   }
 
   if (phonenumber !== undefined) {
@@ -91,18 +93,19 @@ export const sendOTP = async (
       // Validación: si es web, verificar si es entrenador
       if (effectivePlatform === "web") {
         if (!thereIsUser || thereIsUser.rol !== "entrenador") { // Ajusta 'rol' según tu modelo
-          return res.status(403).json({
+          res.status(403).json({
             message: "Acceso denegado: Solo entrenadores pueden acceder al dashboard web",
             error: true,
             date,
           });
+          return;
         }
       }
 
       response = await sendWithPhonenumber(phonenumber, otp, name);
       if (!response.error) {
         const createDB = await services.create(otpData, thereIsUser);
-        res?.status(200).json({ ...response, user_id: createDB?.user_id });
+        res.status(200).json({ ...response, user_id: createDB?.user_id });
         return;
       }
 
@@ -111,11 +114,12 @@ export const sendOTP = async (
         error: true,
         date,
       });
+      return;
     } catch (error) {
       console.log("Error: ", error);
       next(error);
+      return;
     }
-    return;
   }
 
   res.status(400).json({
