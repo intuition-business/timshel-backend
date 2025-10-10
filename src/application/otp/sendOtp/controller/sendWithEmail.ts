@@ -3,7 +3,7 @@ import { API_KEY_SENDGRID } from "../../../../config";
 
 export const sendWithEmail = async (
   email: string,
-  otp: number,
+  otp: number | string,
   name?: string
 ) => {
   const date = new Date();

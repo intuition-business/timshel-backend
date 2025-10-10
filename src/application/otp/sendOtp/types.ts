@@ -3,7 +3,7 @@ export interface ICreateOtp {
   fecha_creacion: number;
   fecha_expiracion: number;
   isUsed: number;
-  code: number;
+  code: number | string;
 }
 
 export interface ICreateAuth extends ICreateOtp {
