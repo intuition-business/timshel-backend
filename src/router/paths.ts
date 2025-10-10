@@ -6,6 +6,7 @@ export const Path: PathProps = {
   validateOtp: "/api/validate-otp",
   register: "/api/register",
   login: "/api/login",
+  trainers: "/api/trainers",
   logout: "/api/logout",
   forgotPassword: "/api/forgot-password",
   resetPassword: "/api/reset-password",
