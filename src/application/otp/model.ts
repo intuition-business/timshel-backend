@@ -46,7 +46,7 @@ const createAuth = async (data: {
 
 const createOtp = async (data: {
   auth_id: number;
-  code: number;
+  code: number | string;
   fecha_creacion: number;
   fecha_expiracion: number;
   isUsed: number;
@@ -66,7 +66,7 @@ const createOtp = async (data: {
 
 const updateOtp = async (data: {
   auth_id: number;
-  code: number;
+  code: number | string;
   fecha_creacion: number;
   fecha_expiracion: number;
   isUsed: number;

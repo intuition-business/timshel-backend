@@ -7,12 +7,12 @@ import {
 
 export const sendWithPhonenumber = async (
   phonenumber: string,
-  otp: number,
+  otp: number | string,
   name?: string
 ) => {
   const date = new Date();
 
-  const response = { message: "", error: false, code: 0, date };
+  const response = { message: "", error: false, code: otp, date };
 
   try {
     const twilioNumber = TWILIO_NUMBER;
