@@ -15,7 +15,19 @@ export const sendOTP = async (
   const services = new OtpService();
   const created_at = Date.now();
   const expires_at = Date.now() + OTP_EXPIRATION_TIME;
-  const { email, phonenumber, name = "" } = req?.body || {};
+  const { email, phonenumber, name = "", platform } = req?.body || {};
+
+  // Hacer 'platform' opcional: si no se proporciona, asumir "mobile"
+  let effectivePlatform = platform || "mobile";
+
+  // Validar si se proporciona un valor inválido
+  if (platform && !["mobile", "web"].includes(platform)) {
+    return res.status(400).json({
+      message: "Platform inválido (debe ser mobile o web)",
+      error: true,
+      date,
+    });
+  }
 
   const otp = generateOTPEmail(6);
   let response;
@@ -36,8 +48,21 @@ export const sendOTP = async (
   if (email !== undefined) {
     otpData.tipo_login = "email";
     try {
-      response = await sendWithEmail(email, otp, name);
+      // Buscar usuario existente
       const thereIsUser: any = await services.findByEmail(email);
+
+      // Validación: si es web, verificar si es entrenador
+      if (effectivePlatform === "web") {
+        if (!thereIsUser || thereIsUser.rol !== "entrenador") { // Ajusta 'rol' según tu modelo (ej. if (thereIsUser.entrenador_id === 0))
+          return res.status(403).json({
+            message: "Acceso denegado: Solo entrenadores pueden acceder al dashboard web",
+            error: true,
+            date,
+          });
+        }
+      }
+
+      response = await sendWithEmail(email, otp, name);
       if (!response.error) {
         const createDB = await services.create(otpData, thereIsUser);
         res?.status(200).json({ ...response, user_id: createDB?.user_id });
@@ -60,8 +85,21 @@ export const sendOTP = async (
   if (phonenumber !== undefined) {
     otpData.tipo_login = "phone";
     try {
-      response = await sendWithPhonenumber(phonenumber, otp, name);
+      // Buscar usuario existente
       const thereIsUser: any = await services.findByPhone(phonenumber);
+
+      // Validación: si es web, verificar si es entrenador
+      if (effectivePlatform === "web") {
+        if (!thereIsUser || thereIsUser.rol !== "entrenador") { // Ajusta 'rol' según tu modelo
+          return res.status(403).json({
+            message: "Acceso denegado: Solo entrenadores pueden acceder al dashboard web",
+            error: true,
+            date,
+          });
+        }
+      }
+
+      response = await sendWithPhonenumber(phonenumber, otp, name);
       if (!response.error) {
         const createDB = await services.create(otpData, thereIsUser);
         res?.status(200).json({ ...response, user_id: createDB?.user_id });
