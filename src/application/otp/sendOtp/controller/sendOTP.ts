@@ -54,7 +54,7 @@ export const sendOTP = async (
 
       // Validación: si es web, verificar si es entrenador o admin
       if (effectivePlatform === "web") {
-        if (!thereIsUser || (thereIsUser.rol !== "entrenador" && thereIsUser.rol !== "admin")) {
+        if (thereIsUser.length === 0 || (thereIsUser[0].rol !== "entrenador" && thereIsUser[0].rol !== "admin")) {
           res.status(403).json({
             message: "Acceso denegado",
             error: true,
@@ -92,7 +92,7 @@ export const sendOTP = async (
 
       // Validación: si es web, verificar si es entrenador o admin
       if (effectivePlatform === "web") {
-        if (!thereIsUser || (thereIsUser.rol !== "entrenador" && thereIsUser.rol !== "admin")) {
+        if (thereIsUser.length === 0 || (thereIsUser[0].rol !== "entrenador" && thereIsUser[0].rol !== "admin")) {
           res.status(403).json({
             message: "Acceso denegado",
             error: true,
