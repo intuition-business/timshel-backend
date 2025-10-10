@@ -52,11 +52,11 @@ export const sendOTP = async (
       // Buscar usuario existente
       const thereIsUser: any = await services.findByEmail(email);
 
-      // Validación: si es web, verificar si es entrenador
+      // Validación: si es web, verificar si es entrenador o admin
       if (effectivePlatform === "web") {
-        if (!thereIsUser || thereIsUser.rol !== "entrenador") { // Ajusta 'rol' según tu modelo (ej. if (thereIsUser.entrenador_id === 0))
+        if (!thereIsUser || (thereIsUser.rol !== "entrenador" && thereIsUser.rol !== "admin")) {
           res.status(403).json({
-            message: "Acceso denegado: Solo entrenadores pueden acceder al dashboard web",
+            message: "Acceso denegado",
             error: true,
             date,
           });
@@ -90,11 +90,11 @@ export const sendOTP = async (
       // Buscar usuario existente
       const thereIsUser: any = await services.findByPhone(phonenumber);
 
-      // Validación: si es web, verificar si es entrenador
+      // Validación: si es web, verificar si es entrenador o admin
       if (effectivePlatform === "web") {
-        if (!thereIsUser || thereIsUser.rol !== "entrenador") { // Ajusta 'rol' según tu modelo
+        if (!thereIsUser || (thereIsUser.rol !== "entrenador" && thereIsUser.rol !== "admin")) {
           res.status(403).json({
-            message: "Acceso denegado: Solo entrenadores pueden acceder al dashboard web",
+            message: "Acceso denegado",
             error: true,
             date,
           });
