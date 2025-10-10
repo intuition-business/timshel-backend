@@ -109,3 +109,12 @@ export const assignUserDto = Joi.object({
     'any.required': 'El ID del usuario es requerido'
   })
 });
+
+export const getTrainersListDto = Joi.object({
+  length: Joi.number().optional().messages({
+    'number.base': 'El length debe ser un número'
+  }),
+  random: Joi.boolean().optional().messages({
+    'boolean.base': 'El random debe ser un booleano (true/false)'
+  })
+});

@@ -4,7 +4,7 @@ import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import { adapterTrainers } from "./adapter";
-import { createTrainerDto, getTrainerDto, updateTrainerDto, deleteTrainerDto, assignUserDto } from "./dto"; // Importamos los DTOs
+import { createTrainerDto, getTrainerDto, updateTrainerDto, deleteTrainerDto, assignUserDto, getTrainersListDto } from "./dto"; // Importamos los DTOs
 import { OtpModel } from "../otp/model";
 
 
@@ -102,7 +102,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
 
   try {
     // Validación con DTO para query params (ajusta si necesitas uno específico para list)
-    const { error: dtoError } = getTrainerDto.validate(req.query); // Reusa o crea uno para list si es necesario
+    const { error: dtoError } = getTrainersListDto.validate(req.query);
     if (dtoError) {
       response.error = true;
       response.message = dtoError.details[0].message;
@@ -165,6 +165,65 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
     console.error("Error al obtener los entrenadores:", error);
     next(error);
     return res.status(500).json({ message: "Error al obtener los entrenadores." });
+  }
+};
+
+// Obtener un entrenador por ID
+export const getTrainerById = async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+
+  const { headers } = req;
+  const token = headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (<any>(<unknown>decode)).userId;
+
+  const response = { message: "", error: false, data: null as Trainer | null };
+
+  try {
+    // Validación con DTO para params
+    const { error: dtoError } = getTrainerDto.validate({ id: Number(id) });
+    if (dtoError) {
+      response.error = true;
+      response.message = dtoError.details[0].message;
+      return res.status(400).json(response);
+    }
+
+    const query = "SELECT id, name, email, telefono as phone, biografia as biography, experiencia as experience_years, certificaciones as certifications, foto_perfil as profile_photo FROM entrenadores WHERE id = ?";
+    const [rows] = await pool.execute(query, [id]);
+
+    const trainerRow = rows as Array<{
+      id: number;
+      name: string;
+      email: string;
+      phone: string;
+      biography: string;
+      experience_years: number;
+      certifications: string;
+      profile_photo: string;
+    }>;
+
+    if (trainerRow.length > 0) {
+      // Obtener usuarios asignados
+      const [assigned] = await pool.execute(
+        "SELECT usuario_id FROM asignaciones WHERE entrenador_id = ?",
+        [id]
+      );
+      const assignedUsers = (assigned as any).map((a: any) => a.usuario_id);
+
+      const trainer = { ...trainerRow[0], assigned_users: assignedUsers };
+
+      response.data = adapterTrainers([trainer])[0];
+      response.message = "Entrenador obtenido exitosamente";
+      return res.status(200).json(response);
+    } else {
+      response.error = true;
+      response.message = "No se encontró el entrenador";
+      return res.status(404).json(response);
+    }
+  } catch (error) {
+    console.error("Error al obtener el entrenador por ID:", error);
+    next(error);
+    return res.status(500).json({ message: "Error al obtener el entrenador por ID." });
   }
 };
 
