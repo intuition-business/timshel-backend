@@ -2,7 +2,7 @@ import { OtpModel } from "./model";
 import { ICreateAuth } from "./sendOtp/types";
 
 class OtpService {
-  constructor() {}
+  constructor() { }
 
   async create(data: ICreateAuth, thereIsUser: any) {
     const date = new Date();
@@ -18,6 +18,7 @@ class OtpService {
         ...data,
         usuario_id: user.insertId,
         entrenador_id: 0,
+        rol: 'user'
       });
 
       const otp = await OtpModel.createOtp({
