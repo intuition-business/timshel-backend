@@ -92,7 +92,7 @@ export const updateTrainerDto = Joi.object({
   new_certifications,
   new_profile_photo
 }).or('new_name', 'new_email', 'new_phone', 'new_biography', 'new_experience_years', 'new_certifications', 'new_profile_photo').messages({
-  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_biography, new_experience_years, new_certifications o new_profile_photo'
+  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_biography, new_experience_years, new_certificaciones o new_profile_photo'
 });
 
 export const deleteTrainerDto = Joi.object({
@@ -111,6 +111,9 @@ export const assignUserDto = Joi.object({
 });
 
 export const getTrainersListDto = Joi.object({
+  name: Joi.string().optional().messages({
+    'string.base': 'El nombre debe ser un string'
+  }),
   length: Joi.number().optional().messages({
     'number.base': 'El length debe ser un número'
   }),
