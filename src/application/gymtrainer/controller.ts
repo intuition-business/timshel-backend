@@ -89,10 +89,9 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-// Obtener entrenadores (con soporte para query params length y random)
+// Obtener entrenadores (con soporte para query param name)
 export const getTrainers = async (req: Request, res: Response, next: NextFunction) => {
-  const { length, random } = req.query; // length como número, random como booleano (true/false)
-
+  const { name } = req.query; // Solo usamos name como query param
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
@@ -109,34 +108,33 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       return res.status(400).json(response);
     }
 
-    let query = "SELECT id, name, email, telefono as phone, biografia as biography, experiencia as experience_years, certificaciones as certifications, foto_perfil as profile_photo FROM entrenadores";
+    let query = `
+      SELECT 
+        id, 
+        name, 
+        email, 
+        telefono AS phone, 
+        biografia AS biography, 
+        experiencia AS experience_years, 
+        certificaciones AS certifications, 
+        foto_perfil AS profile_photo,
+        -- Añade aquí otros campos relevantes de entrenadores si los hay
+        created_at, 
+        updated_at
+      FROM entrenadores
+    `;
     const params: any[] = [];
 
-    // Si no hay params, trae todo ordenado por name ASC
-    if (!length && !random) {
-      query += " ORDER BY name ASC";
-    } else {
-      // Si length no se envía, trae todo
-      const limit = length ? parseInt(length as string, 10) : undefined;
-
-      if (random === "true") {
-        // Trae aleatoriamente (ORDER BY RAND())
-        query += " ORDER BY RAND()";
-        if (limit) {
-          query += " LIMIT ?";
-          params.push(String(limit));  // Convertir a string para evitar errores
-        }
-      } else {
-        // Si random=false o no, ordenado
-        query += " ORDER BY name ASC";
-        if (limit) {
-          query += " LIMIT ?";
-          params.push(String(limit));  // Convertir a string para evitar errores
-        }
-      }
+    // Si se proporciona name, agregar filtro LIKE para búsqueda por letra
+    if (name) {
+      query += " WHERE name LIKE ?";
+      params.push(`%${name}%`); // Búsqueda insensible a mayúsculas/minúsculas
     }
 
-    // Opcional: Si params está vacío, usa pool.query en lugar de execute
+    // Ordenar por nombre de forma ascendente por defecto
+    query += " ORDER BY name ASC";
+
+    // Ejecutar la consulta
     const [rows] = params.length > 0
       ? await pool.execute(query, params)
       : await pool.query(query);
@@ -150,10 +148,13 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       experience_years: number;
       certifications: string;
       profile_photo: string;
+      created_at: Date;
+      updated_at: Date;
+      // Añade tipos para otros campos si los incluyes
     }>;
 
     if (trainerRows.length > 0) {
-      response.data = adapterTrainers(trainerRows);
+      response.data = adapterTrainers(trainerRows); // Asegúrate de que adapterTrainers maneje los nuevos campos
       response.message = "Entrenadores obtenidos exitosamente";
       return res.status(200).json(response);
     } else {
@@ -167,6 +168,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
     return res.status(500).json({ message: "Error al obtener los entrenadores." });
   }
 };
+
 
 // Obtener un entrenador por ID
 export const getTrainerById = async (req: Request, res: Response, next: NextFunction) => {
