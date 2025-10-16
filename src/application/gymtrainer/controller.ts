@@ -118,9 +118,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
         experiencia AS experience_years, 
         certificaciones AS certifications, 
         foto_perfil AS profile_photo,
-        -- Añade aquí otros campos relevantes de entrenadores si los hay
-        created_at, 
-        updated_at
+        fecha_registro AS created_at
       FROM entrenadores
     `;
     const params: any[] = [];
@@ -148,13 +146,11 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       experience_years: number;
       certifications: string;
       profile_photo: string;
-      created_at: Date;
-      updated_at: Date;
-      // Añade tipos para otros campos si los incluyes
+      created_at: Date; // Añadido fecha_registro como created_at
     }>;
 
     if (trainerRows.length > 0) {
-      response.data = adapterTrainers(trainerRows); // Asegúrate de que adapterTrainers maneje los nuevos campos
+      response.data = adapterTrainers(trainerRows); // Asegúrate de que adapterTrainers maneje estos campos
       response.message = "Entrenadores obtenidos exitosamente";
       return res.status(200).json(response);
     } else {
