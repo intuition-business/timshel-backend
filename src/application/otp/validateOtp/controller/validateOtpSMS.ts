@@ -46,7 +46,7 @@ export const validateOtpSMS = async (
       phone,
     };
     //const expiresToken = { expiresIn: '1h' }
-    const token = jwt.sign(payload, SECRET, { expiresIn: "1000h" });
+    const token = jwt.sign(payload, SECRET,);
 
     response.message = "Ah sido verificado con exito.";
     response.error = false;

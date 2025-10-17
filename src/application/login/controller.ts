@@ -31,7 +31,6 @@ export const Login = async (
       name: user?.name,
     };
     const token = sign({ userFound }, SECRET, {
-      expiresIn: 86400,
     });
 
     response.message = "";
