@@ -7,6 +7,7 @@ export const Path: PathProps = {
   register: "/api/register",
   login: "/api/login",
   trainers: "/api/trainers",
+  plans: "/api/plans",
   logout: "/api/logout",
   forgotPassword: "/api/forgot-password",
   resetPassword: "/api/reset-password",
