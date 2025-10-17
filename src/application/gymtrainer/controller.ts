@@ -151,7 +151,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       rating: number;
       experience_years: number;
       certifications: string;
-      profile_photo: string;
+      image: string;
       created_at: Date;
     }>;
 
@@ -192,7 +192,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       return res.status(400).json(response);
     }
 
-    const query = "SELECT id, name, email, phone, description, goal, rating, experience_years, certifications, profile_photo FROM entrenadores WHERE id = ?";
+    const query = "SELECT id, name, email, phone, description, goal, rating, experience_years, certifications, image FROM entrenadores WHERE id = ?";
     const [rows] = await pool.execute(query, [id]);
 
     const trainerRow = rows as Array<{
@@ -205,7 +205,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       rating: number;
       experience_years: number;
       certifications: string;
-      profile_photo: string;
+      image: string;
     }>;
 
     if (trainerRow.length > 0) {
