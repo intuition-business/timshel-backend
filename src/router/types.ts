@@ -4,6 +4,7 @@ export interface PathProps {
   validateOtp: string;
   register: string;
   trainers: string;
+  plans: string;
   login: string;
   logout: string;
   forgotPassword: string;
