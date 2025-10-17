@@ -23,8 +23,17 @@ const phone = Joi.string().trim().required().messages({
   'any.required': 'El teléfono es requerido'
 });
 
-const biography = Joi.string().trim().optional().messages({
-  'string.base': 'La biografía debe ser un string'
+const description = Joi.string().trim().optional().messages({
+  'string.base': 'La descripción debe ser un string'
+});
+const goal = Joi.string().trim().optional().messages({
+  'string.base': 'La meta debe ser un string'
+});
+
+const rating = Joi.number().min(0).max(5).optional().messages({
+  'number.base': 'La calificación debe ser un número',
+  'number.min': 'La calificación mínima es 0',
+  'number.max': 'La calificación máxima es 5'
 });
 
 const experience_years = Joi.number().optional().messages({
@@ -35,8 +44,8 @@ const certifications = Joi.string().trim().optional().messages({
   'string.base': 'Las certificaciones deben ser un string'
 });
 
-const profile_photo = Joi.string().trim().optional().messages({
-  'string.base': 'La foto de perfil debe ser un string'
+const image = Joi.string().trim().optional().messages({
+  'string.base': 'La imagen debe ser un string'
 });
 
 const new_name = Joi.string().trim().optional().messages({
@@ -52,8 +61,18 @@ const new_phone = Joi.string().trim().optional().messages({
   'string.base': 'El nuevo teléfono debe ser un string'
 });
 
-const new_biography = Joi.string().trim().optional().messages({
-  'string.base': 'La nueva biografía debe ser un string'
+const new_description = Joi.string().trim().optional().messages({
+  'string.base': 'La nueva descripción debe ser un string'
+});
+
+const new_goal = Joi.string().trim().optional().messages({
+  'string.base': 'La nueva meta debe ser un string'
+});
+
+const new_rating = Joi.number().min(0).max(5).optional().messages({
+  'number.base': 'La nueva calificación debe ser un número',
+  'number.min': 'La nueva calificación mínima es 0',
+  'number.max': 'La nueva calificación máxima es 5'
 });
 
 const new_experience_years = Joi.number().optional().messages({
@@ -64,18 +83,20 @@ const new_certifications = Joi.string().trim().optional().messages({
   'string.base': 'Las nuevas certificaciones deben ser un string'
 });
 
-const new_profile_photo = Joi.string().trim().optional().messages({
-  'string.base': 'La nueva foto de perfil debe ser un string'
+const new_image = Joi.string().trim().optional().messages({
+  'string.base': 'La nueva imagen debe ser un string'
 });
 
 export const createTrainerDto = Joi.object({
   name,
   email,
   phone,
-  biography,
+  description,
+  goal,
+  rating,
   experience_years,
   certifications,
-  profile_photo
+  image
 });
 
 export const getTrainerDto = Joi.object({
@@ -87,12 +108,14 @@ export const updateTrainerDto = Joi.object({
   new_name,
   new_email,
   new_phone,
-  new_biography,
+  new_description,
+  new_goal,
+  new_rating,
   new_experience_years,
   new_certifications,
-  new_profile_photo
-}).or('new_name', 'new_email', 'new_phone', 'new_biography', 'new_experience_years', 'new_certifications', 'new_profile_photo').messages({
-  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_biography, new_experience_years, new_certificaciones o new_profile_photo'
+  new_image
+}).or('new_name', 'new_email', 'new_phone', 'new_description', 'new_goal', 'new_rating', 'new_experience_years', 'new_certifications', 'new_image').messages({
+  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_description, new_goal, new_rating, new_experience_years, new_certificaciones o new_image'
 });
 
 export const deleteTrainerDto = Joi.object({

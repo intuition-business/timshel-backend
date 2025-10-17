@@ -5,11 +5,13 @@ export const adapterTrainers = (data: any) => {
       id: item?.id,
       name: item?.name,
       email: item?.email,
-      phone: item?.telefono,
-      biography: item?.biografia,
-      experience_years: item?.experiencia,
-      certifications: item?.certificaciones,
-      profile_photo: item?.foto_perfil,
+      phone: item?.phone,
+      description: item?.description,
+      goals: item?.goals,
+      rating: item?.rating,
+      experience_years: item?.experience_years,
+      certifications: item?.certifications,
+      image: item?.image,
       assigned_users: item?.assigned_users || [],
     };
   });
