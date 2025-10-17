@@ -13,15 +13,17 @@ interface Trainer {
   name: string;
   email: string;
   phone: string;
-  biography: string;
+  description: string;
+  goal: string;
+  rating: number;
   experience_years: number;
   certifications: string;
-  profile_photo: string;
+  image: string;
 }
 
 // Crear un entrenador
 export const createTrainer = async (req: Request, res: Response, next: NextFunction) => {
-  const { name, email, phone, biography, experience_years, certifications, profile_photo } = req.body;
+  const { name, email, phone, description, goal, rating, experience_years, certifications, image } = req.body;
 
   const response = { message: "", error: false };
 
@@ -57,8 +59,8 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json(response);
     }
 
-    const query = "INSERT INTO entrenadores (name, email, telefono, biografia, experiencia, certificaciones, foto_perfil) VALUES (?, ?, ?, ?, ?, ?, ?)";
-    const [result]: any = await pool.query(query, [name, email, phone, biography, experience_years, certifications, profile_photo]);
+    const query = "INSERT INTO entrenadores (name, email, phone, description, goal, rating, experience_years, certifications, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    const [result]: any = await pool.query(query, [name, email, phone, description, goal, rating, experience_years, certifications, image]);
 
     if (result) {
       // Crear auth asociado con rol 'entrenador'
@@ -75,7 +77,7 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
 
       response.message = "Entrenador creado exitosamente";
       return res.status(201).json({
-        trainer: { name, email, phone, biography, experience_years, certifications, profile_photo },
+        trainer: { name, email, phone, description, goal, rating, experience_years, certifications, image },
       });
     } else {
       response.error = true;
@@ -113,12 +115,14 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
         id, 
         name, 
         email, 
-        telefono AS phone, 
-        biografia AS biography, 
-        experiencia AS experience_years, 
-        certificaciones AS certifications, 
-        foto_perfil AS profile_photo,
-        fecha_registro AS created_at
+        phone, 
+        description, 
+        goal, 
+        rating, 
+        experience_years, 
+        certifications, 
+        image, 
+        created_at
       FROM entrenadores
     `;
     const params: any[] = [];
@@ -142,11 +146,13 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       name: string;
       email: string;
       phone: string;
-      biography: string;
+      description: string;
+      goal: string;
+      rating: number;
       experience_years: number;
       certifications: string;
       profile_photo: string;
-      created_at: Date; // Añadido fecha_registro como created_at
+      created_at: Date;
     }>;
 
     if (trainerRows.length > 0) {
@@ -186,7 +192,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       return res.status(400).json(response);
     }
 
-    const query = "SELECT id, name, email, telefono as phone, biografia as biography, experiencia as experience_years, certificaciones as certifications, foto_perfil as profile_photo FROM entrenadores WHERE id = ?";
+    const query = "SELECT id, name, email, phone, description, goal, rating, experience_years, certifications, profile_photo FROM entrenadores WHERE id = ?";
     const [rows] = await pool.execute(query, [id]);
 
     const trainerRow = rows as Array<{
@@ -194,7 +200,9 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       name: string;
       email: string;
       phone: string;
-      biography: string;
+      description: string;
+      goal: string;
+      rating: number;
       experience_years: number;
       certifications: string;
       profile_photo: string;
@@ -227,7 +235,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
 
 // Actualizar un entrenador
 export const updateTrainer = async (req: Request, res: Response, next: NextFunction) => {
-  const { id, new_name, new_email, new_phone, new_biography, new_experience_years, new_certifications, new_profile_photo } = req.body;
+  const { id, new_name, new_email, new_phone, new_description, new_goal, new_rating, new_experience_years, new_certifications, new_image } = req.body;
 
   const response = { message: "", error: false };
 
@@ -267,9 +275,17 @@ export const updateTrainer = async (req: Request, res: Response, next: NextFunct
       updateFields.push("telefono = ?");
       updateValues.push(new_phone);
     }
-    if (new_biography) {
-      updateFields.push("biografia = ?");
-      updateValues.push(new_biography);
+    if (new_description) {
+      updateFields.push("description = ?");
+      updateValues.push(new_description);
+    }
+    if (new_goal) {
+      updateFields.push("goal = ?");
+      updateValues.push(new_goal);
+    }
+    if (new_rating !== undefined) {
+      updateFields.push("rating = ?");
+      updateValues.push(new_rating);
     }
     if (new_experience_years !== undefined) {
       updateFields.push("experiencia = ?");
@@ -279,9 +295,9 @@ export const updateTrainer = async (req: Request, res: Response, next: NextFunct
       updateFields.push("certificaciones = ?");
       updateValues.push(new_certifications);
     }
-    if (new_profile_photo) {
+    if (new_image) {
       updateFields.push("foto_perfil = ?");
-      updateValues.push(new_profile_photo);
+      updateValues.push(new_image);
     }
 
     if (updateFields.length === 0) {
