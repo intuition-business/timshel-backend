@@ -238,17 +238,29 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       `, [id]);
 
       // 3. Formatear usuarios asignados
-      const assignedUsers = (assigned as any[]).map((a: any) => ({
-        assignment_id: a.assignment_id,
-        user_id: a.user_id,
-        user_email: a.user_email || `Usuario ${a.user_id}`, // Fallback si no hay email
-        plan_id: a.plan_id,
-        plan_title: a.plan_title || 'Plan no especificado',
-        price_cop: a.price_cop || 0,
-        description_items: a.description_items ? JSON.parse(a.description_items) : [],
-        status: a.status,
-        assigned_date: a.assigned_date ? formatDateWithSlash(new Date(a.assigned_date)) : null
-      }));
+      const assignedUsers = (assigned as any[]).map((a: any) => {
+        let parsedDescriptionItems = [];
+
+        // Intenta parsear description_items, pero si falla, maneja el error
+        try {
+          parsedDescriptionItems = a.description_items ? JSON.parse(a.description_items) : [];
+        } catch (error) {
+          console.error("Error al parsear description_items para el usuario:", a.user_id, error);
+          parsedDescriptionItems = []; // Fallback si el JSON no es válido
+        }
+
+        return {
+          assignment_id: a.assignment_id,
+          user_id: a.user_id,
+          user_email: a.user_email || `Usuario ${a.user_id}`, // Fallback si no hay email
+          plan_id: a.plan_id,
+          plan_title: a.plan_title || 'Plan no especificado',
+          price_cop: a.price_cop || 0,
+          description_items: parsedDescriptionItems,
+          status: a.status,
+          assigned_date: a.assigned_date ? formatDateWithSlash(new Date(a.assigned_date)) : null
+        };
+      });
 
       // 4. Contar total de usuarios activos
       const totalAssignedUsers = assignedUsers.length;
