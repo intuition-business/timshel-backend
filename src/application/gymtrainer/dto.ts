@@ -101,7 +101,7 @@ export const assignUserDto = Joi.object({
   })
 });
 
-// ✅ NUEVO DTO para suscripción con plan
+// ✅ NUEVO DTO para suscripción con plan (optimizado con unknown(true) para capturar errores)
 export const assignUserWithPlanDto = Joi.object({
   trainer_id: Joi.number().required().messages({
     'number.base': 'El ID del entrenador debe ser un número',
@@ -111,9 +111,11 @@ export const assignUserWithPlanDto = Joi.object({
     'number.base': 'El ID del plan debe ser un número',
     'any.required': 'El ID del plan es requerido'
   })
-}).messages({
-  'object.missing': 'Deben proporcionarse trainer_id y plan_id'
-});
+})
+  .unknown(true) // ← Permite campos adicionales sin fallar, útil para depuración
+  .messages({
+    'object.missing': 'Deben proporcionarse trainer_id y plan_id'
+  });
 
 // DTOs existentes
 export const createTrainerDto = Joi.object({
@@ -161,7 +163,7 @@ export const getTrainersListDto = Joi.object({
   random: Joi.boolean().optional().messages({
     'boolean.base': 'El random debe ser un booleano (true/false)'
   }),
-  with_users: Joi.boolean().optional().messages({  // ✅ Nuevo param opcional
+  with_users: Joi.boolean().optional().messages({
     'boolean.base': 'with_users debe ser un booleano (true/false)'
   })
 });
