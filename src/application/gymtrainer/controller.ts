@@ -515,14 +515,22 @@ export const assignUser = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-// Asignar usuario a entrenador CON PLAN (nueva funcionalidad)
+// Asignar usuario a entrenador CON PLAN (nueva funcionalidad - COMPLETO Y AJUSTADO)
 export const assignUserWithPlan = async (req: Request, res: Response, next: NextFunction) => {
-  console.log("=== DEPURACIÓN assignUserWithPlan ===");
-  console.log("Headers:", req.headers);
-  console.log("Content-Type:", req.get('Content-Type'));
-  console.log("req.body:", req.body);
-  console.log("req.body type:", typeof req.body);
-  console.log("================================");
+  // 🔥 LOGS DE DEPURACIÓN COMPLETA
+  console.log('🔍 === DEPURACIÓN assignUserWithPlan ===');
+  console.log('📤 URL:', req.originalUrl);
+  console.log('📋 Method:', req.method);
+  console.log('📊 Headers:', {
+    'content-type': req.get('Content-Type'),
+    'x-access-token': req.get('x-access-token') ? 'PRESENTE' : 'AUSENTE',
+    'user-agent': req.get('User-Agent')
+  });
+  console.log('📦 req.body:', req.body);
+  console.log('📦 req.body type:', typeof req.body);
+  console.log('📦 req.body keys:', Object.keys(req.body || {}));
+  console.log('🔍 ==============================');
+
   const { trainer_id, plan_id } = req.body;
 
   const response = {
@@ -532,59 +540,102 @@ export const assignUserWithPlan = async (req: Request, res: Response, next: Next
   };
 
   try {
+    // 🔥 LOG: Verificar desestructuración inicial
+    console.log('🔑 trainer_id inicial:', trainer_id, '(', typeof trainer_id, ')');
+    console.log('🔑 plan_id inicial:', plan_id, '(', typeof plan_id, ')');
+
     // 1. Obtener usuario autenticado del token
     const { headers } = req;
     const token = headers["x-access-token"];
+    if (!token) {
+      console.log('❌ ERROR: Sin token');
+      response.error = true;
+      response.message = "Token de acceso requerido";
+      return res.status(401).json(response);
+    }
+
     const decode = token && verify(`${token}`, SECRET);
-    const userId = (<any>(<unknown>decode)).userId; // Usuario que se suscribe
+    if (!decode) {
+      console.log('❌ ERROR: Token inválido');
+      response.error = true;
+      response.message = "Token inválido";
+      return res.status(401).json(response);
+    }
 
+    const userId = (<any>decode).userId; // Asegurar que userId sea accesible
+    if (!userId) {
+      console.log('❌ ERROR: Sin userId en token');
+      response.error = true;
+      response.message = "Usuario no identificado en el token";
+      return res.status(401).json(response);
+    }
 
-    // 🔍 DEPURACIÓN: Verificar desestructuración
-    console.log("trainer_id:", trainer_id, "type:", typeof trainer_id);
-    console.log("plan_id:", plan_id, "type:", typeof plan_id);
-    // 2. Validación con NUEVO DTO
-    const { error: dtoError } = assignUserWithPlanDto.validate(req.body);
+    console.log('👤 userId del token:', userId, 'type:', typeof userId);
+
+    // 2. Validación con NUEVO DTO (con detalles completos)
+    console.log('🔍 Iniciando validación DTO...');
+    const { error: dtoError, value } = assignUserWithPlanDto.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true
+    });
+
+    console.log('📋 DTO value:', value);
+    console.log('❌ DTO error:', dtoError ? dtoError.details.map((d: any) => d.message).join(', ') : 'NINGUNO');
+
     if (dtoError) {
       response.error = true;
-      response.message = dtoError.details[0].message;
+      response.message = dtoError.details.map((detail: any) => detail.message).join(', ');
+      console.log('🚫 VALIDACIÓN FALLÓ - Detalles:', dtoError.details);
       return res.status(400).json(response);
     }
 
+    console.log('✅ DTO validación EXITOSA');
+
     // 3. Verificar que el ENTRENADOR existe
+    console.log('🔍 Verificando entrenador ID:', trainer_id);
     const [trainer] = await pool.execute(
       "SELECT id, name, email FROM entrenadores WHERE id = ?",
       [trainer_id]
     );
     if ((trainer as any[]).length === 0) {
+      console.log('🏋️‍♂️ Entrenador NO encontrado');
       response.error = true;
       response.message = "El entrenador seleccionado no existe";
       return res.status(404).json(response);
     }
+    console.log('🏋️‍♂️ Entrenador encontrado:', (trainer as any[])[0].name);
 
     // 4. Verificar que el PLAN existe
+    console.log('🔍 Verificando plan ID:', plan_id);
     const [plan] = await pool.execute(
-      "SELECT id, title, price_cop FROM planes WHERE id = ?",
+      "SELECT id, title, price_cop, description_items FROM planes WHERE id = ?",
       [plan_id]
     );
     if ((plan as any[]).length === 0) {
+      console.log('📅 Plan NO encontrado');
       response.error = true;
       response.message = "El plan seleccionado no existe";
       return res.status(400).json(response);
     }
+    console.log('📅 Plan encontrado:', (plan as any[])[0].title);
 
-    // 5. Verificar si ya existe una suscripción ACTIVA para este usuario-entrenador
+    // 5. Verificar si ya existe una suscripción ACTIVA
+    console.log('🔍 Verificando suscripción existente para userId:', userId, 'trainer_id:', trainer_id);
     const [existingAssignment] = await pool.execute(
       "SELECT id, status FROM asignaciones WHERE usuario_id = ? AND entrenador_id = ? AND status = 'active'",
       [userId, trainer_id]
     );
     if ((existingAssignment as any[]).length > 0) {
+      console.log('🚫 Suscripción activa existente encontrada');
       response.error = true;
       response.message = "Ya tienes una suscripción activa con este entrenador. Cancela la anterior antes de crear una nueva.";
       return res.status(400).json(response);
     }
+    console.log('✅ No hay suscripción activa previa');
 
     // 6. Insertar la NUEVA ASIGNACIÓN con plan
-    const fechaAsignacion = new Date();
+    console.log('📥 Insertando nueva asignación...');
+    const fechaAsignacion = new Date(); // 20/10/2025 22:13 (hora actual aproximada)
     const [result]: any = await pool.execute(
       `INSERT INTO asignaciones (
         usuario_id, 
@@ -597,7 +648,10 @@ export const assignUserWithPlan = async (req: Request, res: Response, next: Next
     );
 
     if (result && result.insertId) {
+      console.log('✅ Asignación insertada con ID:', result.insertId);
+
       // 7. Obtener la asignación creada CON DETALLES completos
+      console.log('🔍 Obteniendo detalles de la asignación...');
       const [newAssignment] = await pool.execute(`
         SELECT 
           a.id,
@@ -626,31 +680,51 @@ export const assignUserWithPlan = async (req: Request, res: Response, next: Next
         plan_id: assignmentData.plan_id,
         plan_title: assignmentData.plan_title,
         price_cop: assignmentData.price_cop,
-        description_items: JSON.parse(assignmentData.description_items || '[]'),
+        // 🔥 CORREGIDO: Parseo seguro de JSON con logs
+        description_items: (() => {
+          try {
+            const parsedItems = assignmentData.description_items
+              ? JSON.parse(assignmentData.description_items)
+              : [];
+            console.log('✅ description_items parseado:', parsedItems);
+            return parsedItems;
+          } catch (parseError) {
+            console.log('⚠️ JSON parse error en description_items:', assignmentData.description_items, 'Error:', parseError);
+            if (typeof assignmentData.description_items === 'string' && assignmentData.description_items.trim()) {
+              const fallbackItems = assignmentData.description_items.split(',').map((item: any) => item.trim()).filter((item: any) => item);
+              console.log('🔧 Fallback description_items:', fallbackItems);
+              return fallbackItems;
+            }
+            console.log('🔴 No se pudo parsear, retornando array vacío');
+            return [];
+          }
+        })(),
         status: assignmentData.status,
-        assigned_date: assignmentData.fecha_asignacion
+        assigned_date: formatDateWithSlash(assignmentData.fecha_asignacion) // Ajustado al formato DD/MM/YYYY
       };
 
       response.message = "¡Suscripción creada exitosamente! Ahora estás asignado al entrenador con el plan seleccionado.";
+      console.log('✅ Respuesta lista para enviar:', response);
       return res.status(201).json(response);
     } else {
+      console.log('❌ Fallo al insertar asignación');
       response.error = true;
       response.message = "No se pudo crear la suscripción. Intenta nuevamente.";
       return res.status(400).json(response);
     }
 
   } catch (error: any) {
-    // Manejo específico de errores de base de datos
-    if (error.code === 'ER_NO_REFERENCED_ROW_2') {
-      response.error = true;
-      response.message = "Error de integridad: El entrenador o plan no existe";
-      return res.status(400).json(response);
-    }
-
-    console.error("Error al crear suscripción:", error);
-    next(error);
-    return res.status(500).json({
-      message: "Error interno del servidor al crear la suscripción."
-    });
+    console.error('💥 ERROR GENERAL:', error.message, 'Code:', error.code);
+    response.error = true;
+    response.message = "Error interno del servidor al crear la suscripción.";
+    return res.status(500).json(response);
   }
+};
+
+// Función auxiliar para formato de fecha (asegurada)
+const formatDateWithSlash = (date: Date): string => {
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Octubre es 10
+  const year = date.getFullYear(); // 2025
+  return `${day}/${month}/${year}`;
 };
