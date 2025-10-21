@@ -57,7 +57,7 @@ router.delete(
 
 // Ruta POST para asignar un usuario a un entrenador
 router.post(
-  "/plan-and-trainer-subscription",
+  "/assign-user",
   verifyToken,
   asyncHandler(assignUser)
 );
