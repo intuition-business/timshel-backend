@@ -7,6 +7,7 @@ import {
   deleteTrainer,
   assignUser,
   getTrainerById,
+  assignUserWithPlan,
 } from "./controller";  // Importamos los controladores de trainers
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 
@@ -56,9 +57,17 @@ router.delete(
 
 // Ruta POST para asignar un usuario a un entrenador
 router.post(
-  "/assign",
+  "/plan-and-trainer-subscription",
   verifyToken,
   asyncHandler(assignUser)
 );
+
+router.post(
+  "/plan-and-trainer-subscription",
+  verifyToken,
+  asyncHandler(assignUserWithPlan)
+);
+
+
 
 export default router;

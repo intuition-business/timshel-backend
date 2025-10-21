@@ -26,6 +26,7 @@ const phone = Joi.string().trim().required().messages({
 const description = Joi.string().trim().optional().messages({
   'string.base': 'La descripción debe ser un string'
 });
+
 const goal = Joi.string().trim().optional().messages({
   'string.base': 'La meta debe ser un string'
 });
@@ -48,6 +49,7 @@ const image = Joi.string().trim().optional().messages({
   'string.base': 'La imagen debe ser un string'
 });
 
+// Campos para actualización
 const new_name = Joi.string().trim().optional().messages({
   'string.base': 'El nuevo nombre debe ser un string'
 });
@@ -87,6 +89,33 @@ const new_image = Joi.string().trim().optional().messages({
   'string.base': 'La nueva imagen debe ser un string'
 });
 
+// ✅ DTO ANTIGUO (mantener para compatibilidad)
+export const assignUserDto = Joi.object({
+  trainerId: Joi.number().required().messages({
+    'number.base': 'El ID del entrenador debe ser un número',
+    'any.required': 'El ID del entrenador es requerido'
+  }),
+  userId: Joi.number().required().messages({
+    'number.base': 'El ID del usuario debe ser un número',
+    'any.required': 'El ID del usuario es requerido'
+  })
+});
+
+// ✅ NUEVO DTO para suscripción con plan
+export const assignUserWithPlanDto = Joi.object({
+  trainer_id: Joi.number().required().messages({
+    'number.base': 'El ID del entrenador debe ser un número',
+    'any.required': 'El ID del entrenador es requerido'
+  }),
+  plan_id: Joi.number().required().messages({
+    'number.base': 'El ID del plan debe ser un número',
+    'any.required': 'El ID del plan es requerido'
+  })
+}).messages({
+  'object.missing': 'Deben proporcionarse trainer_id y plan_id'
+});
+
+// DTOs existentes
 export const createTrainerDto = Joi.object({
   name,
   email,
@@ -122,17 +151,6 @@ export const deleteTrainerDto = Joi.object({
   id
 });
 
-export const assignUserDto = Joi.object({
-  trainerId: Joi.number().required().messages({
-    'number.base': 'El ID del entrenador debe ser un número',
-    'any.required': 'El ID del entrenador es requerido'
-  }),
-  userId: Joi.number().required().messages({
-    'number.base': 'El ID del usuario debe ser un número',
-    'any.required': 'El ID del usuario es requerido'
-  })
-});
-
 export const getTrainersListDto = Joi.object({
   name: Joi.string().optional().messages({
     'string.base': 'El nombre debe ser un string'
@@ -142,5 +160,8 @@ export const getTrainersListDto = Joi.object({
   }),
   random: Joi.boolean().optional().messages({
     'boolean.base': 'El random debe ser un booleano (true/false)'
+  }),
+  with_users: Joi.boolean().optional().messages({  // ✅ Nuevo param opcional
+    'boolean.base': 'with_users debe ser un booleano (true/false)'
   })
 });
