@@ -517,6 +517,12 @@ export const assignUser = async (req: Request, res: Response, next: NextFunction
 
 // Asignar usuario a entrenador CON PLAN (nueva funcionalidad)
 export const assignUserWithPlan = async (req: Request, res: Response, next: NextFunction) => {
+  console.log("=== DEPURACIÓN assignUserWithPlan ===");
+  console.log("Headers:", req.headers);
+  console.log("Content-Type:", req.get('Content-Type'));
+  console.log("req.body:", req.body);
+  console.log("req.body type:", typeof req.body);
+  console.log("================================");
   const { trainer_id, plan_id } = req.body;
 
   const response = {
@@ -532,6 +538,10 @@ export const assignUserWithPlan = async (req: Request, res: Response, next: Next
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId; // Usuario que se suscribe
 
+
+    // 🔍 DEPURACIÓN: Verificar desestructuración
+    console.log("trainer_id:", trainer_id, "type:", typeof trainer_id);
+    console.log("plan_id:", plan_id, "type:", typeof plan_id);
     // 2. Validación con NUEVO DTO
     const { error: dtoError } = assignUserWithPlanDto.validate(req.body);
     if (dtoError) {
