@@ -171,7 +171,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-// Obtener un entrenador por ID (ACTUALIZADO)
+// Obtener un entrenador por ID (ACTUALIZADO con JOIN a auth y formato de fecha)
 export const getTrainerById = async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
 
@@ -181,6 +181,14 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
   const userId = (<any>(<unknown>decode)).userId;
 
   const response = { message: "", error: false, data: null as Trainer | null };
+
+  // Función auxiliar para formatear fecha
+  const formatDateWithSlash = (date: Date): string => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
 
   try {
     // Validación con DTO para params
@@ -210,7 +218,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
     }>;
 
     if (trainerRow.length > 0) {
-      // 2. Obtener usuarios asignados CON PLANES Y STATUS (solo activos por defecto)
+      // 2. Obtener usuarios asignados CON PLANES Y STATUS desde auth
       const [assigned] = await pool.execute(`
         SELECT 
           a.id as assignment_id,
@@ -221,10 +229,10 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
           p.title as plan_title,
           p.price_cop,
           p.description_items,
-          u.name as user_name  -- Si tienes campo 'name' en tabla users
+          auth.email as user_email  -- Usar email de auth como identificador
         FROM asignaciones a
         LEFT JOIN planes p ON a.plan_id = p.id
-        LEFT JOIN users u ON a.usuario_id = u.id  -- Opcional: para nombre del usuario
+        LEFT JOIN auth ON a.usuario_id = auth.usuario_id
         WHERE a.entrenador_id = ? AND a.status = 'active'
         ORDER BY a.fecha_asignacion DESC
       `, [id]);
@@ -233,13 +241,13 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       const assignedUsers = (assigned as any[]).map((a: any) => ({
         assignment_id: a.assignment_id,
         user_id: a.user_id,
-        user_name: a.user_name || `Usuario ${a.user_id}`, // Fallback si no hay nombre
+        user_email: a.user_email || `Usuario ${a.user_id}`, // Fallback si no hay email
         plan_id: a.plan_id,
         plan_title: a.plan_title || 'Plan no especificado',
         price_cop: a.price_cop || 0,
         description_items: a.description_items ? JSON.parse(a.description_items) : [],
         status: a.status,
-        assigned_date: a.assigned_date ? new Date(a.assigned_date) : null,
+        assigned_date: a.assigned_date ? formatDateWithSlash(new Date(a.assigned_date)) : null
       }));
 
       // 4. Contar total de usuarios activos
@@ -252,7 +260,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
         total_assigned_users: totalAssignedUsers
       };
 
-      // 6. Usar adapter para consistencia (asegúrate de que maneje los nuevos campos)
+      // 6. Usar adapter para consistencia
       response.data = adapterTrainers([trainer])[0];
       response.message = "Entrenador obtenido exitosamente";
       return res.status(200).json(response);
