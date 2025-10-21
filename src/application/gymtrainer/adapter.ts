@@ -7,7 +7,7 @@ export const adapterTrainers = (data: any) => {
       email: item?.email,
       phone: item?.phone,
       description: item?.description,
-      goals: item?.goals,
+      goal: item?.goal,
       rating: item?.rating,
       experience_years: item?.experience_years,
       certifications: item?.certifications,
