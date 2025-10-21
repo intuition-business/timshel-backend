@@ -4,7 +4,7 @@ import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import { adapterTrainers } from "./adapter";
-import { createTrainerDto, getTrainerDto, updateTrainerDto, deleteTrainerDto, assignUserDto, getTrainersListDto } from "./dto"; // Importamos los DTOs
+import { createTrainerDto, getTrainerDto, updateTrainerDto, deleteTrainerDto, assignUserDto, getTrainersListDto, assignUserWithPlanDto } from "./dto"; // Importamos los DTOs
 import { OtpModel } from "../otp/model";
 
 
@@ -171,8 +171,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-
-// Obtener un entrenador por ID
+// Obtener un entrenador por ID (ACTUALIZADO)
 export const getTrainerById = async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
 
@@ -192,7 +191,8 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       return res.status(400).json(response);
     }
 
-    const query = "SELECT id, name, email, phone, description, goal, rating, experience_years, certifications, image FROM entrenadores WHERE id = ?";
+    // 1. Obtener datos del entrenador
+    const query = "SELECT id, name, email, phone, description, goal, rating, experience_years, certifications, image, created_at FROM entrenadores WHERE id = ?";
     const [rows] = await pool.execute(query, [id]);
 
     const trainerRow = rows as Array<{
@@ -206,18 +206,53 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       experience_years: number;
       certifications: string;
       image: string;
+      created_at: Date;
     }>;
 
     if (trainerRow.length > 0) {
-      // Obtener usuarios asignados
-      const [assigned] = await pool.execute(
-        "SELECT usuario_id FROM asignaciones WHERE entrenador_id = ?",
-        [id]
-      );
-      const assignedUsers = (assigned as any).map((a: any) => a.usuario_id);
+      // 2. Obtener usuarios asignados CON PLANES Y STATUS (solo activos por defecto)
+      const [assigned] = await pool.execute(`
+        SELECT 
+          a.id as assignment_id,
+          a.usuario_id as user_id,
+          a.plan_id,
+          a.status,
+          a.fecha_asignacion as assigned_date,
+          p.title as plan_title,
+          p.price_cop,
+          p.description_items,
+          u.name as user_name  -- Si tienes campo 'name' en tabla users
+        FROM asignaciones a
+        LEFT JOIN planes p ON a.plan_id = p.id
+        LEFT JOIN users u ON a.usuario_id = u.id  -- Opcional: para nombre del usuario
+        WHERE a.entrenador_id = ? AND a.status = 'active'
+        ORDER BY a.fecha_asignacion DESC
+      `, [id]);
 
-      const trainer = { ...trainerRow[0], assigned_users: assignedUsers };
+      // 3. Formatear usuarios asignados
+      const assignedUsers = (assigned as any[]).map((a: any) => ({
+        assignment_id: a.assignment_id,
+        user_id: a.user_id,
+        user_name: a.user_name || `Usuario ${a.user_id}`, // Fallback si no hay nombre
+        plan_id: a.plan_id,
+        plan_title: a.plan_title || 'Plan no especificado',
+        price_cop: a.price_cop || 0,
+        description_items: a.description_items ? JSON.parse(a.description_items) : [],
+        status: a.status,
+        assigned_date: a.assigned_date ? new Date(a.assigned_date) : null,
+      }));
 
+      // 4. Contar total de usuarios activos
+      const totalAssignedUsers = assignedUsers.length;
+
+      // 5. Construir objeto del entrenador completo
+      const trainer = {
+        ...trainerRow[0],
+        assigned_users: assignedUsers,
+        total_assigned_users: totalAssignedUsers
+      };
+
+      // 6. Usar adapter para consistencia (asegúrate de que maneje los nuevos campos)
       response.data = adapterTrainers([trainer])[0];
       response.message = "Entrenador obtenido exitosamente";
       return res.status(200).json(response);
@@ -233,7 +268,8 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-// Actualizar un entrenador
+
+// Actualizar un entrenador (CORREGIDO)
 export const updateTrainer = async (req: Request, res: Response, next: NextFunction) => {
   const { id, new_name, new_email, new_phone, new_description, new_goal, new_rating, new_experience_years, new_certifications, new_image } = req.body;
 
@@ -259,44 +295,71 @@ export const updateTrainer = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json(response);
     }
 
-    // Construir la consulta de actualización dinámicamente
+    // 1. Verificar que el entrenador existe antes de actualizar
+    const [existingTrainer] = await pool.execute(
+      "SELECT id FROM entrenadores WHERE id = ?",
+      [id]
+    );
+    if ((existingTrainer as any[]).length === 0) {
+      response.error = true;
+      response.message = "El entrenador no existe";
+      return res.status(404).json(response);
+    }
+
     const updateFields: string[] = [];
     const updateValues: any[] = [];
 
+    // ✅ phone -> phone (no telefono)
+    if (new_phone) {
+      updateFields.push("phone = ?");  // ✅ CORREGIDO
+      updateValues.push(new_phone);
+    }
+
+    // ✅ name -> name (no name, ya está correcto)
     if (new_name) {
       updateFields.push("name = ?");
       updateValues.push(new_name);
     }
+
+    // ✅ email -> email (no email, ya está correcto)
     if (new_email) {
       updateFields.push("email = ?");
       updateValues.push(new_email);
     }
-    if (new_phone) {
-      updateFields.push("telefono = ?");
-      updateValues.push(new_phone);
-    }
+
+    // ✅ description -> description (no description, ya está correcto)
     if (new_description) {
       updateFields.push("description = ?");
       updateValues.push(new_description);
     }
+
+    // ✅ goal -> goal (no goal, ya está correcto)
     if (new_goal) {
       updateFields.push("goal = ?");
       updateValues.push(new_goal);
     }
+
+    // ✅ rating -> rating (no rating, ya está correcto)
     if (new_rating !== undefined) {
       updateFields.push("rating = ?");
       updateValues.push(new_rating);
     }
+
+    // ❌ PROBLEMA: experience_years vs experiencia
     if (new_experience_years !== undefined) {
-      updateFields.push("experiencia = ?");
+      updateFields.push("experience_years = ?");
       updateValues.push(new_experience_years);
     }
+
+    // ❌ PROBLEMA: certifications vs certificaciones
     if (new_certifications) {
-      updateFields.push("certificaciones = ?");
+      updateFields.push("certifications = ?");
       updateValues.push(new_certifications);
     }
+
+    // ❌ PROBLEMA: image vs foto_perfil
     if (new_image) {
-      updateFields.push("foto_perfil = ?");
+      updateFields.push("image = ?");
       updateValues.push(new_image);
     }
 
@@ -306,20 +369,52 @@ export const updateTrainer = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json(response);
     }
 
+    // 3. Verificación adicional para email único (si se actualiza)
+    if (new_email) {
+      const [emailConflict] = await pool.execute(
+        "SELECT id FROM entrenadores WHERE email = ? AND id != ?",
+        [new_email, id]
+      );
+      if ((emailConflict as any[]).length > 0) {
+        response.error = true;
+        response.message = `El email "${new_email}" ya está registrado por otro entrenador.`;
+        return res.status(400).json(response);
+      }
+    }
+
+    // 4. Ejecutar actualización
     const query = `UPDATE entrenadores SET ${updateFields.join(", ")} WHERE id = ?`;
     updateValues.push(id);
 
-    const [result]: any = await pool.query(query, updateValues);
+    const [result]: any = await pool.execute(query, updateValues);  // ✅ Usar execute en lugar de query para consistencia
 
     if (result.affectedRows > 0) {
       response.message = "Entrenador actualizado exitosamente";
-      return res.status(200).json(response);
+
+      // Opcional: retornar los datos actualizados
+      const [updatedTrainer] = await pool.execute(
+        "SELECT id, name, email, phone, description, goal, rating, experience_years, certifications, image FROM entrenadores WHERE id = ?",
+        [id]
+      );
+
+      return res.status(200).json({
+        ...response,
+        data: adapterTrainers(updatedTrainer as any[])[0]  // Retornar entrenador actualizado
+      });
     } else {
       response.error = true;
       response.message = "No se encontró el entrenador para actualizar";
       return res.status(404).json(response);
     }
-  } catch (error) {
+
+  } catch (error: any) {
+    // Manejo específico de errores
+    if (error.code === 'ER_DUP_ENTRY') {
+      response.error = true;
+      response.message = "Error: El email ya está registrado por otro entrenador.";
+      return res.status(400).json(response);
+    }
+
     console.error("Error al actualizar el entrenador:", error);
     next(error);
     return res.status(500).json({ message: "Error al actualizar el entrenador." });
@@ -409,5 +504,135 @@ export const assignUser = async (req: Request, res: Response, next: NextFunction
     console.error("Error al asignar usuario:", error);
     next(error);
     return res.status(500).json({ message: "Error al asignar usuario." });
+  }
+};
+
+// Asignar usuario a entrenador CON PLAN (nueva funcionalidad)
+export const assignUserWithPlan = async (req: Request, res: Response, next: NextFunction) => {
+  const { trainer_id, plan_id } = req.body;
+
+  const response = {
+    message: "",
+    error: false,
+    data: null as any
+  };
+
+  try {
+    // 1. Obtener usuario autenticado del token
+    const { headers } = req;
+    const token = headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId; // Usuario que se suscribe
+
+    // 2. Validación con NUEVO DTO
+    const { error: dtoError } = assignUserWithPlanDto.validate(req.body);
+    if (dtoError) {
+      response.error = true;
+      response.message = dtoError.details[0].message;
+      return res.status(400).json(response);
+    }
+
+    // 3. Verificar que el ENTRENADOR existe
+    const [trainer] = await pool.execute(
+      "SELECT id, name, email FROM entrenadores WHERE id = ?",
+      [trainer_id]
+    );
+    if ((trainer as any[]).length === 0) {
+      response.error = true;
+      response.message = "El entrenador seleccionado no existe";
+      return res.status(404).json(response);
+    }
+
+    // 4. Verificar que el PLAN existe
+    const [plan] = await pool.execute(
+      "SELECT id, title, price_cop FROM planes WHERE id = ?",
+      [plan_id]
+    );
+    if ((plan as any[]).length === 0) {
+      response.error = true;
+      response.message = "El plan seleccionado no existe";
+      return res.status(400).json(response);
+    }
+
+    // 5. Verificar si ya existe una suscripción ACTIVA para este usuario-entrenador
+    const [existingAssignment] = await pool.execute(
+      "SELECT id, status FROM asignaciones WHERE usuario_id = ? AND entrenador_id = ? AND status = 'active'",
+      [userId, trainer_id]
+    );
+    if ((existingAssignment as any[]).length > 0) {
+      response.error = true;
+      response.message = "Ya tienes una suscripción activa con este entrenador. Cancela la anterior antes de crear una nueva.";
+      return res.status(400).json(response);
+    }
+
+    // 6. Insertar la NUEVA ASIGNACIÓN con plan
+    const fechaAsignacion = new Date();
+    const [result]: any = await pool.execute(
+      `INSERT INTO asignaciones (
+        usuario_id, 
+        entrenador_id, 
+        plan_id, 
+        fecha_asignacion, 
+        status
+      ) VALUES (?, ?, ?, ?, 'active')`,
+      [userId, trainer_id, plan_id, fechaAsignacion]
+    );
+
+    if (result && result.insertId) {
+      // 7. Obtener la asignación creada CON DETALLES completos
+      const [newAssignment] = await pool.execute(`
+        SELECT 
+          a.id,
+          a.usuario_id,
+          a.entrenador_id,
+          a.plan_id,
+          a.status,
+          a.fecha_asignacion,
+          t.name as trainer_name,
+          p.title as plan_title,
+          p.price_cop,
+          p.description_items
+        FROM asignaciones a
+        JOIN entrenadores t ON a.entrenador_id = t.id
+        JOIN planes p ON a.plan_id = p.id
+        WHERE a.id = ?
+      `, [result.insertId]);
+
+      const assignmentData = (newAssignment as any[])[0];
+
+      response.data = {
+        id: assignmentData.id,
+        user_id: assignmentData.usuario_id,
+        trainer_id: assignmentData.entrenador_id,
+        trainer_name: assignmentData.trainer_name,
+        plan_id: assignmentData.plan_id,
+        plan_title: assignmentData.plan_title,
+        price_cop: assignmentData.price_cop,
+        description_items: JSON.parse(assignmentData.description_items || '[]'),
+        status: assignmentData.status,
+        assigned_date: assignmentData.fecha_asignacion
+      };
+
+      response.message = "¡Suscripción creada exitosamente! Ahora estás asignado al entrenador con el plan seleccionado.";
+      return res.status(201).json(response);
+    } else {
+      response.error = true;
+      response.message = "No se pudo crear la suscripción. Intenta nuevamente.";
+      return res.status(400).json(response);
+    }
+
+  } catch (error: any) {
+    // Manejo específico de errores de base de datos
+    if (error.code === 'ER_NO_REFERENCED_ROW_2') {
+      response.error = true;
+      response.message = "Error de integridad: El entrenador o plan no existe";
+      return res.status(400).json(response);
+    }
+
+    console.error("Error al crear suscripción:", error);
+    next(error);
+    return res.status(500).json({
+      message: "Error interno del servidor al crear la suscripción."
+    });
   }
 };
