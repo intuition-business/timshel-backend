@@ -26,7 +26,7 @@ interface GetUsersResponse {
 
 // Obtener lista de usuarios (para admin, con trainer info)
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
-  const { page = 1, limit = 20 } = req.query; // page y limit para paginación, default 1 y 20
+  const { page = 1, limit = 20, name = "" } = req.query; // page y limit para paginación, name para búsqueda
   const { headers } = req;
   const token = headers["x-access-token"];
 
@@ -57,17 +57,25 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     // Verifica los valores de limitNum y offset
     console.log("limitNum:", limitNum, "offset:", offset);  // Verificación de parámetros
 
-    // Consulta para contar el total de usuarios
-    const countQuery = `
+    // Consulta para contar el total de usuarios, considerando el filtro por nombre
+    let countQuery = `
       SELECT COUNT(*) AS total
       FROM auth
-      WHERE rol = 'user' -- Asumiendo que solo users normales, ajusta si incluye otros
+      LEFT JOIN usuarios u ON auth.usuario_id = u.id
+      WHERE auth.rol = 'user' -- Filtrar solo users
     `;
-    const [countRows] = await pool.query(countQuery);
+
+    // Si se pasa un nombre, agregar el filtro a la consulta
+    if (name) {
+      countQuery += ` AND u.nombre LIKE ?`;
+    }
+
+    const countParams = name ? [`%${name}%`] : [];
+    const [countRows] = await pool.query(countQuery, countParams);
     const totalUsers = (countRows as any)[0].total;
     const totalPages = Math.ceil(totalUsers / limitNum);
 
-    // Consulta principal para usuarios, ordenados por auth.id ASC
+    // Consulta principal para usuarios, ordenados por auth.id ASC, considerando el filtro por nombre
     let query = `
       SELECT 
         u.id,
@@ -82,12 +90,20 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
       LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
       WHERE auth.rol = 'user' -- Filtrar solo users
-      ORDER BY auth.id ASC -- Ordenado del primero al último según auth
-      LIMIT ${limitNum} OFFSET ${offset} -- Concatenamos los valores de LIMIT y OFFSET
     `;
 
-    // Ejecuta la consulta sin parámetros (LIMIT y OFFSET se concatenan directamente)
-    const [rows] = await pool.query(query);
+    // Si se pasa un nombre, agregar el filtro a la consulta
+    if (name) {
+      query += ` AND u.nombre LIKE ?`;
+    }
+
+    query += `
+      ORDER BY auth.id ASC -- Ordenado del primero al último según auth
+      LIMIT ${limitNum} OFFSET ${offset}
+    `;
+
+    const params = name ? [`%${name}%`] : [];
+    const [rows] = await pool.query(query, params);
 
     const userRows = rows as Array<{
       id: number;
