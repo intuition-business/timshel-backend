@@ -75,6 +75,7 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
       // Crear auth asociado con rol 'entrenador'
       const authData = {
         usuario_id: 0,
+        name: name,
         entrenador_id: result.insertId,
         email: email,
         telefono: phone,
