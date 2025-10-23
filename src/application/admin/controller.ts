@@ -54,6 +54,9 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10))); // Limita el límite entre 1 y 100
     const offset = (pageNum - 1) * limitNum;
 
+    // Verifica los valores de limitNum y offset
+    console.log("limitNum:", limitNum, "offset:", offset);  // Verificación de parámetros
+
     // Consulta para contar el total de usuarios
     const countQuery = `
       SELECT COUNT(*) AS total
