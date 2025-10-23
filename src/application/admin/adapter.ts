@@ -3,9 +3,9 @@ export const adapterUsers = (data: any) => {
   const result = data.map((item: any) => {
     return {
       id: item?.id,
-      name: item?.nombre,
+      name: item?.name,
       email: item?.email,
-      phone: item?.telefono,
+      phone: item?.phone,
       fecha_registro: item?.fecha_registro,
       trainer_id: item?.trainer_id || null,
       trainer_name: item?.trainer_name || null,
