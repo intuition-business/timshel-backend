@@ -25,19 +25,18 @@ const createUser = async (data: {
 const createAuth = async (data: {
   usuario_id: number;
   entrenador_id: number;
-  name: string;
   email: string;
   rol: string;
   telefono: string;
   id_apple: number;
   tipo_login: string;
+  name: string;
 }): Promise<any> => {
   try {
-    const { usuario_id, name, entrenador_id, email, rol = 'user', telefono, id_apple, tipo_login } =
-      data;
+    const { usuario_id, entrenador_id, email, rol = 'user', telefono, id_apple, tipo_login, name } = data;  // Incluir 'name' en destructuring
     const [result] = await pool.execute(
-      `INSERT INTO ${OTP_AUTH_TABLE} (usuario_id, entrenador_id, email, 	telefono,	id_apple,	tipo_login, rol) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [usuario_id, entrenador_id, email, telefono, id_apple, tipo_login, rol]
+      `INSERT INTO ${OTP_AUTH_TABLE} (usuario_id, entrenador_id, email, rol, telefono, id_apple, tipo_login, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,  // Agregar 'name' en columns y VALUES
+      [usuario_id, entrenador_id, email, rol, telefono, id_apple, tipo_login, name]
     );
     return result;
   } catch (error) {
