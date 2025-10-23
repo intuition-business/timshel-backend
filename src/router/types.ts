@@ -11,6 +11,7 @@ export interface PathProps {
   resetPassword: string;
   google: string;
   user: string;
+  admins: string;
   getRoutines: string;
   warmUps: string;
   profile: string;

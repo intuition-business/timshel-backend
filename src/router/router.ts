@@ -9,6 +9,7 @@ import { validateOTPRouter } from "../application/otp/validateOtp";
 import { GoogleRouter } from "../application/google";
 import { userRouter } from "../application/forms";
 import { routinesRouter } from "../application/routines";
+import { adminRouter } from "../application/admin";
 import { weightRouter } from "../application/weight";
 import { profileRouter } from "../application/profile";
 import { warmUpRouter } from "../application/warm-ups";
@@ -16,7 +17,7 @@ import { routineRouter } from "../application/routineDays";
 import { specialCaseRouter } from "../application/specialCase";
 import { exerciseRouter } from "../application/exercises";
 
-const { sendOtp, validateOtp, register, login, google, user, getRoutines, trainers, profile, routineDays, specialCases, routineExercises, weight, warmUps, plans } =
+const { sendOtp, validateOtp, register, login, google, user, getRoutines, trainers, admins, profile, routineDays, specialCases, routineExercises, weight, warmUps, plans } =
   path;
 
 const router = (app: Application) => {
@@ -26,6 +27,7 @@ const router = (app: Application) => {
   app.use(google, GoogleRouter);
   app.use(user, userRouter);
   app.use(trainers, trainerRouter);
+  app.use(admins, adminRouter);
   app.use(plans, planRouter);
 
   // app.use(validateData, validateData);
