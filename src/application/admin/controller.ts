@@ -83,14 +83,11 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
       WHERE auth.rol = 'user' -- Filtrar solo users
       ORDER BY auth.id ASC -- Ordenado del primero al último según auth
-      LIMIT ? OFFSET ?
+      LIMIT ${limitNum} OFFSET ${offset} -- Concatenamos los valores de LIMIT y OFFSET
     `;
 
-    // Asegura que LIMIT y OFFSET se pasan correctamente como parámetros
-    const params: [number, number] = [limitNum, offset]; // Usamos un array de números
-
-    // Ejecuta la consulta con los parámetros
-    const [rows] = await pool.execute(query, params);
+    // Ejecuta la consulta sin parámetros (LIMIT y OFFSET se concatenan directamente)
+    const [rows] = await pool.query(query);
 
     const userRows = rows as Array<{
       id: number;
