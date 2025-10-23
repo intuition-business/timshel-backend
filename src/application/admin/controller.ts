@@ -87,7 +87,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     `;
 
     // Asegura que LIMIT y OFFSET se pasan correctamente como parámetros
-    const params: any[] = [limitNum, offset];
+    const params: [number, number] = [limitNum, offset]; // Usamos un array de números
 
     // Ejecuta la consulta con los parámetros
     const [rows] = await pool.execute(query, params);
