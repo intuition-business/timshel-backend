@@ -71,7 +71,7 @@ router.post(
 
 // Ruta GET para obtener el entrenador y plan del usuario autenticado (desde token)
 router.get(
-  "/my-trainer",
+  "/user/my-trainer",
   verifyToken,
   asyncHandler(getUserTrainerAndPlan)
 );
