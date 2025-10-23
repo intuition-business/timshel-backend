@@ -16,16 +16,25 @@ interface User {
   trainer_name: string | null;
 }
 
+interface GetUsersResponse {
+  message: string;
+  error: boolean;
+  data: User[];
+  current_page: number;
+  total_users: number;
+  total_pages: number;
+}
+
 // Obtener lista de usuarios (para admin, con trainer info)
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
-  const { length, random, with_trainer } = req.query; // length como número, random como booleano, with_trainer para incluir trainer
+  const { page = 1, limit = 20, with_trainer } = req.query; // page y limit para paginación, default 1 y 20
 
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
   const adminId = (<any>(<unknown>decode)).userId; // Asume admin autenticado
 
-  const response = { message: "", error: false, data: [] as User[] };
+  const response: GetUsersResponse = { message: "", error: false, data: [], current_page: 0, total_users: 0, total_pages: 0 };
 
   try {
     // Validación con DTO para query params
@@ -36,6 +45,21 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
       return res.status(400).json(response);
     }
 
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 20;
+    const offset = (pageNum - 1) * limitNum;
+
+    // Consulta para contar total de usuarios (basado en auth, ya que quieres ordenar de acuerdo a auth)
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM auth
+      WHERE rol = 'user'  -- Asumiendo que solo users normales, ajusta si incluye otros
+    `;
+    const [countRows] = await pool.query(countQuery);
+    const totalUsers = (countRows as any)[0].total;
+    const totalPages = Math.ceil(totalUsers / limitNum);
+
+    // Consulta principal para usuarios, ordenados por auth.id ASC (del primero al último en auth)
     let query = `
       SELECT 
         u.id,
@@ -45,41 +69,18 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
         u.fecha_registro,
         e.id AS trainer_id,
         e.name AS trainer_name
-      FROM usuarios u
-      LEFT JOIN auth ON u.id = auth.usuario_id
-      LEFT JOIN asignaciones a ON u.id = a.usuario_id
+      FROM auth
+      LEFT JOIN usuarios u ON auth.usuario_id = u.id
+      LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
+      WHERE auth.rol = 'user'  -- Filtrar solo users
+      ORDER BY auth.id ASC  -- Ordenado del primero al último según auth
+      LIMIT ? OFFSET ?
     `;
-    const params: any[] = [];
-
-    // Si no hay params, trae todo ordenado por name ASC
-    if (!length && !random) {
-      query += " ORDER BY u.nombre ASC";
-    } else {
-      // Si length no se envía, trae todo
-      const limit = length ? parseInt(length as string, 10) : undefined;
-
-      if (random === "true") {
-        // Trae aleatoriamente (ORDER BY RAND())
-        query += " ORDER BY RAND()";
-        if (limit) {
-          query += " LIMIT ?";
-          params.push(String(limit));  // Convertir a string para evitar errores
-        }
-      } else {
-        // Si random=false o no, ordenado
-        query += " ORDER BY u.nombre ASC";
-        if (limit) {
-          query += " LIMIT ?";
-          params.push(String(limit));  // Convertir a string para evitar errores
-        }
-      }
-    }
+    const params: any[] = [limitNum, offset];
 
     // Ejecuta la query
-    const [rows] = params.length > 0
-      ? await pool.execute(query, params)
-      : await pool.query(query);
+    const [rows] = await pool.execute(query, params);
 
     const userRows = rows as Array<{
       id: number;
@@ -91,9 +92,16 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
       trainer_name: string | null;
     }>;
 
+    response.current_page = pageNum;
+    response.total_users = totalUsers;
+    response.total_pages = totalPages;
+
     if (userRows.length > 0) {
       response.data = adapterUsers(userRows);
       response.message = "Usuarios obtenidos exitosamente";
+      if (pageNum === 1 && userRows.length <= 20) {
+        response.message += " (Estás en la primera página)";
+      }
       return res.status(200).json(response);
     } else {
       response.error = true;
