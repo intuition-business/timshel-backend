@@ -24,20 +24,22 @@ interface GetUsersResponse {
   total_users: number;
   total_pages: number;
 }
-
-// Obtener lista de usuarios (para admin, con trainer info)
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   const { page = 1, limit = 20, with_trainer } = req.query; // page y limit para paginación, default 1 y 20
 
   const { headers } = req;
   const token = headers["x-access-token"];
-  const decode = token && verify(`${token}`, SECRET);
-  const adminId = (<any>(<unknown>decode)).userId; // Asume admin autenticado
+  let decode;
+  try {
+    decode = verify(`${token}`, SECRET);
+  } catch (err) {
+    return res.status(401).json({ message: 'Token inválido' });
+  }
 
+  const adminId = (decode as any).userId; // Asume admin autenticado
   const response: GetUsersResponse = { message: "", error: false, data: [], current_page: 0, total_users: 0, total_pages: 0 };
 
   try {
-    // Validación con DTO para query params
     const { error: dtoError } = getUsersListDto.validate(req.query);
     if (dtoError) {
       response.error = true;
@@ -45,21 +47,19 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
       return res.status(400).json(response);
     }
 
-    const pageNum = parseInt(page as string, 10) || 1;
-    const limitNum = parseInt(limit as string, 10) || 20;
+    const pageNum = Math.max(1, parseInt(page as string, 10));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10))); // Limita el límite entre 1 y 100
     const offset = (pageNum - 1) * limitNum;
 
-    // Consulta para contar total de usuarios (basado en auth, ya que quieres ordenar de acuerdo a auth)
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM auth
-      WHERE rol = 'user'  -- Asumiendo que solo users normales, ajusta si incluye otros
+      WHERE rol = 'user'
     `;
     const [countRows] = await pool.query(countQuery);
     const totalUsers = (countRows as any)[0].total;
     const totalPages = Math.ceil(totalUsers / limitNum);
 
-    // Consulta principal para usuarios, ordenados por auth.id ASC (del primero al último en auth)
     let query = `
       SELECT 
         u.id,
@@ -73,13 +73,12 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
       LEFT JOIN usuarios u ON auth.usuario_id = u.id
       LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
-      WHERE auth.rol = 'user'  -- Filtrar solo users
-      ORDER BY auth.id ASC  -- Ordenado del primero al último según auth
+      WHERE auth.rol = 'user'
+      ORDER BY auth.id ASC
       LIMIT ? OFFSET ?
     `;
     const params: any[] = [limitNum, offset];
 
-    // Ejecuta la query
     const [rows] = await pool.execute(query, params);
 
     const userRows = rows as Array<{
