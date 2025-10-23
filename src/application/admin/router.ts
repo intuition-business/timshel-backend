@@ -16,7 +16,7 @@ function asyncHandler(fn: any) {
 
 // Ruta GET para obtener usuarios (para admin, con trainer info opcional via query)
 router.get(
-  "/",
+  "/users",
   verifyToken,
   asyncHandler(getUsers)
 );
