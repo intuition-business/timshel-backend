@@ -17,6 +17,7 @@ class OtpService {
       const auth = await OtpModel.createAuth({
         ...data,
         usuario_id: user.insertId,
+        name: data.name || '',
         entrenador_id: 0,
         rol: 'user'
       });
