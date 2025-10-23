@@ -24,12 +24,11 @@ interface Trainer {
 
 // Interface para la data de respuesta
 interface UserTrainerPlan {
-  trainer_id: number;
   trainer_name: string;
-  plan_id: number;
   plan_title: string;
   inscription_date: string | null;
 }
+
 // Crear un entrenador
 export const createTrainer = async (req: Request, res: Response, next: NextFunction) => {
   const { name, email, phone, description, goal, rating, experience_years, certifications, image } = req.body;
@@ -297,6 +296,9 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+
+
+
 export const getUserTrainerAndPlan = async (req: Request, res: Response, next: NextFunction) => {
   const { headers } = req;
   const token = headers["x-access-token"];
@@ -325,9 +327,7 @@ export const getUserTrainerAndPlan = async (req: Request, res: Response, next: N
     // Consulta para obtener entrenador, plan y fecha de inscripción basada en el userId
     const query = `
       SELECT 
-        e.id AS trainer_id,
         e.name AS trainer_name,
-        p.id AS plan_id,
         p.title AS plan_title,
         a.fecha_asignacion AS inscription_date
       FROM asignaciones a
@@ -340,18 +340,14 @@ export const getUserTrainerAndPlan = async (req: Request, res: Response, next: N
     const [rows] = await pool.execute(query, [userId]);
 
     const resultRow = rows as Array<{
-      trainer_id: number;
       trainer_name: string;
-      plan_id: number;
       plan_title: string;
       inscription_date: Date;
     }>;
 
     if (resultRow.length > 0) {
       const data = {
-        trainer_id: resultRow[0].trainer_id,
         trainer_name: resultRow[0].trainer_name,
-        plan_id: resultRow[0].plan_id,
         plan_title: resultRow[0].plan_title,
         inscription_date: resultRow[0].inscription_date ? formatDateWithSlash(new Date(resultRow[0].inscription_date)) : null
       };
