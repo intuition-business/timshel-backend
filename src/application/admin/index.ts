@@ -1,4 +1,4 @@
-// index.ts for trainers
-import trainerRouter from "./router";
+// index.ts for users
+import adminRouter from "./router";
 
-export { trainerRouter };
+export { adminRouter };
