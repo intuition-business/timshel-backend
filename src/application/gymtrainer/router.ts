@@ -8,6 +8,7 @@ import {
   assignUser,
   getTrainerById,
   assignUserWithPlan,
+  getUserTrainerAndPlan,
 } from "./controller";  // Importamos los controladores de trainers
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 
@@ -68,6 +69,11 @@ router.post(
   asyncHandler(assignUserWithPlan)
 );
 
-
+// Ruta GET para obtener el entrenador y plan del usuario autenticado (desde token)
+router.get(
+  "/my-trainer",
+  verifyToken,
+  asyncHandler(getUserTrainerAndPlan)
+);
 
 export default router;

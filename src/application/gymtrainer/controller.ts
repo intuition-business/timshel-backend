@@ -21,6 +21,14 @@ interface Trainer {
   image: string;
 }
 
+
+// Interface para la data de respuesta
+interface UserTrainerPlan {
+  trainer_name: string;
+  plan_title: string;
+  inscription_date: string | null;
+}
+
 // Crear un entrenador
 export const createTrainer = async (req: Request, res: Response, next: NextFunction) => {
   const { name, email, phone, description, goal, rating, experience_years, certifications, image } = req.body;
@@ -288,6 +296,76 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+
+
+
+export const getUserTrainerAndPlan = async (req: Request, res: Response, next: NextFunction) => {
+  const { headers } = req;
+  const token = headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (<any>(<unknown>decode)).userId;
+
+  const response = { message: "", error: false, data: null as UserTrainerPlan | null };
+
+  // Función auxiliar para formatear fecha
+  const formatDateWithSlash = (date: Date): string => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  try {
+    // No se necesita DTO de validación ya que no hay params/body, pero si quieres agregar uno para futuro, hazlo aquí
+
+    if (!userId) {
+      response.error = true;
+      response.message = "No se pudo obtener el ID del usuario desde el token";
+      return res.status(401).json(response);
+    }
+
+    // Consulta para obtener entrenador, plan y fecha de inscripción basada en el userId
+    const query = `
+      SELECT 
+        e.name AS trainer_name,
+        p.title AS plan_title,
+        a.fecha_asignacion AS inscription_date
+      FROM asignaciones a
+      LEFT JOIN entrenadores e ON a.entrenador_id = e.id
+      LEFT JOIN planes p ON a.plan_id = p.id
+      WHERE a.usuario_id = ? AND a.status = 'active'
+      ORDER BY a.fecha_asignacion DESC
+      LIMIT 1  -- Asumimos el más reciente si hay múltiples, ajusta si necesitas todos
+    `;
+    const [rows] = await pool.execute(query, [userId]);
+
+    const resultRow = rows as Array<{
+      trainer_name: string;
+      plan_title: string;
+      inscription_date: Date;
+    }>;
+
+    if (resultRow.length > 0) {
+      const data = {
+        trainer_name: resultRow[0].trainer_name,
+        plan_title: resultRow[0].plan_title,
+        inscription_date: resultRow[0].inscription_date ? formatDateWithSlash(new Date(resultRow[0].inscription_date)) : null
+      };
+
+      response.data = data;
+      response.message = "Datos de entrenador y plan obtenidos exitosamente";
+      return res.status(200).json(response);
+    } else {
+      response.error = true;
+      response.message = "No se encontró entrenador o plan asignado para este usuario";
+      return res.status(404).json(response);
+    }
+  } catch (error) {
+    console.error("Error al obtener el entrenador y plan del usuario:", error);
+    next(error);
+    return res.status(500).json({ message: "Error al obtener el entrenador y plan del usuario." });
+  }
+};
 
 // Actualizar un entrenador (CORREGIDO)
 export const updateTrainer = async (req: Request, res: Response, next: NextFunction) => {
