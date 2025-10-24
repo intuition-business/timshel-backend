@@ -151,7 +151,7 @@ const removeOtp = async (auth_id: string) => {
   try {
     const [result] = await pool.execute(
       `
-       DELETE FROM ${OTP_AUTH_TABLE} where auth_id = ?
+       DELETE FROM ${OTP_VALIDATION_TABLE} WHERE auth_id = ?
       `,
       [auth_id] // Proporciona el email como parámetro
     );
