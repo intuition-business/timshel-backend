@@ -22,9 +22,9 @@ export const validateOtpSMS = async (
     const dataForValidate: any = await services.findByPhone(phone);
     if (!dataForValidate) {
     }
-    const { fecha_expiracion } = dataForValidate[0] || {};
+    const { fecha_expiracion, code, auth_id, rol } = dataForValidate[0] || {};
     if (Date.now() >= Number(fecha_expiracion)) {
-      const remove = await services.removeOtp(dataForValidate[0]?.auth_id);
+      const remove = await services.removeOtp(auth_id);
       if (remove) {
         response.message = "Tu codigo de verificacion ha expirado.";
         response.error = true;
@@ -33,7 +33,7 @@ export const validateOtpSMS = async (
       }
     }
 
-    if (otp !== dataForValidate[0]?.code) {
+    if (otp !== code) {
       response.message = "Tu codigo de verificacion no coincide.";
       response.error = true;
       response.status = 400;
@@ -42,8 +42,9 @@ export const validateOtpSMS = async (
     }
 
     const payload = {
-      userId: dataForValidate[0]?.auth_id,
+      userId: auth_id,
       phone,
+      role: rol || 'user',
     };
     //const expiresToken = { expiresIn: '1h' }
     const token = jwt.sign(payload, SECRET,);
