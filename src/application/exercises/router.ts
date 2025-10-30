@@ -5,7 +5,8 @@ import {
   getExercisesByCategory,
   updateExercise,
   deleteExercise,
-} from "./controller";  // Importamos los controladores de ejercicios
+  uploadExerciseMedia,
+} from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 
 const router = Router();
@@ -17,10 +18,11 @@ function asyncHandler(fn: any) {
   };
 }
 
-// Ruta POST para crear un ejercicio
+// Ruta POST para crear un ejercicio (con upload de video y thumbnail)
 router.post(
   "/create",
   verifyToken,  // Verificación de token
+  uploadExerciseMedia.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]),  // Middleware para manejar uploads
   asyncHandler(createExercise)  // Llama a la función del controlador
 );
 
@@ -38,10 +40,11 @@ router.get(
   asyncHandler(getExercisesByCategory)  // Llama al controlador para obtener ejercicios por categoría
 );
 
-// Ruta PUT para actualizar un ejercicio
+// Ruta PUT para actualizar un ejercicio (con upload de video y thumbnail)
 router.put(
   "/update",
   verifyToken,  // Verificación de token
+  uploadExerciseMedia.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]),  // Middleware para manejar uploads
   asyncHandler(updateExercise)  // Llama al controlador para actualizar el ejercicio
 );
 
