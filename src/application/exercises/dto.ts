@@ -52,7 +52,9 @@ export const getExerciseDto = Joi.object({
 export const updateExerciseDto = Joi.object({
   category,
   exercise,
-  new_category,
+  new_category: Joi.string().trim().optional().messages({
+    'string.base': 'La nueva categoría debe ser un string'
+  }),
   new_exercise,
   new_description,
   new_video_url,
