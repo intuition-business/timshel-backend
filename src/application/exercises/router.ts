@@ -40,17 +40,16 @@ router.get(
   asyncHandler(getExercisesByCategory)  // Llama al controlador para obtener ejercicios por categoría
 );
 
-// Ruta PATCH para actualizar un ejercicio (con upload de video y thumbnail)
+// Ruta PATCH para actualizar un ejercicio, incluyendo el ID
 router.patch(
-  "/update",
+  "/update/:id",  // Ahora la ruta espera un ID
   verifyToken,  // Verificación de token
   uploadExerciseMedia.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]),  // Middleware para manejar uploads
   asyncHandler(updateExercise)  // Llama al controlador para actualizar el ejercicio
 );
-
 // Ruta DELETE para eliminar un ejercicio
 router.delete(
-  "/delete",
+  "/delete/:id",  // Ahora la ruta espera un ID
   verifyToken,  // Verificación de token
   asyncHandler(deleteExercise)  // Llama al controlador para eliminar el ejercicio
 );
