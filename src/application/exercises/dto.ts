@@ -31,6 +31,15 @@ const new_thumbnail_url = Joi.string().trim().optional().messages({
   'string.base': 'La nueva URL de la miniatura debe ser un string'
 });
 
+// Add this near the top with other validations
+const exerciseId = Joi.number().integer().positive().required().messages({
+  'number.base': 'exerciseId debe ser un número',
+  'number.integer': 'exerciseId debe ser un entero',
+  'number.positive': 'exerciseId debe ser positivo',
+  'any.required': 'exerciseId es requerido'
+});
+
+
 export const createExerciseDto = Joi.object({
   category,
   exercise,
@@ -46,9 +55,11 @@ export const getExerciseDto = Joi.object({
   })
 });
 
+// Then update the export
 export const updateExerciseDto = Joi.object({
-  category,  // Cambiarlo de 'required' a 'optional'
-  exercise,
+  exerciseId,  // Add this
+  category,    // Already optional
+  exercise,    // Already optional (though not used in update logic—consider removing if unnecessary)
   new_category: Joi.string().trim().optional().messages({
     'string.base': 'La nueva categoría debe ser un string'
   }),
@@ -59,7 +70,6 @@ export const updateExerciseDto = Joi.object({
 }).or('new_category', 'new_exercise', 'new_description', 'new_video_url', 'new_thumbnail_url').messages({
   'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_category, new_exercise, new_description, new_video_url o new_thumbnail_url'
 });
-
 
 export const deleteExerciseDto = Joi.object({
   category,
