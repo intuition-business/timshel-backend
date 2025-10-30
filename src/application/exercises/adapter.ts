@@ -6,7 +6,8 @@ export const adapterExercises = (data: any) => {
       exercise: item?.exercise,
       description: item?.description,
       video_url: item?.video_url,
-      thumbnail_url: item?.thumbnail_url
+      thumbnail_url: item?.thumbnail_url,
+      at_home: item?.at_home
     };
   });
   return result;
