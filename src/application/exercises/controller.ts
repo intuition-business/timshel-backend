@@ -145,7 +145,8 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
 
 // Update con uploads integrados (sobrescribe si se suben nuevos archivos)
 export const updateExercise = async (req: Request, res: Response, next: NextFunction) => {
-  const { exerciseId, new_category, new_exercise, new_description } = req.body; // Campos de texto
+  const exerciseId = req.params.id; // De la ruta, ej: /api/exercises/59
+  const { new_category, new_exercise, new_description, new_video_url: bodyVideoUrl, new_thumbnail_url: bodyThumbnailUrl } = req.body; // Campos de texto opcionales
   const files = req.files as { [fieldname: string]: Express.MulterS3.File[] } | undefined;
 
   const response = { message: "", error: false };
@@ -156,7 +157,7 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
 
-    // Validación DTO
+    // Validación DTO (todo opcional ahora)
     const { error: dtoError } = updateExerciseDto.validate(req.body);
     if (dtoError) {
       response.error = true;
@@ -164,22 +165,24 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
       return res.status(400).json(response);
     }
 
-    if (!exerciseId) {
+    // Validación manual para exerciseId
+    if (!exerciseId || isNaN(Number(exerciseId))) {
       response.error = true;
-      response.message = "Falta exerciseId.";
+      response.message = "exerciseId inválido o faltante en la ruta.";
       return res.status(400).json(response);
     }
 
-    // Obtener actuales para eliminar viejos si se suben nuevos
+    // Obtener actuales para eliminar viejos si se suben nuevos o se proporcionan URLs en body
     const [current] = await pool.execute(
       "SELECT video_url, thumbnail_url FROM exercises WHERE id = ?",
       [exerciseId]
     );
     const currentData = (current as any[])[0] || {};
 
-    // URLs nuevas de S3
+    // URLs nuevas: prioriza files, luego body (si soportas URLs en body)
     let new_video_url = undefined; // undefined significa no cambiar
     let new_thumbnail_url = undefined;
+
     if (files && files['video'] && files['video'][0]) {
       new_video_url = files['video'][0].location;
       // Eliminar viejo de S3 si existe
@@ -187,13 +190,18 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
         const oldKey = currentData.video_url.split('/').slice(3).join('/');
         await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME!, Key: oldKey }));
       }
+    } else if (bodyVideoUrl) {
+      new_video_url = bodyVideoUrl; // Usa URL de body si no hay file
     }
+
     if (files && files['thumbnail'] && files['thumbnail'][0]) {
       new_thumbnail_url = files['thumbnail'][0].location;
       if (currentData.thumbnail_url) {
         const oldKey = currentData.thumbnail_url.split('/').slice(3).join('/');
         await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME!, Key: oldKey }));
       }
+    } else if (bodyThumbnailUrl) {
+      new_thumbnail_url = bodyThumbnailUrl; // Usa URL de body si no hay file
     }
 
     // Construir update
@@ -221,9 +229,10 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
       updateValues.push(new_thumbnail_url);
     }
 
+    // Verifica si hay al menos un cambio (incluyendo files o body URLs)
     if (updateFields.length === 0) {
       response.error = true;
-      response.message = "No hay cambios.";
+      response.message = "No hay cambios para actualizar.";
       return res.status(400).json(response);
     }
 
