@@ -5,6 +5,8 @@ export const adapterExercises = (data: any) => {
       category: item?.category,
       exercise: item?.exercise,
       description: item?.description,
+      video_url: item?.video_url,
+      thumbnail_url: item?.thumbnail_url
     };
   });
   return result;

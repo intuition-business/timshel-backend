@@ -21,4 +21,5 @@ export const Path: PathProps = {
   weight: "/api/weight",
   routineExercises: "/api/routine-exercises",
   profile: "/api/profile",
+  exercises: "/api/exercises",
 };
