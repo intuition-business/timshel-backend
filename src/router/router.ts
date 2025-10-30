@@ -17,7 +17,7 @@ import { routineRouter } from "../application/routineDays";
 import { specialCaseRouter } from "../application/specialCase";
 import { exerciseRouter } from "../application/exercises";
 
-const { sendOtp, validateOtp, register, login, google, user, getRoutines, trainers, admins, profile, routineDays, specialCases, routineExercises, weight, warmUps, plans } =
+const { sendOtp, validateOtp, register, login, google, user, getRoutines, trainers, admins, profile, routineDays, specialCases, routineExercises, weight, warmUps, plans, exercises } =
   path;
 
 const router = (app: Application) => {
@@ -29,6 +29,7 @@ const router = (app: Application) => {
   app.use(trainers, trainerRouter);
   app.use(admins, adminRouter);
   app.use(plans, planRouter);
+  app.use(exercises, exerciseRouter);
 
   // app.use(validateData, validateData);
   app.use(validateOtp, validateOTPRouter);

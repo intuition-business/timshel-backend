@@ -19,4 +19,5 @@ export interface PathProps {
   weight: string;
   specialCases: string;
   routineExercises: string;
+  exercises: string;
 }
