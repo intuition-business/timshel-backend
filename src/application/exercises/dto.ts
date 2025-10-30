@@ -30,6 +30,13 @@ const new_video_url = Joi.string().trim().optional().messages({
 const new_thumbnail_url = Joi.string().trim().optional().messages({
   'string.base': 'La nueva URL de la miniatura debe ser un string'
 });
+const at_home = Joi.boolean().optional().allow(null).messages({
+  'boolean.base': 'at_home debe ser un booleano o null'
+});
+
+const new_at_home = Joi.boolean().optional().allow(null).messages({
+  'boolean.base': 'new_at_home debe ser un booleano o null'
+});
 
 // Add this near the top with other validations
 const exerciseId = Joi.number().integer().positive().required().messages({
@@ -44,6 +51,7 @@ export const createExerciseDto = Joi.object({
   category,
   exercise,
   description,
+  at_home,
   video_url: new_video_url,
   thumbnail_url: new_thumbnail_url
 });
@@ -71,6 +79,9 @@ export const updateExerciseDto = Joi.object({
   }),
   new_thumbnail_url: Joi.string().trim().optional().messages({
     'string.base': 'La nueva URL de la miniatura debe ser un string'
+  }),
+  new_at_home: Joi.boolean().optional().allow(null).messages({
+    'boolean.base': 'new_at_home debe ser un booleano o null'
   })
 });
 

@@ -56,11 +56,12 @@ interface Exercise {
   description: string;
   video_url?: string;
   thumbnail_url?: string;
+  at_home?: boolean;
 }
 
 // Create con uploads integrados
 export const createExercise = async (req: Request, res: Response, next: NextFunction) => {
-  const { category, exercise, description } = req.body; // Campos de texto
+  const { category, exercise, description, at_home } = req.body; // Campos de texto
   const files = req.files as { [fieldname: string]: Express.MulterS3.File[] } | undefined;
 
   const response = { message: "", error: false };
@@ -110,6 +111,12 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
     let query = "INSERT INTO exercises (category, exercise, description";
     const values: any[] = [category.toUpperCase(), exercise, description];
 
+    let at_home_value = null;
+    if (at_home !== undefined && at_home !== null) {
+      at_home_value = at_home ? 1 : 0;
+      query += ", at_home";
+      values.push(at_home_value);
+    }
     if (video_url) {
       query += ", video_url";
       values.push(video_url);
@@ -120,6 +127,7 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
     }
 
     query += ") VALUES (?, ?, ?";
+    if (at_home_value !== null) query += ", ?";
     if (video_url) query += ", ?";
     if (thumbnail_url) query += ", ?";
     query += ")";
@@ -127,9 +135,18 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
     const [result]: any = await pool.query(query, values);
 
     if (result) {
+      // Consulta el ejercicio creado para obtener todos los campos, incluyendo at_home
+      const [newExercise]: any = await pool.execute(
+        "SELECT id, category, exercise, description, at_home, video_url, thumbnail_url FROM exercises WHERE id = ?",
+        [result.insertId]
+      );
+      const createdExercise = newExercise[0] || {};
+      // Mapea at_home a boolean o null
+      createdExercise.at_home = createdExercise.at_home === null ? null : Boolean(createdExercise.at_home);
+
       response.message = "Ejercicio creado exitosamente";
       return res.status(201).json({
-        exercise: { id: result.insertId, category: category.toUpperCase(), exercise, description, video_url, thumbnail_url },
+        exercise: createdExercise,
       });
     } else {
       response.error = true;
@@ -146,7 +163,7 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
 // Update con uploads integrados (sobrescribe si se suben nuevos archivos)
 export const updateExercise = async (req: Request, res: Response, next: NextFunction) => {
   const exerciseId = req.params.id; // De la ruta, ej: /api/exercises/59
-  const { new_category, new_exercise, new_description, new_video_url: bodyVideoUrl, new_thumbnail_url: bodyThumbnailUrl } = req.body; // Campos de texto opcionales
+  const { new_category, new_exercise, new_description, new_at_home, new_video_url: bodyVideoUrl, new_thumbnail_url: bodyThumbnailUrl } = req.body; // Campos de texto opcionales
   const files = req.files as { [fieldname: string]: Express.MulterS3.File[] } | undefined;
 
   const response = { message: "", error: false };
@@ -220,6 +237,10 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
       updateFields.push("exercise = ?");
       updateValues.push(new_exercise);
     }
+    if (new_at_home !== undefined) {
+      updateFields.push("at_home = ?");
+      updateValues.push(new_at_home === null ? null : (new_at_home ? 1 : 0)); // Maneja null o 1/0
+    }
     if (new_video_url !== undefined) {
       updateFields.push("video_url = ?");
       updateValues.push(new_video_url);
@@ -256,8 +277,6 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-
-
 export const getAllExercises = async (req: Request, res: Response, next: NextFunction) => {
   const { headers } = req;
   const token = headers["x-access-token"];
@@ -286,6 +305,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
       description: string;
       video_url?: string;
       thumbnail_url?: string;
+      at_home?: boolean;
     }>;
 
     if (exerciseRows.length > 0) {

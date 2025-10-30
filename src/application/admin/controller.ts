@@ -4,6 +4,8 @@ import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import { adapterUsers } from "./adapter"; // Importa el adaptador para users
 import { getUsersListDto } from "./dto"; // Importa el DTO para list
+import { getExerciseDto } from "../exercises/dto";
+import { adapterExercises } from "../exercises/adapter";
 
 interface User {
   id: number;
@@ -15,6 +17,16 @@ interface User {
   trainer_name: string | null;
 }
 
+interface Exercise {
+  id: number;
+  category: string;
+  exercise: string;
+  description: string;
+  video_url?: string;
+  thumbnail_url?: string;
+  at_home?: boolean;
+}
+
 interface GetUsersResponse {
   message: string;
   error: boolean;
@@ -24,119 +36,114 @@ interface GetUsersResponse {
   total_pages: number;
 }
 
-// Obtener lista de usuarios (para admin, con trainer info)
-export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
-  const { page = 1, limit = 20, name = "" } = req.query; // page y limit para paginación, name para búsqueda
+export const getAllExercises = async (req: Request, res: Response, next: NextFunction) => {
+  const { page, limit } = req.query; // page y limit opcionales para paginación
   const { headers } = req;
   const token = headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (<any>(<unknown>decode)).userId; // Mantenemos auth
 
-  let decode;
+  // Response con paginación (o sin si no se pasa params)
+  const response = {
+    message: "",
+    error: false,
+    data: [] as Exercise[],
+    current_page: 0,
+    total_exercises: 0,
+    total_pages: 0
+  };
+
   try {
-    decode = verify(`${token}`, SECRET);
-  } catch (err) {
-    return res.status(401).json({ message: 'Token inválido' });
-  }
-  const adminId = (decode as any).userId; // Asume admin autenticado
-
-  const response: GetUsersResponse = { message: "", error: false, data: [], current_page: 0, total_users: 0, total_pages: 0 };
-
-  try {
-    // Validación con DTO para query params
-    const { error: dtoError } = getUsersListDto.validate(req.query);
+    // Validación con DTO si aplica (por ejemplo, para query params si hay filtros)
+    const { error: dtoError } = getExerciseDto.validate(req.query);
     if (dtoError) {
       response.error = true;
       response.message = dtoError.details[0].message;
       return res.status(400).json(response);
     }
 
-    // Paginación: Asegura que `page` y `limit` son valores válidos
-    const pageNum = Math.max(1, parseInt(page as string, 10));
-    const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10))); // Limita el límite entre 1 y 100
-    const offset = (pageNum - 1) * limitNum;
+    // Determina si paginar o traer todo
+    const shouldPaginate = page !== undefined || limit !== undefined;
+    let pageNum: number | null = null;
+    let limitNum: number | null = null;
+    let offset = 0;
 
-    // Verifica los valores de limitNum y offset
-    console.log("limitNum:", limitNum, "offset:", offset);  // Verificación de parámetros
-
-    // Consulta para contar el total de usuarios, considerando el filtro por nombre
-    let countQuery = `
-      SELECT COUNT(*) AS total
-      FROM auth
-      LEFT JOIN usuarios u ON auth.usuario_id = u.id
-      WHERE auth.rol = 'user' -- Filtrar solo users
-    `;
-
-    // Si se pasa un nombre, agregar el filtro a la consulta
-    if (name) {
-      countQuery += ` AND u.nombre LIKE ?`;
+    if (shouldPaginate) {
+      pageNum = Math.max(1, parseInt(page as string, 10));
+      limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10))); // Limita el límite entre 1 y 100
+      offset = (pageNum - 1) * limitNum;
     }
 
-    const countParams = name ? [`%${name}%`] : [];
-    const [countRows] = await pool.query(countQuery, countParams);
-    const totalUsers = (countRows as any)[0].total;
-    const totalPages = Math.ceil(totalUsers / limitNum);
+    // Consulta para contar el total de ejercicios
+    const [countRows] = await pool.execute(
+      "SELECT COUNT(*) AS total FROM exercises"
+    );
+    const totalExercises = (countRows as any)[0].total;
 
-    // Consulta principal para usuarios, ordenados por auth.id ASC, considerando el filtro por nombre
-    let query = `
-      SELECT 
-        u.id,
-        u.nombre AS name,
-        auth.email,
-        auth.telefono AS phone,
-        u.fecha_registro,
-        e.id AS trainer_id,
-        e.name AS trainer_name
-      FROM auth
-      LEFT JOIN usuarios u ON auth.usuario_id = u.id
-      LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
-      LEFT JOIN entrenadores e ON a.entrenador_id = e.id
-      WHERE auth.rol = 'user' -- Filtrar solo users
-    `;
+    let exerciseRows: any[] = [];
 
-    // Si se pasa un nombre, agregar el filtro a la consulta
-    if (name) {
-      query += ` AND u.nombre LIKE ?`;
+    if (shouldPaginate) {
+      const totalPages = Math.ceil(totalExercises / limitNum!);
+
+      // Consulta paginada
+      const [rows] = await pool.execute(
+        "SELECT id, category, exercise, description, video_url, thumbnail_url, at_home FROM exercises ORDER BY id ASC LIMIT ? OFFSET ?",
+        [limitNum, offset]
+      );
+
+      exerciseRows = rows as Array<{
+        id: number;
+        category: string;
+        exercise: string;
+        description: string;
+        video_url?: string;
+        thumbnail_url?: string;
+        at_home?: number | null;  // De DB, mapea en adapter
+      }>;
+
+      response.current_page = pageNum!;
+      response.total_exercises = totalExercises;
+      response.total_pages = totalPages;
+    } else {
+      // Traer todos sin paginación
+      const [rows] = await pool.execute(
+        "SELECT id, category, exercise, description, video_url, thumbnail_url, at_home FROM exercises ORDER BY id ASC"
+      );
+
+      exerciseRows = rows as Array<{
+        id: number;
+        category: string;
+        exercise: string;
+        description: string;
+        video_url?: string;
+        thumbnail_url?: string;
+        at_home?: number | null;  // De DB, mapea en adapter
+      }>;
+
+      response.current_page = 1;
+      response.total_exercises = totalExercises;
+      response.total_pages = 1;
     }
-
-    query += `
-      ORDER BY auth.id ASC -- Ordenado del primero al último según auth
-      LIMIT ${limitNum} OFFSET ${offset}
-    `;
-
-    const params = name ? [`%${name}%`] : [];
-    const [rows] = await pool.query(query, params);
-
-    const userRows = rows as Array<{
-      id: number;
-      name: string;
-      email: string;
-      phone: string;
-      fecha_registro: Date;
-      trainer_id: number | null;
-      trainer_name: string | null;
-    }>;
-
-    response.current_page = pageNum;
-    response.total_users = totalUsers;
-    response.total_pages = totalPages;
 
     // Enviar respuesta si hay datos
-    if (userRows.length > 0) {
-      response.data = adapterUsers(userRows);
-      response.message = "Usuarios obtenidos exitosamente";
-      if (pageNum === 1 && userRows.length <= 20) {
+    if (exerciseRows.length > 0) {
+      response.data = adapterExercises(exerciseRows);
+      response.message = "Ejercicios obtenidos exitosamente";
+      if (!shouldPaginate) {
+        response.message += " (Todos los ejercicios sin paginación)";
+      } else if (pageNum === 1 && exerciseRows.length <= 20) {
         response.message += " (Estás en la primera página)";
       }
-      return res.status(200).json(response); // Asegúrate de que se envíe solo una vez
+      return res.status(200).json(response);
     } else {
       // Si no hay datos
       response.error = true;
-      response.message = "No se encontraron usuarios";
-      return res.status(404).json(response); // Asegúrate de que se envíe solo una vez
+      response.message = "No se encontraron ejercicios";
+      return res.status(404).json(response);
     }
   } catch (error) {
-    // Manejo de errores
-    console.error("Error al obtener los usuarios:", error);
+    console.error("Error al obtener los ejercicios:", error);
     next(error);
-    return res.status(500).json({ message: "Error al obtener los usuarios." }); // Asegúrate de que no se envíe otra respuesta
+    return res.status(500).json({ message: "Error al obtener los ejercicios." });
   }
 };
