@@ -1,24 +1,21 @@
 import Joi from "joi";
 
 // Definición de validaciones para category, exercise y description
-const category = Joi.string().trim().required().messages({
+const category = Joi.string().trim().optional().messages({
   'string.base': 'La categoría debe ser un string',
   'any.required': 'La categoría es requerida'
 });
 
-const exercise = Joi.string().trim().required().messages({
+const exercise = Joi.string().trim().optional().messages({
   'string.base': 'El ejercicio debe ser un string',
   'any.required': 'El ejercicio es requerido'
 });
 
-const description = Joi.string().trim().required().messages({
+const description = Joi.string().trim().optional().messages({
   'string.base': 'La descripción debe ser un string',
   'any.required': 'La descripción es requerida'
 });
 
-const new_category = Joi.string().trim().optional().messages({
-  'string.base': 'La nueva categoría debe ser un string'
-});
 
 const new_exercise = Joi.string().trim().optional().messages({
   'string.base': 'El nuevo ejercicio debe ser un string'
@@ -50,7 +47,7 @@ export const getExerciseDto = Joi.object({
 });
 
 export const updateExerciseDto = Joi.object({
-  category,
+  category,  // Cambiarlo de 'required' a 'optional'
   exercise,
   new_category: Joi.string().trim().optional().messages({
     'string.base': 'La nueva categoría debe ser un string'
@@ -62,6 +59,7 @@ export const updateExerciseDto = Joi.object({
 }).or('new_category', 'new_exercise', 'new_description', 'new_video_url', 'new_thumbnail_url').messages({
   'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_category, new_exercise, new_description, new_video_url o new_thumbnail_url'
 });
+
 
 export const deleteExerciseDto = Joi.object({
   category,
