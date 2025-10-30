@@ -40,8 +40,8 @@ router.get(
   asyncHandler(getExercisesByCategory)  // Llama al controlador para obtener ejercicios por categoría
 );
 
-// Ruta PUT para actualizar un ejercicio (con upload de video y thumbnail)
-router.put(
+// Ruta PATCH para actualizar un ejercicio (con upload de video y thumbnail)
+router.patch(
   "/update",
   verifyToken,  // Verificación de token
   uploadExerciseMedia.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]),  // Middleware para manejar uploads
