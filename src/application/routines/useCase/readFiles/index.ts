@@ -24,21 +24,26 @@ export const readFiles = async (personData: any, daysData: any) => {
 
   // En lugar de leer el CSV, consultamos la base de datos
   const [rows] = await pool.execute(
-    "SELECT category, exercise, description FROM exercises ORDER BY category ASC, exercise ASC"
+    "SELECT category, exercise, description, video_url, thumbnail_url FROM exercises ORDER BY category ASC, exercise ASC"
   );
 
   const exerciseRows = rows as Array<{
     category: string;
     exercise: string;
     description: string;
+    video_url: string | null;
+    thumbnail_url: string | null;
   }>;
 
   // Formateamos los datos como un string CSV similar al original
-  let ejerciciosCsv = "Categoria;Ejercicio;Descripción\n";
+  let ejerciciosCsv = "Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL\n";
   exerciseRows.forEach((row) => {
-    // Escapamos comillas y manejamos saltos de línea si es necesario
+    // Escapamos comillas y manejamos saltos de línea si es necesario en la descripción
     const desc = row.description.replace(/"/g, '""').replace(/\n/g, ' ');
-    ejerciciosCsv += `${row.category};${row.exercise};"${desc}"\n`;
+    // Manejo de null en video_url y thumbnail_url
+    const videoUrl = row.video_url ?? '';
+    const thumbnailUrl = row.thumbnail_url ?? '';
+    ejerciciosCsv += `${row.category};${row.exercise};"${desc}";${videoUrl};${thumbnailUrl}\n`;
   });
 
   // Generamos el prompt con los datos de la persona y los días
