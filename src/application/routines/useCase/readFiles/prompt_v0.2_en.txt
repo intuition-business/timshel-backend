@@ -33,7 +33,11 @@ Please ensure that every date listed gets a unique training routine.
 The training days provided are as follows:
 [###DIAS###]
 Your task is to assign exercises, sets, and repetitions that match the user's profile for each specific date in the list.
-Next, I will give you the list of exercises you may suggest (in CSV format, semicolon-delimited):
+Next, I will give you the list of exercises you may suggest (in CSV format, semicolon-delimited). 
+The columns are: Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL
+Note: 
+- Video_URL and Thumbnail_URL may be empty strings if no media is available.
+- You MUST include `video_url` and `thumbnail_url` in the output JSON for each exercise, even if they are empty strings.
 ###EJERCICIOS###
 To structure the routines across multiple weeks (assuming up to 4 weeks based on the dates provided), assign categories consistently by day of the week: For each day of the week (e.g., all Mondays), use the same muscle category (e.g., "PECHO" for Mondays), but select different exercises from that category for each subsequent week. Repeat this pattern for other days (e.g., Tuesdays always "ESPALDA" with varying exercises per week). Vary the exercises within the category to keep routines unique per date, while maintaining the category consistency per day of the week.
 Please generate a weekly training plan in JSON format with the following structure:
@@ -48,12 +52,14 @@ It should be a list where each item corresponds to a training day, based on the 
         "ejercicios": [
             {
                 "nombre_ejercicio": "As per the exercise list",
+                "video_url": "URL of the instructional video (or empty string if not available)",
+                "thumbnail_url": "URL of the thumbnail image (or empty string if not available)",
                 "Esquema": {
-                    "Descanso": "Rest time in minutes",
-                    "Series": "Number of sets",
+                    "Descanso": "Rest time in minutes (e.g., 1.5)",
+                    "Series": "Number of sets (must be > 3)",
                     "Detalle series": [
                         {
-                            "Reps": "Number of repetitions"
+                            "Reps": "Number of repetitions (vary across sets, e.g., 12, 10, 8)"
                         }
                     ]
                 }
