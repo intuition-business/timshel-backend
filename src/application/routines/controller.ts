@@ -182,6 +182,7 @@ export const getGeneratedRoutinesIa = async (
     });
   }
 };
+
 export const generateRoutinesIa = async (
   req: Request,
   res: Response,
@@ -749,7 +750,7 @@ export const routinesSaved = async (
 
     const { fecha_rutina, rutina } = body;
 
-    const formattedFecha = convertDate(fecha_rutina);
+    const formattedFecha = convertDate(fecha_rutina as string);
 
     const { routine_name, exercises } = rutina;
 
@@ -788,27 +789,16 @@ export const routinesSaved = async (
     try {
       await connection.beginTransaction();
 
-      const [rows]: any = await connection.execute(
-        "SELECT id, status FROM user_routine WHERE date = ? AND status = 'pending'",
-        [formattedFecha]
+      // Actualizar el estado de la rutina a 'completed' directamente
+      const [updateResult]: any = await connection.execute(
+        "UPDATE user_routine SET status = ? WHERE user_id = ? AND date = ?",
+        ['completed', userId, formattedFecha]
       );
 
-      if (rows.length > 0) {
-        const { id } = rows[0];
-
-        // Actualizar el estado de la rutina a 'approved'
-        const [updateResult]: any = await connection.execute(
-          "UPDATE user_routine SET status = ? WHERE id = ?",
-          ['completed', id]
-        );
-
-        if (updateResult.affectedRows > 0) {
-          console.log(`Estado de la rutina para la fecha ${formattedFecha} actualizado a 'approved'.`);
-        } else {
-          console.error(`No se pudo actualizar el estado de la rutina para la fecha ${formattedFecha}`);
-        }
+      if (updateResult.affectedRows > 0) {
+        console.log(`Estado de la rutina para la fecha ${formattedFecha} actualizado a 'completed'.`);
       } else {
-        console.log(`No se encontró una rutina pendiente para la fecha ${formattedFecha}`);
+        console.log(`No se encontró una rutina para actualizar en la fecha ${formattedFecha}`);
       }
 
       for (const exercise of validExercises) {
