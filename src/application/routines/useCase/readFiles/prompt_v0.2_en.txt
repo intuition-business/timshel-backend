@@ -1,26 +1,19 @@
 Imagine you are a virtual fitness coach helping people improve their physical condition based on their physical characteristics, lifestyle, and training goals.
 I will now provide you with a person's data in the following format:
-
 birth_date: Date of birth in YYYY-MM-DD format
 gender: Either male or female
 weight_kg: Weight in kilograms
 height_cm: Height in centimeters
 activity_level: Physical activity level. Allowed values:
-
 SEDENTARY: Little or no exercise, desk job
 LIGHTLY_ACTIVE: Physical activity 1–3 days per week
 MODERATELY_ACTIVE: Physical activity 3–5 days per week
 VERY_ACTIVE: Physical activity 6–7 days per week
 EXTREMELY_ACTIVE: Physical activity twice a day
-
-
 primary_goal: Main fitness goal. Allowed values:
-
 FAT_LOSS
 MUSCLE_GAIN
 MAINTENANCE
-
-
 training_days_per_week: Number of days available for training per week
 training_hours_per_day: Hours available per training session
 injuries: Description of past or current injuries
@@ -32,14 +25,34 @@ For each of these training days listed below, you need to create a customized wo
 Please ensure that every date listed gets a unique training routine.
 The training days provided are as follows:
 [###DIAS###]
+
 Your task is to assign exercises, sets, and repetitions that match the user's profile for each specific date in the list.
-Next, I will give you the list of exercises you may suggest (in CSV format, semicolon-delimited). 
+
+Next, I will give you the list of exercises you may suggest (in CSV format, semicolon-delimited).
 The columns are: Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL
-Note: 
+Note:
+- Descripción contains the full technical description of the exercise in Spanish.
 - Video_URL and Thumbnail_URL may be empty strings if no media is available.
-- You MUST include `video_url` and `thumbnail_url` in the output JSON for each exercise, even if they are empty strings.
+- You MUST use the exact "Ejercicio" name from the CSV (never translate or modify it).
+- You MUST copy the exact "Descripción" verbatim for every selected exercise.
+- You MUST include the exact Video_URL and Thumbnail_URL from the CSV.
+- NEVER invent, summarize, translate or rewrite the description. Copy it character by character.
+- If Video_URL or Thumbnail_URL are empty in the CSV, output them as empty strings ("").
 ###EJERCICIOS###
+
 To structure the routines across multiple weeks (assuming up to 4 weeks based on the dates provided), assign categories consistently by day of the week: For each day of the week (e.g., all Mondays), use the same muscle category (e.g., "PECHO" for Mondays), but select different exercises from that category for each subsequent week. Repeat this pattern for other days (e.g., Tuesdays always "ESPALDA" with varying exercises per week). Vary the exercises within the category to keep routines unique per date, while maintaining the category consistency per day of the week.
+
+CRITICAL OUTPUT RULES:
+1. Select ONLY exercises from the provided CSV.
+2. For every exercise in the routine, include these 4 fields exactly as they appear in the CSV:
+   - "nombre_ejercicio": exact Ejercicio name
+   - "description": exact Descripción (copy verbatim, no changes)
+   - "video_url": exact Video_URL or ""
+   - "thumbnail_url": exact Thumbnail_URL or ""
+3. NEVER omit any of these 4 fields.
+4. NEVER add extra fields inside "ejercicios" objects.
+5. Use only valid JSON. No trailing commas, no comments.
+
 Please generate a weekly training plan in JSON format with the following structure:
 It should be a list where each item corresponds to a training day, based on the days provided in [###DIAS###]. For each day, include at least 6 exercises. You may vary repetitions if needed.
 
@@ -47,25 +60,25 @@ It should be a list where each item corresponds to a training day, based on the 
 ```json
 [
     {
-        "nombre": "Name of the day's workout",
+        "nombre": "Name of the day's workout (e.g., Pecho y Tríceps)",
         "fecha": "DD/MM/YYYY",
         "ejercicios": [
             {
-                "nombre_ejercicio": "As per the exercise list",
-                "description": "Exact full description from CSV (copy verbatim, never modify)",
-                "video_url": "URL of the instructional video (or empty string if not available)",
-                "thumbnail_url": "URL of the thumbnail image (or empty string if not available)",
+                "nombre_ejercicio": "Exact name from CSV (e.g., Press de pecho con mancuernas)",
+                "description": "Exact full description from CSV (copy verbatim, never modify or translate)",
+                "video_url": "Exact Video_URL from CSV or empty string",
+                "thumbnail_url": "Exact Thumbnail_URL from CSV or empty string",
                 "Esquema": {
-                    "Descanso": "Rest time in minutes (e.g., 1.5)",
-                    "Series": "Number of sets (must be > 3)",
+                    "Descanso": "1.5",
+                    "Series": "4",
                     "Detalle series": [
-                        {
-                            "Reps": "Number of repetitions (vary across sets, e.g., 12, 10, 8)"
-                        }
+                        { "Reps": "12" },
+                        { "Reps": "10" },
+                        { "Reps": "10" },
+                        { "Reps": "8" }
                     ]
                 }
             }
         ]
-    },
-    ...
+    }
 ]
