@@ -52,6 +52,7 @@ It should be a list where each item corresponds to a training day, based on the 
         "ejercicios": [
             {
                 "nombre_ejercicio": "As per the exercise list",
+                "description": "Exact full description from CSV (copy verbatim, never modify)",
                 "video_url": "URL of the instructional video (or empty string if not available)",
                 "thumbnail_url": "URL of the thumbnail image (or empty string if not available)",
                 "Esquema": {
