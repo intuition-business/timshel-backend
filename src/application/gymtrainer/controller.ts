@@ -122,29 +122,59 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
 
     let query = `
       SELECT 
-        id, 
-        name, 
-        email, 
-        phone, 
-        description, 
-        goal, 
-        rating, 
-        experience_years, 
-        certifications, 
-        image, 
-        created_at
-      FROM entrenadores
+        e.id, 
+        e.name, 
+        e.email, 
+        e.phone, 
+        e.description, 
+        e.goal, 
+        e.rating, 
+        e.experience_years, 
+        e.certifications, 
+        e.image, 
+        e.created_at,
+        COUNT(DISTINCT a.usuario_id) AS user_count,
+        IFNULL(
+          JSON_ARRAYAGG(
+            JSON_OBJECT(
+              'id', u.id,
+              'name', u.name
+            )
+          ),
+          JSON_ARRAY()
+        ) AS assigned_users
+      FROM entrenadores e
+      LEFT JOIN asignaciones a ON a.entrenador_id = e.id
+      LEFT JOIN usuarios u ON u.id = a.usuario_id
     `;
     const params: any[] = [];
 
     // Si se proporciona name, agregar filtro LIKE para búsqueda por letra
     if (name) {
-      query += " WHERE name LIKE ?";
+      query += " WHERE e.name LIKE ?";
       params.push(`%${name}%`); // Búsqueda insensible a mayúsculas/minúsculas
+    } else {
+      query += " WHERE 1=1"; // Placeholder para GROUP BY si no hay WHERE
     }
 
+    // Agrupar por los campos del entrenador
+    query += `
+      GROUP BY 
+        e.id, 
+        e.name, 
+        e.email, 
+        e.phone, 
+        e.description, 
+        e.goal, 
+        e.rating, 
+        e.experience_years, 
+        e.certifications, 
+        e.image, 
+        e.created_at
+    `;
+
     // Ordenar por nombre de forma ascendente por defecto
-    query += " ORDER BY name ASC";
+    query += " ORDER BY e.name ASC";
 
     // Ejecutar la consulta
     const [rows] = params.length > 0
@@ -163,6 +193,8 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       certifications: string;
       image: string;
       created_at: Date;
+      user_count: number;
+      assigned_users: string; // JSON string from the query
     }>;
 
     if (trainerRows.length > 0) {
