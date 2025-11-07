@@ -102,15 +102,21 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
 };
 
 // Obtener entrenadores (con soporte para query param name)
-// Obtener entrenadores (con soporte para query param name)
 export const getTrainers = async (req: Request, res: Response, next: NextFunction) => {
-  const { name } = req.query; // Solo usamos name como query param
+  const { name, page = 1, limit = 20 } = req.query; // Agregamos page y limit como query params
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
 
-  const response = { message: "", error: false, data: [] as Trainer[] };
+  const response = {
+    message: "",
+    error: false,
+    data: [] as Trainer[],
+    current_page: 0,
+    total_trainers: 0,
+    total_pages: 0
+  };
 
   try {
     // Validación con DTO para query params (ajusta si necesitas uno específico para list)
@@ -121,6 +127,35 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       return res.status(400).json(response);
     }
 
+    const pageNum = Math.max(1, parseInt(page as string, 10));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10)));
+    const offset = (pageNum - 1) * limitNum;
+
+    // === CONSTRUCCIÓN DINÁMICA DE WHERE ===
+    const whereConditions: string[] = [];
+    const params: any[] = [];
+
+    if (name) {
+      whereConditions.push(`e.name LIKE ?`);
+      params.push(`%${name}%`);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // === CONTAR TOTAL ===
+    let countQuery = `
+      SELECT COUNT(DISTINCT e.id) AS total
+      FROM entrenadores e
+      LEFT JOIN asignaciones a ON a.entrenador_id = e.id
+      LEFT JOIN usuarios u ON u.id = a.usuario_id
+      ${whereClause}
+    `;
+
+    const [countRows] = await pool.query(countQuery, params);
+    const totalTrainers = (countRows as any)[0].total;
+    const totalPages = Math.ceil(totalTrainers / limitNum);
+
+    // === CONSULTA PRINCIPAL ===
     let query = `
       SELECT 
         e.id, 
@@ -147,19 +182,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       FROM entrenadores e
       LEFT JOIN asignaciones a ON a.entrenador_id = e.id
       LEFT JOIN usuarios u ON u.id = a.usuario_id
-    `;
-    const params: any[] = [];
-
-    // Si se proporciona name, agregar filtro LIKE para búsqueda por letra
-    if (name) {
-      query += " WHERE e.name LIKE ?";
-      params.push(`%${name}%`); // Búsqueda insensible a mayúsculas/minúsculas
-    } else {
-      query += " WHERE 1=1"; // Placeholder para GROUP BY si no hay WHERE
-    }
-
-    // Agrupar por los campos del entrenador
-    query += `
+      ${whereClause}
       GROUP BY 
         e.id, 
         e.name, 
@@ -172,15 +195,12 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
         e.certifications, 
         e.image, 
         e.created_at
+      ORDER BY e.name ASC
+      LIMIT ? OFFSET ?
     `;
 
-    // Ordenar por nombre de forma ascendente por defecto
-    query += " ORDER BY e.name ASC";
-
-    // Ejecutar la consulta
-    const [rows] = params.length > 0
-      ? await pool.execute(query, params)
-      : await pool.query(query);
+    const queryParams = [...params, limitNum, offset];
+    const [rows] = await pool.query(query, queryParams);
 
     const trainerRows = rows as Array<{
       id: number;
@@ -197,6 +217,10 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       user_count: number;
       assigned_users: string; // JSON string from the query
     }>;
+
+    response.current_page = pageNum;
+    response.total_trainers = totalTrainers;
+    response.total_pages = totalPages;
 
     if (trainerRows.length > 0) {
       response.data = adapterTrainers(trainerRows); // Asegúrate de que adapterTrainers maneje estos campos
