@@ -14,7 +14,6 @@ export const adapterTrainers = (data: any) => {
       image: item?.image,
       assigned_users: item?.assigned_users ? JSON.parse(item.assigned_users) : [],
       user_count: item?.user_count || 0,
-
     };
   });
   return result;
