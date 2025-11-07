@@ -102,6 +102,7 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
 };
 
 // Obtener entrenadores (con soporte para query param name)
+// Obtener entrenadores (con soporte para query param name)
 export const getTrainers = async (req: Request, res: Response, next: NextFunction) => {
   const { name } = req.query; // Solo usamos name como query param
   const { headers } = req;
@@ -138,7 +139,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
           JSON_ARRAYAGG(
             JSON_OBJECT(
               'id', u.id,
-              'name', u.name
+              'name', u.nombre  -- Reemplaza 'nombre' con el nombre real de la columna en 'usuarios' si es diferente
             )
           ),
           JSON_ARRAY()
