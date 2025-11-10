@@ -1,48 +1,29 @@
-// router.ts for warm-ups
+// src/warmups/router.ts
 import { Router } from "express";
 import {
   createWarmUp,
   getWarmUps,
   updateWarmUp,
   deleteWarmUp,
-} from "./controller";  // Importamos los controladores de warm-ups
-import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
+} from "./controller";
+import { verifyToken } from "../../middleware/jwtVerify";
+
+// Middleware para capturar errores asíncronos (excelente práctica)
+const asyncHandler = (fn: any) => (req: any, res: any, next: any) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
 
 const router = Router();
 
-// Función para manejar errores asíncronos
-function asyncHandler(fn: any) {
-  return function (req: any, res: any, next: any) {
-    Promise.resolve(fn(req, res, next)).catch(next);
-  };
-}
+// POST   /api/warmups          → Crear (con video + thumbnail)
+router.post("/", verifyToken, asyncHandler(createWarmUp));
 
-// Ruta POST para crear un ejercicio de calentamiento
-router.post(
-  "/create",
-  verifyToken,
-  asyncHandler(createWarmUp)
-);
+// GET    /api/warmups          → Todos o con ?length=5&random=true
+router.get("/", verifyToken, asyncHandler(getWarmUps));
 
-// Ruta GET para obtener ejercicios de calentamiento (con query params)
-router.get(
-  "/",
-  verifyToken,
-  asyncHandler(getWarmUps)
-);
+// PUT    /api/warmups/:id      → Actualizar (parcial, con reemplazo de archivos)
+router.put("/:id", verifyToken, asyncHandler(updateWarmUp));
 
-// Ruta PUT para actualizar un ejercicio de calentamiento
-router.put(
-  "/update",
-  verifyToken,
-  asyncHandler(updateWarmUp)
-);
-
-// Ruta DELETE para eliminar un ejercicio de calentamiento
-router.delete(
-  "/delete",
-  verifyToken,
-  asyncHandler(deleteWarmUp)
-);
+// DELETE /api/warmups/:id      → Eliminar (con borrado de S3)
+router.delete("/:id", verifyToken, asyncHandler(deleteWarmUp));
 
 export default router;

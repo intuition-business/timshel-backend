@@ -1,10 +1,12 @@
-// controller.ts for warm-ups
+// src/warmups/controller.ts
 import { Request, Response, NextFunction } from "express";
 import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import { adapterWarmUps } from "./adapter";
-import { createWarmUpDto, getWarmUpDto, updateWarmUpDto, deleteWarmUpDto } from "./dto"; // Importamos los DTOs
+import { createWarmUpDto, getWarmUpDto, updateWarmUpDto, deleteWarmUpDto } from "./dto";
+import { deleteFromS3, uploadWarmUpMedia } from "../../middleware/uploadWarmUpMedia";
+
 
 interface WarmUp {
   id: number;
@@ -15,256 +17,203 @@ interface WarmUp {
   duration_in_minutes: number;
 }
 
-// Crear un ejercicio de calentamiento
-export const createWarmUp = async (req: Request, res: Response, next: NextFunction) => {
-  const { name, description, video_url, video_thumbnail, duration_in_minutes } = req.body;
+// JWT Payload seguro
+interface JwtPayload {
+  userId: number;
+}
 
-  const response = { message: "", error: false };
+// CREATE - con subida de archivos
+export const createWarmUp = [
+  uploadWarmUpMedia.fields([
+    { name: "video", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 },
+  ]),
+  async (req: Request, res: Response, next: NextFunction) => {
+    const { name, description, duration_in_minutes } = req.body;
+    const files = req.files as { [fieldname: string]: Express.MulterS3.File[] };
 
-  try {
-    const { headers } = req;
-    const token = headers["x-access-token"];
-    const decode = token && verify(`${token}`, SECRET);
-    const userId = (<any>(<unknown>decode)).userId;
+    const response = { message: "", error: false };
 
-    // Validación con DTO
-    const { error: dtoError } = createWarmUpDto.validate(req.body);
-    if (dtoError) {
-      response.error = true;
-      response.message = dtoError.details[0].message;
-      return res.status(400).json(response);
-    }
+    try {
+      const token = req.headers["x-access-token"] as string;
+      const decoded = verify(token, SECRET) as JwtPayload;
 
-    if (!name || !description || !video_url || !video_thumbnail || duration_in_minutes === undefined) {
-      response.error = true;
-      response.message = "Faltan campos requeridos: name, description, video_url, video_thumbnail, duration_in_minutes.";
-      return res.status(400).json(response);
-    }
+      const { error: dtoError } = createWarmUpDto.validate(req.body);
+      if (dtoError) {
+        response.error = true;
+        response.message = dtoError.details[0].message;
+        return res.status(400).json(response);
+      }
 
-    // Verificar si ya existe el warm-up por name (asumimos unique)
-    const [existingWarmUp] = await pool.execute(
-      "SELECT id FROM warm_ups WHERE name = ?",
-      [name]
-    );
+      if (!name || !description || duration_in_minutes === undefined) {
+        return res.status(400).json({ error: true, message: "Faltan campos requeridos." });
+      }
 
-    if ((existingWarmUp as any).length > 0) {
-      response.error = true;
-      response.message = `Ya existe un ejercicio de calentamiento con el nombre "${name}".`;
-      return res.status(400).json(response);
-    }
+      if (!files?.video?.[0] || !files?.thumbnail?.[0]) {
+        return res.status(400).json({ error: true, message: "Video y thumbnail son obligatorios." });
+      }
 
-    const query = "INSERT INTO warm_ups (name, description, video_url, video_thumbnail, duration_in_minutes) VALUES (?, ?, ?, ?, ?)";
-    const [result]: any = await pool.query(query, [name, description, video_url, video_thumbnail, duration_in_minutes]);
+      const [existing] = await pool.execute("SELECT id FROM warm_ups WHERE name = ?", [name]);
+      if ((existing as any[]).length > 0) {
+        return res.status(400).json({ error: true, message: "Ya existe un calentamiento con ese nombre." });
+      }
 
-    if (result) {
-      response.message = "Ejercicio de calentamiento creado exitosamente";
+      const video_url = files.video[0].location;
+      const video_thumbnail = files.thumbnail[0].location;
+
+      const [result]: any = await pool.query(
+        `INSERT INTO warm_ups 
+         (name, description, video_url, video_thumbnail, duration_in_minutes) 
+         VALUES (?, ?, ?, ?, ?)`,
+        [name, description, video_url, video_thumbnail, Number(duration_in_minutes)]
+      );
+
+      response.message = "Calentamiento creado exitosamente";
       return res.status(201).json({
-        warm_up: { name, description, video_url, video_thumbnail, duration_in_minutes },
+        warm_up: { id: result.insertId, name, description, video_url, video_thumbnail, duration_in_minutes: Number(duration_in_minutes) },
       });
-    } else {
-      response.error = true;
-      response.message = "No se pudo guardar el ejercicio de calentamiento";
-      return res.status(400).json(response);
+    } catch (error: any) {
+      if (error.name === "JsonWebTokenError") {
+        return res.status(401).json({ error: true, message: "Token inválido." });
+      }
+      console.error("Error al crear warm-up:", error);
+      next(error);
+      return res.status(500).json({ message: "Error interno del servidor." });
     }
-  } catch (error) {
-    console.error("Error al crear el ejercicio de calentamiento:", error);
-    next(error);
-    return res.status(500).json({ message: "Error al crear el ejercicio de calentamiento." });
-  }
-};
+  },
+];
 
-// Obtener ejercicios de calentamiento (con soporte para query params length y random)
+// READ ALL - con random y limit
 export const getWarmUps = async (req: Request, res: Response, next: NextFunction) => {
-  const { length, random } = req.query; // length como número, random como booleano (true/false)
-
-  const { headers } = req;
-  const token = headers["x-access-token"];
-  const decode = token && verify(`${token}`, SECRET);
-  const userId = (<any>(<unknown>decode)).userId;
-
+  const { length, random } = req.query;
   const response = { message: "", error: false, data: [] as WarmUp[] };
 
   try {
-    // Validación con DTO para query params
+    const token = req.headers["x-access-token"] as string;
+    verify(token, SECRET) as JwtPayload;
+
     const { error: dtoError } = getWarmUpDto.validate(req.query);
-    if (dtoError) {
-      response.error = true;
-      response.message = dtoError.details[0].message;
-      return res.status(400).json(response);
-    }
+    if (dtoError) return res.status(400).json({ error: true, message: dtoError.details[0].message });
 
     let query = "SELECT id, name, description, video_url, video_thumbnail, duration_in_minutes FROM warm_ups";
     const params: any[] = [];
 
-    // Si no hay params, trae todo ordenado por name ASC
-    if (!length && !random) {
+    if (random === "true") {
+      query += " ORDER BY RAND()";
+    } else {
       query += " ORDER BY name ASC";
-    } else {
-      // Si length no se envía, trae todo
-      const limit = length ? parseInt(length as string, 10) : undefined;
+    }
 
-      if (random === "true") {
-        // Trae aleatoriamente (ORDER BY RAND())
-        query += " ORDER BY RAND()";
-        if (limit) {
-          query += " LIMIT ?";
-          params.push(String(limit));  // ¡Fix: Convertir a string para evitar el error!
-        }
-      } else {
-        // Si random=false o no, ordenado
-        query += " ORDER BY name ASC";
-        if (limit) {
-          query += " LIMIT ?";
-          params.push(String(limit));  // ¡Fix: Convertir a string para evitar el error!
-        }
+    if (length) {
+      const limit = Math.min(100, Math.max(1, parseInt(length as string, 10)));
+      query += " LIMIT ?";
+      params.push(limit);
+    }
+
+    const [rows] = params.length > 0 ? await pool.execute(query, params) : await pool.query(query);
+    const warmUps = rows as WarmUp[];
+
+    if (warmUps.length === 0) {
+      response.error = true;
+      response.message = "No se encontraron calentamientos";
+      return res.status(404).json(response);
+    }
+
+    response.data = adapterWarmUps(warmUps);
+    response.message = "Calentamientos obtenidos exitosamente";
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("Error al obtener warm-ups:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno." });
+  }
+};
+
+// UPDATE - con reemplazo de archivos
+export const updateWarmUp = [
+  uploadWarmUpMedia.fields([
+    { name: "video", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 },
+  ]),
+  async (req: Request, res: Response, next: NextFunction) => {
+    const id = parseInt(req.params.id);
+    const { name, description, duration_in_minutes } = req.body;
+    const files = req.files as { [fieldname: string]: Express.MulterS3.File[] };
+
+    if (isNaN(id)) return res.status(400).json({ error: true, message: "ID inválido." });
+
+    try {
+      const token = req.headers["x-access-token"] as string;
+      verify(token, SECRET) as JwtPayload;
+
+      const { error: dtoError } = updateWarmUpDto.validate(req.body);
+      if (dtoError) return res.status(400).json({ error: true, message: dtoError.details[0].message });
+
+      // Obtener datos actuales
+      const [current] = await pool.execute("SELECT video_url, video_thumbnail FROM warm_ups WHERE id = ?", [id]);
+      const currentData = (current as any[])[0];
+      if (!currentData) return res.status(404).json({ error: true, message: "Calentamiento no encontrado." });
+
+      const updates: string[] = [];
+      const values: any[] = [];
+
+      if (name !== undefined) { updates.push("name = ?"); values.push(name); }
+      if (description !== undefined) { updates.push("description = ?"); values.push(description); }
+      if (duration_in_minutes !== undefined) { updates.push("duration_in_minutes = ?"); values.push(Number(duration_in_minutes)); }
+
+      if (files?.video?.[0]) {
+        updates.push("video_url = ?");
+        values.push(files.video[0].location);
+        await deleteFromS3(currentData.video_url);
       }
+      if (files?.thumbnail?.[0]) {
+        updates.push("video_thumbnail = ?");
+        values.push(files.thumbnail[0].location);
+        await deleteFromS3(currentData.video_thumbnail);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: true, message: "No hay cambios para actualizar." });
+      }
+
+      values.push(id);
+      await pool.query(`UPDATE warm_ups SET ${updates.join(", ")} WHERE id = ?`, values);
+
+      return res.status(200).json({ message: "Calentamiento actualizado exitosamente" });
+    } catch (error) {
+      console.error("Error al actualizar warm-up:", error);
+      next(error);
+      return res.status(500).json({ message: "Error interno." });
     }
+  },
+];
 
-    // Opcional: Si params está vacío, usa pool.query en lugar de execute para mayor compatibilidad
-    const [rows] = params.length > 0
-      ? await pool.execute(query, params)
-      : await pool.query(query);
-
-    const warmUpRows = rows as Array<{
-      id: number;
-      name: string;
-      description: string;
-      video_url: string;
-      video_thumbnail: string;
-      duration_in_minutes: number;
-    }>;
-
-    if (warmUpRows.length > 0) {
-      response.data = adapterWarmUps(warmUpRows);
-      response.message = "Ejercicios de calentamiento obtenidos exitosamente";
-      return res.status(200).json(response);
-    } else {
-      response.error = true;
-      response.message = "No se encontraron ejercicios de calentamiento";
-      return res.status(404).json(response);
-    }
-  } catch (error) {
-    console.error("Error al obtener los ejercicios de calentamiento:", error);
-    next(error);
-    return res.status(500).json({ message: "Error al obtener los ejercicios de calentamiento." });
-  }
-};
-
-// Actualizar un ejercicio de calentamiento
-export const updateWarmUp = async (req: Request, res: Response, next: NextFunction) => {
-  const { name, new_name, new_description, new_video_url, new_video_thumbnail, new_duration_in_minutes } = req.body;
-
-  const response = { message: "", error: false };
-
-  try {
-    const { headers } = req;
-    const token = headers["x-access-token"];
-    const decode = token && verify(`${token}`, SECRET);
-    const userId = (<any>(<unknown>decode)).userId;
-
-    // Validación con DTO
-    const { error: dtoError } = updateWarmUpDto.validate(req.body);
-    if (dtoError) {
-      response.error = true;
-      response.message = dtoError.details[0].message;
-      return res.status(400).json(response);
-    }
-
-    if (!name) {
-      response.error = true;
-      response.message = "Falta el campo requerido: name para identificar el ejercicio de calentamiento a actualizar.";
-      return res.status(400).json(response);
-    }
-
-    // Construir la consulta de actualización dinámicamente
-    const updateFields: string[] = [];
-    const updateValues: any[] = [];
-
-    if (new_name) {
-      updateFields.push("name = ?");
-      updateValues.push(new_name);
-    }
-    if (new_description) {
-      updateFields.push("description = ?");
-      updateValues.push(new_description);
-    }
-    if (new_video_url) {
-      updateFields.push("video_url = ?");
-      updateValues.push(new_video_url);
-    }
-    if (new_video_thumbnail) {
-      updateFields.push("video_thumbnail = ?");
-      updateValues.push(new_video_thumbnail);
-    }
-    if (new_duration_in_minutes !== undefined) {
-      updateFields.push("duration_in_minutes = ?");
-      updateValues.push(new_duration_in_minutes);
-    }
-
-    if (updateFields.length === 0) {
-      response.error = true;
-      response.message = "No se proporcionaron campos para actualizar.";
-      return res.status(400).json(response);
-    }
-
-    const query = `UPDATE warm_ups SET ${updateFields.join(", ")} WHERE name = ?`;
-    updateValues.push(name);
-
-    const [result]: any = await pool.query(query, updateValues);
-
-    if (result.affectedRows > 0) {
-      response.message = "Ejercicio de calentamiento actualizado exitosamente";
-      return res.status(200).json(response);
-    } else {
-      response.error = true;
-      response.message = "No se encontró el ejercicio de calentamiento para actualizar";
-      return res.status(404).json(response);
-    }
-  } catch (error) {
-    console.error("Error al actualizar el ejercicio de calentamiento:", error);
-    next(error);
-    return res.status(500).json({ message: "Error al actualizar el ejercicio de calentamiento." });
-  }
-};
-
-// Eliminar un ejercicio de calentamiento
+// DELETE - por ID en params
 export const deleteWarmUp = async (req: Request, res: Response, next: NextFunction) => {
-  const { name } = req.body;
-
-  const { headers } = req;
-  const token = headers["x-access-token"];
-  const decode = token && verify(`${token}`, SECRET);
-  const userId = (<any>(<unknown>decode)).userId;
-
-  const response = { message: "", error: false };
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: true, message: "ID inválido." });
 
   try {
-    // Validación con DTO
-    const { error: dtoError } = deleteWarmUpDto.validate(req.body);
-    if (dtoError) {
-      response.error = true;
-      response.message = dtoError.details[0].message;
-      return res.status(400).json(response);
-    }
+    const token = req.headers["x-access-token"] as string;
+    verify(token, SECRET) as JwtPayload;
 
-    const [result] = await pool.execute(
-      "DELETE FROM warm_ups WHERE name = ?",
-      [name]
-    );
+    const { error: dtoError } = deleteWarmUpDto.validate({ id });
+    if (dtoError) return res.status(400).json({ error: true, message: dtoError.details[0].message });
 
-    const deleteResult = result as import('mysql2').ResultSetHeader;
+    const [current] = await pool.execute("SELECT video_url, video_thumbnail FROM warm_ups WHERE id = ?", [id]);
+    const currentData = (current as any[])[0];
 
-    if (deleteResult && deleteResult.affectedRows > 0) {
-      response.message = "Ejercicio de calentamiento eliminado exitosamente";
-      return res.status(200).json(response);
-    } else {
-      response.error = true;
-      response.message = "No se pudo eliminar el ejercicio de calentamiento";
-      return res.status(400).json(response);
-    }
+    if (!currentData) return res.status(404).json({ error: true, message: "Calentamiento no encontrado." });
+
+    await deleteFromS3(currentData.video_url);
+    await deleteFromS3(currentData.video_thumbnail);
+
+    await pool.execute("DELETE FROM warm_ups WHERE id = ?", [id]);
+
+    return res.status(200).json({ message: "Calentamiento eliminado exitosamente" });
   } catch (error) {
-    console.error("Error al eliminar el ejercicio de calentamiento:", error);
+    console.error("Error al eliminar warm-up:", error);
     next(error);
-    return res.status(500).json({ message: "Error al eliminar el ejercicio de calentamiento." });
+    return res.status(500).json({ message: "Error interno." });
   }
 };
