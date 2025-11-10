@@ -78,21 +78,25 @@ export const getGeneratedRoutinesIa = async (
   const { headers, query } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
-  const userId = (<any>(<unknown>decode)).userId;
+  const userIdFromToken = (<any>(<unknown>decode)).userId;
 
   const month = query.month as string;
   const date = query.date as string;
+  const adminUserId = query.user_id as string; // ← NUEVO: solo para admin
+
+  // ← NUEVO BLOQUE: decidir qué userId usar
+  const targetUserId = adminUserId ? adminUserId : userIdFromToken;
 
   try {
     let sql = "SELECT id, training_plan, created_at FROM user_training_plans WHERE user_id = ?";
-    let params: any[] = [userId];
+    let params: any[] = [targetUserId]; // ← usamos targetUserId (puede ser del token o del query)
 
     // Si se pasa un mes, filtrar por mes en created_at (ej: created_at LIKE '2025-09%')
     if (month) {
       sql += " AND created_at LIKE ?";
       params.push(`${month}%`);
     }
-    // Si se pasa una fecha específica, filtrar por mes de esa fecha (o ajustar lógica si necesitas buscar en el JSON)
+    // Si se pasa una fecha específica, filtrar por mes de esa fecha
     else if (date) {
       const targetDate = new Date(date);
       const targetMonth = targetDate.toISOString().slice(0, 7); // 'YYYY-MM'
@@ -143,7 +147,7 @@ export const getGeneratedRoutinesIa = async (
     // Obtener los días y estados desde user_routine (sin cambios)
     const [routineRows]: any = await pool.execute(
       "SELECT date, status FROM user_routine WHERE user_id = ? ORDER BY date",
-      [userId]
+      [targetUserId] // ← también aquí usamos targetUserId
     );
 
     const statusMap: { [key: string]: string } = {};
@@ -169,8 +173,9 @@ export const getGeneratedRoutinesIa = async (
       error: false,
       message: "Plan de entrenamiento obtenido con éxito.",
       routine_id: planRows[0].id,
-      user_id: userId,
-      created_at: planRows[0].created_at // Agrego esto para que sepas de qué mes/fecha es el plan
+      user_id: targetUserId, // ← devuelve el ID real consultado
+      queried_by_admin: !!adminUserId, // ← opcional: para saber si fue consulta externa
+      created_at: planRows[0].created_at
     });
   } catch (error: any) {
     console.error("Error al obtener el plan de entrenamiento:", error);
