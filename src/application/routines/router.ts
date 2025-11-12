@@ -8,6 +8,7 @@ import {
   getRoutineByDate,
   getRoutineByExerciseName,
   editExercise,
+  searchInGeneratedRoutine,
 } from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";
 
@@ -21,5 +22,6 @@ router.get("/routinesByDate", verifyToken, getRoutineByDate);
 router.get("/routinesByExerciseName", verifyToken, getRoutineByExerciseName);
 router.post("/routinesSave", verifyToken, routinesSaved);
 router.patch("/edit-exercise", verifyToken, editExercise);
+router.get("/search-in-generated", verifyToken, searchInGeneratedRoutine);
 
 export default router;
