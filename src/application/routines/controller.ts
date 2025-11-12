@@ -1019,24 +1019,17 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    const { fecha_rutina, exercise_name } = req.query;
+    const { fecha_rutina, routine_name, exercise_name } = req.query;
 
-    // 2. NORMALIZAR
-    const normalize = (str: string): string =>
-      str.toString().toLowerCase().trim().replace(/\s+/g, " ");
-
-    // 3. CONVERTIR FECHA (opcional)
-    let formattedFecha: string | null = null;
-    if (fecha_rutina) {
-      try {
-        formattedFecha = convertDate(fecha_rutina as string);
-      } catch (error: any) {
-        res.status(400).json({ error: true, message: error.message });
-        return;
-      }
+    // REQUERIDO: fecha_rutina
+    if (!fecha_rutina) {
+      res.status(400).json({ error: true, message: "fecha_rutina es requerido" });
+      return;
     }
 
-    // 4. OBTENER RUTINA
+    const formattedFecha = convertDate(fecha_rutina as string);
+
+    // 2. OBTENER RUTINA
     const [planRows]: any = await pool.execute(
       `SELECT training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
       [targetUserId]
@@ -1068,39 +1061,54 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 5. FILTRAR DÍAS
-    let filteredDays = trainingPlan;
+    // 3. BUSCAR DÍA POR FECHA
+    const day = trainingPlan.find((d: any) =>
+      new Date(d.fecha).toISOString().split("T")[0] === formattedFecha
+    );
 
-    // Filtro por fecha
-    if (formattedFecha) {
-      filteredDays = filteredDays.filter((d: any) =>
-        new Date(d.fecha).toISOString().split("T")[0] === formattedFecha
-      );
-    }
-
-    // Filtro por nombre de rutina (ej: "Pecho - Semana 1")
-    if (exercise_name && !formattedFecha) {
-      const searchName = normalize(exercise_name as string);
-      filteredDays = filteredDays.filter((d: any) =>
-        normalize(d.nombre).includes(searchName)
-      );
-    }
-
-    if (filteredDays.length === 0) {
-      res.status(404).json({ error: true, message: "No se encontraron resultados" });
+    if (!day) {
+      res.status(404).json({ error: true, message: "Fecha no encontrada" });
       return;
     }
 
-    // 6. SI HAY exercise_name + fecha → buscar ejercicio específico
-    if (exercise_name && formattedFecha) {
-      const searchName = normalize(exercise_name as string);
-      const day = filteredDays[0];
+    // 4. MODO 1: routine_name → DEVOLVER TODO EL DÍA
+    if (routine_name) {
+      const searchRoutine = (routine_name as string).trim();
+      if (day.nombre !== searchRoutine) {
+        res.status(404).json({ error: true, message: "Rutina no coincide con la fecha" });
+        return;
+      }
+
+      res.json({
+        error: false,
+        message: "Día encontrado",
+        response: {
+          fecha_rutina: formattedFecha,
+          user_id: targetUserId,
+          routine_name: day.nombre,
+          ejercicios: day.ejercicios.map((e: any) => ({
+            nombre_ejercicio: e.nombre_ejercicio,
+            description: e.description || "",
+            video_url: e.video_url || "",
+            thumbnail_url: e.thumbnail_url || "",
+            Esquema: e.Esquema,
+          })),
+          status: day.status || "pending",
+        },
+        queried_by_admin: targetUserId !== currentUserId,
+      });
+      return;
+    }
+
+    // 5. MODO 2: exercise_name → DEVOLVER 1 EJERCICIO
+    if (exercise_name) {
+      const searchExercise = normalize(exercise_name as string);
       const exercise = day.ejercicios.find((e: any) =>
-        normalize(e.nombre_ejercicio).includes(searchName)
+        normalize(e.nombre_ejercicio).includes(searchExercise)
       );
 
       if (!exercise) {
-        res.status(404).json({ error: true, message: "Ejercicio no encontrado en esa fecha" });
+        res.status(404).json({ error: true, message: "Ejercicio no encontrado" });
         return;
       }
 
@@ -1124,26 +1132,15 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 7. SI NO → DEVOLVER TODOS LOS DÍAS FILTRADOS
-    res.json({
-      error: false,
-      message: "Rutinas encontradas",
-      response: filteredDays.map((day: any) => ({
-        fecha: day.fecha,
-        nombre: day.nombre,
-        ejercicios: day.ejercicios.map((e: any) => ({
-          nombre_ejercicio: e.nombre_ejercicio,
-          description: e.description || "",
-          video_url: e.video_url || "",
-          thumbnail_url: e.thumbnail_url || "",
-          Esquema: e.Esquema,
-        })),
-        status: day.status || "pending",
-      })),
-      queried_by_admin: targetUserId !== currentUserId,
-    });
+    // 6. SI NO HAY routine_name NI exercise_name → ERROR
+    res.status(400).json({ error: true, message: "Debe pasar routine_name o exercise_name" });
+
   } catch (error) {
     console.error("Error:", error);
     next(error);
   }
 };
+
+// NORMALIZAR
+const normalize = (str: string): string =>
+  str.toString().toLowerCase().trim().replace(/\s+/g, " ");
