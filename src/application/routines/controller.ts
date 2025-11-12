@@ -24,6 +24,20 @@ interface JwtPayload {
   userId: string;
 }
 
+interface EditExerciseRequest {
+  fecha_rutina: string;
+  exercise_name: string;
+  rutina_id?: string;
+  updates: {
+    Series?: number;
+    Descanso?: string;
+    "Detalle series"?: { Reps: number }[];
+    description?: string;
+    video_url?: string;
+    thumbnail_url?: string;
+  };
+}
+
 interface RoutineRow {
   fecha_rutina: string;
   routine_name: string;
@@ -363,6 +377,20 @@ function generateDefaultRoutineDays() {
   });
 }
 
+// Función para generar series con repeticiones y detalles
+function generateSeries(seriesCount: number, detaileSeries?: { Reps: number }[]): { reps: number; load: number; breakTime: number }[] {
+  const series = [];
+  for (let i = 0; i < seriesCount; i++) {
+    const reps = detaileSeries && detaileSeries[i] ? detaileSeries[i].Reps : 0;
+    series.push({
+      reps: reps,
+      load: 0,
+      breakTime: 0
+    });
+  }
+  return series;
+}
+
 export const getRoutinesSaved = async (
   req: Request,
   res: Response,
@@ -575,29 +603,33 @@ export const getRoutineByExerciseName = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Autenticación
+    // 1. AUTENTICACIÓN
     const token = req.headers["x-access-token"] as string;
     if (!token) {
       res.status(401).json({ error: true, message: "Token requerido" });
       return;
     }
-    let decode: JwtPayload;
+
+    let currentUserId: string;
+    let targetUserId: string;
     try {
-      decode = verify(token, SECRET) as JwtPayload;
+      const decoded = verify(token, SECRET) as JwtPayload;
+      currentUserId = decoded.userId;
+      // Si viene user_id en query → admin consulta otro usuario
+      targetUserId = (req.query.user_id as string) || currentUserId;
     } catch (error) {
       res.status(401).json({ error: true, message: "Token inválido" });
       return;
     }
-    const userId = decode.userId;
 
-    // Validación de entrada
+    // 2. VALIDACIÓN DE ENTRADA
     const { exercise_name, fecha_rutina, routine_name } = req.query;
     if (!exercise_name || typeof exercise_name !== "string") {
       res.status(400).json({ error: true, message: "Nombre del ejercicio es requerido y debe ser una cadena" });
       return;
     }
 
-    // Formato de fecha
+    // 3. FORMATO DE FECHA
     let formattedFecha: string | null = null;
     if (fecha_rutina) {
       try {
@@ -608,13 +640,14 @@ export const getRoutineByExerciseName = async (
       }
     }
 
-    // Construcción de consulta
+    // 4. CONSTRUCCIÓN DE CONSULTA
     let query = `
       SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed
       FROM complete_rutina
       WHERE user_id = ? AND LOWER(exercise_name) LIKE LOWER(?)
     `;
-    const params: (string | number)[] = [userId, `%${exercise_name}%`];
+    const params: (string | number)[] = [targetUserId, `%${exercise_name}%`];
+
     if (routine_name && typeof routine_name === "string") {
       query += " AND LOWER(routine_name) LIKE LOWER(?)";
       params.push(`%${routine_name}%`);
@@ -625,10 +658,10 @@ export const getRoutineByExerciseName = async (
     }
     query += " ORDER BY fecha_rutina DESC, rutina_id ASC, exercise_name LIMIT 100";
 
-    // Ejecutar consulta
+    // 5. EJECUTAR CONSULTA
     const [rows]: any = await pool.execute(query, params);
 
-    // Procesar series_completed y calcular avg_load
+    // 6. PROCESAR series_completed y avg_load
     const exerciseGroups = new Map<string, { row: RoutineRow; avg_load: number; fecha: Date; rutina_id: string }[]>();
 
     for (const item of rows) {
@@ -644,15 +677,13 @@ export const getRoutineByExerciseName = async (
         seriesCompletedParsed = item.series_completed;
       }
 
-      // Calcular avg_load
       let avg_load = 0;
       if (Array.isArray(seriesCompletedParsed) && seriesCompletedParsed.length > 0) {
         const sum_load = seriesCompletedParsed.reduce((acc: number, s: any) => acc + (Number(s.load) || 0), 0);
         avg_load = sum_load / seriesCompletedParsed.length;
-        avg_load = Math.round(avg_load * 100) / 100; // Redondear a 2 decimales
+        avg_load = Math.round(avg_load * 100) / 100;
       }
 
-      // Almacenar series parseadas
       item.series_completed = seriesCompletedParsed;
 
       const groupKey = item.exercise_name;
@@ -667,24 +698,22 @@ export const getRoutineByExerciseName = async (
       });
     }
 
-    // Calcular last_weight_comparation
+    // 7. CALCULAR last_weight_comparation
     for (const group of exerciseGroups.values()) {
-      // Ordenar DESC por fecha y ASC por rutina_id (como en la respuesta)
       group.sort((a, b) => {
         if (a.fecha.getTime() !== b.fecha.getTime()) {
-          return b.fecha.getTime() - a.fecha.getTime(); // DESC
+          return b.fecha.getTime() - a.fecha.getTime();
         }
-        return a.rutina_id.localeCompare(b.rutina_id); // ASC
+        return a.rutina_id.localeCompare(b.rutina_id);
       });
 
-      // Asignar diferencias
       for (let i = 0; i < group.length; i++) {
         const diff = i === 0 ? 0 : group[i].avg_load - group[i - 1].avg_load;
-        group[i].row.last_weight_comparation = Math.round(diff * 100) / 100; // Redondear a 2 decimales
+        group[i].row.last_weight_comparation = Math.round(diff * 100) / 100;
       }
     }
 
-    // Construir respuesta
+    // 8. CONSTRUIR RESPUESTA
     if (rows.length > 0) {
       const datesMap = new Map<string, { fecha_rutina: string; routines: Map<string, { rutina_id: string; routine_name: string; exercises: Exercise[] }> }>();
       for (const item of rows) {
@@ -718,7 +747,13 @@ export const getRoutineByExerciseName = async (
       if (routine_name) message += " en la rutina especificada";
       if (formattedFecha) message = `Rutina encontrada para la fecha y ejercicio especificado${routine_name ? " en la rutina especificada" : ""}`;
 
-      res.status(200).json({ error: false, message, response: responseData });
+      res.status(200).json({
+        error: false,
+        message,
+        response: responseData,
+        queried_user_id: targetUserId,
+        queried_by_admin: targetUserId !== currentUserId
+      });
       return;
     }
 
@@ -732,7 +767,6 @@ export const getRoutineByExerciseName = async (
     next(error);
   }
 };
-
 
 export const routinesSaved = async (
   req: Request,
@@ -865,6 +899,104 @@ export const routinesSaved = async (
     }
   } catch (error) {
     console.error("Error general al guardar rutinas:", error);
+    next(error);
+  }
+};
+
+export const editExercise = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const token = req.headers["x-access-token"] as string;
+  if (!token) {
+    res.status(401).json({ error: true, message: "Token requerido" });
+    return;
+  }
+
+  let userId: string;
+  try {
+    const decoded = verify(token, SECRET) as any;
+    userId = decoded.userId;
+  } catch {
+    res.status(401).json({ error: true, message: "Token inválido" });
+    return;
+  }
+
+  const { fecha_rutina, exercise_name, rutina_id, updates } = req.body as EditExerciseRequest;
+
+  if (!fecha_rutina || !exercise_name || !updates || Object.keys(updates).length === 0) {
+    res.status(400).json({ error: true, message: "Faltan datos requeridos" });
+    return;
+  }
+
+  const formattedDate = convertDate(fecha_rutina);
+
+  try {
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    // 1. Buscar ejercicio
+    let sql = `
+      SELECT id, series_completed 
+      FROM complete_rutina 
+      WHERE user_id = ? AND fecha_rutina = ? AND exercise_name = ?
+    `;
+    const params: any[] = [userId, formattedDate, exercise_name];
+    if (rutina_id) {
+      sql += " AND rutina_id = ?";
+      params.push(rutina_id);
+    }
+
+    const [rows]: any = await connection.execute(sql, params);
+    if (rows.length === 0) {
+      await connection.rollback();
+      connection.release();
+      res.status(404).json({ error: true, message: "Ejercicio no encontrado" });
+      return;
+    }
+
+    const row = rows[0];
+    let seriesCompleted = typeof row.series_completed === "string"
+      ? JSON.parse(row.series_completed)
+      : row.series_completed;
+
+    // 2. APLICAR CAMBIOS
+    if (updates.Series !== undefined) {
+      seriesCompleted = generateSeries(updates.Series, updates["Detalle series"]);
+    }
+    if (updates.Descanso !== undefined) {
+      seriesCompleted = seriesCompleted.map((s: any) => ({ ...s, breakTime: parseFloat(updates.Descanso!) }));
+    }
+    if (updates["Detalle series"]) {
+      seriesCompleted = generateSeries(seriesCompleted.length, updates["Detalle series"]);
+    }
+
+    // CAMPOS SIMPLES
+    if (updates.description) {
+      await connection.execute("UPDATE complete_rutina SET description = ? WHERE id = ?", [updates.description, row.id]);
+    }
+    if (updates.video_url !== undefined) {
+      await connection.execute("UPDATE complete_rutina SET video_url = ? WHERE id = ?", [updates.video_url, row.id]);
+    }
+    if (updates.thumbnail_url !== undefined) {
+      await connection.execute("UPDATE complete_rutina SET thumbnail_url = ? WHERE id = ?", [updates.thumbnail_url, row.id]);
+    }
+
+    // 3. GUARDAR SERIES
+    await connection.execute(
+      "UPDATE complete_rutina SET series_completed = ? WHERE id = ?",
+      [JSON.stringify(seriesCompleted), row.id]
+    );
+
+    await connection.commit();
+    connection.release();
+
+    // CORRECTO: SIN return
+    res.json({ error: false, message: "Ejercicio actualizado", data: { id: row.id } });
+  } catch (error) {
+    console.error("Error editando ejercicio:", error);
+    res.status(500).json({ error: true, message: "Error interno" });
     next(error);
   }
 };
