@@ -1019,43 +1019,36 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 2. PARÁMETROS
     const { fecha_rutina, exercise_name } = req.query;
-    if (!fecha_rutina || !exercise_name) {
-      res.status(400).json({ error: true, message: "fecha_rutina y exercise_name son requeridos" });
-      return;
-    }
 
-    // 3. NORMALIZAR NOMBRE DEL EJERCICIO
+    // 2. NORMALIZAR
     const normalize = (str: string): string =>
       str.toString().toLowerCase().trim().replace(/\s+/g, " ");
 
-    const searchName = normalize(exercise_name as string);
-
-    // 4. CONVERTIR FECHA (ISO o dd/mm/yyyy)
-    let formattedFecha: string;
-    try {
-      formattedFecha = convertDate(fecha_rutina as string);
-    } catch (error: any) {
-      res.status(400).json({ error: true, message: error.message });
-      return;
+    // 3. CONVERTIR FECHA (opcional)
+    let formattedFecha: string | null = null;
+    if (fecha_rutina) {
+      try {
+        formattedFecha = convertDate(fecha_rutina as string);
+      } catch (error: any) {
+        res.status(400).json({ error: true, message: error.message });
+        return;
+      }
     }
 
-    // 5. OBTENER RUTINA
+    // 4. OBTENER RUTINA
     const [planRows]: any = await pool.execute(
       `SELECT training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
       [targetUserId]
     );
 
     if (planRows.length === 0) {
-      res.status(404).json({ error: true, message: "No hay rutina generada para este usuario" });
+      res.status(404).json({ error: true, message: "No hay rutina generada" });
       return;
     }
 
-    // 6. PARSEAR training_plan (string o array)
     let trainingPlan: any[];
     const rawData = planRows[0].training_plan;
-
     try {
       if (typeof rawData === "string") {
         const cleaned = rawData
@@ -1070,57 +1063,87 @@ export const searchInGeneratedRoutine = async (
         throw new Error("Formato no soportado");
       }
     } catch (error) {
-      console.error("Error parseando training_plan:", error);
-      res.status(500).json({
-        error: true,
-        message: "Formato JSON inválido en training_plan",
-        raw_sample: String(rawData).substring(0, 300),
+      console.error("Error parseando:", error);
+      res.status(500).json({ error: true, message: "JSON inválido" });
+      return;
+    }
+
+    // 5. FILTRAR DÍAS
+    let filteredDays = trainingPlan;
+
+    // Filtro por fecha
+    if (formattedFecha) {
+      filteredDays = filteredDays.filter((d: any) =>
+        new Date(d.fecha).toISOString().split("T")[0] === formattedFecha
+      );
+    }
+
+    // Filtro por nombre de rutina (ej: "Pecho - Semana 1")
+    if (exercise_name && !formattedFecha) {
+      const searchName = normalize(exercise_name as string);
+      filteredDays = filteredDays.filter((d: any) =>
+        normalize(d.nombre).includes(searchName)
+      );
+    }
+
+    if (filteredDays.length === 0) {
+      res.status(404).json({ error: true, message: "No se encontraron resultados" });
+      return;
+    }
+
+    // 6. SI HAY exercise_name + fecha → buscar ejercicio específico
+    if (exercise_name && formattedFecha) {
+      const searchName = normalize(exercise_name as string);
+      const day = filteredDays[0];
+      const exercise = day.ejercicios.find((e: any) =>
+        normalize(e.nombre_ejercicio).includes(searchName)
+      );
+
+      if (!exercise) {
+        res.status(404).json({ error: true, message: "Ejercicio no encontrado en esa fecha" });
+        return;
+      }
+
+      res.json({
+        error: false,
+        message: "Ejercicio encontrado",
+        response: {
+          fecha_rutina: formattedFecha,
+          user_id: targetUserId,
+          routine_name: day.nombre,
+          exercise: {
+            nombre_ejercicio: exercise.nombre_ejercicio,
+            description: exercise.description || "",
+            video_url: exercise.video_url || "",
+            thumbnail_url: exercise.thumbnail_url || "",
+            Esquema: exercise.Esquema,
+          },
+        },
+        queried_by_admin: targetUserId !== currentUserId,
       });
       return;
     }
 
-    // 7. BUSCAR DÍA
-    const day = trainingPlan.find((d: any) => {
-      const dayDate = new Date(d.fecha).toISOString().split("T")[0];
-      return dayDate === formattedFecha;
-    });
-
-    if (!day) {
-      res.status(404).json({ error: true, message: "Fecha no encontrada en la rutina generada" });
-      return;
-    }
-
-    // 8. BUSCAR EJERCICIO (NORMALIZADO)
-    const exercise = day.ejercicios.find((e: any) =>
-      normalize(e.nombre_ejercicio).includes(searchName)
-    );
-
-    if (!exercise) {
-      res.status(404).json({ error: true, message: "Ejercicio no encontrado en esa fecha" });
-      return;
-    }
-
-    // 9. RESPUESTA
+    // 7. SI NO → DEVOLVER TODOS LOS DÍAS FILTRADOS
     res.json({
       error: false,
-      message: "Ejercicio encontrado en rutina generada",
-      response: {
-        fecha_rutina: formattedFecha,
-        user_id: targetUserId,
-        routine_name: day.nombre,
-        exercise: {
-          nombre_ejercicio: exercise.nombre_ejercicio,
-          description: exercise.description || "",
-          video_url: exercise.video_url || "",
-          thumbnail_url: exercise.thumbnail_url || "",
-          Esquema: exercise.Esquema,
-        },
-      },
+      message: "Rutinas encontradas",
+      response: filteredDays.map((day: any) => ({
+        fecha: day.fecha,
+        nombre: day.nombre,
+        ejercicios: day.ejercicios.map((e: any) => ({
+          nombre_ejercicio: e.nombre_ejercicio,
+          description: e.description || "",
+          video_url: e.video_url || "",
+          thumbnail_url: e.thumbnail_url || "",
+          Esquema: e.Esquema,
+        })),
+        status: day.status || "pending",
+      })),
       queried_by_admin: targetUserId !== currentUserId,
     });
   } catch (error) {
-    console.error("Error en searchInGeneratedRoutine:", error);
+    console.error("Error:", error);
     next(error);
   }
 };
-
