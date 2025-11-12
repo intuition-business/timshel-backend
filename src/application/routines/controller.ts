@@ -603,33 +603,29 @@ export const getRoutineByExerciseName = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // 1. AUTENTICACIÓN
+    // Autenticación
     const token = req.headers["x-access-token"] as string;
     if (!token) {
       res.status(401).json({ error: true, message: "Token requerido" });
       return;
     }
-
-    let currentUserId: string;
-    let targetUserId: string;
+    let decode: JwtPayload;
     try {
-      const decoded = verify(token, SECRET) as JwtPayload;
-      currentUserId = decoded.userId;
-      // Si viene user_id en query → admin consulta otro usuario
-      targetUserId = (req.query.user_id as string) || currentUserId;
+      decode = verify(token, SECRET) as JwtPayload;
     } catch (error) {
       res.status(401).json({ error: true, message: "Token inválido" });
       return;
     }
+    const userId = decode.userId;
 
-    // 2. VALIDACIÓN DE ENTRADA
+    // Validación de entrada
     const { exercise_name, fecha_rutina, routine_name } = req.query;
     if (!exercise_name || typeof exercise_name !== "string") {
       res.status(400).json({ error: true, message: "Nombre del ejercicio es requerido y debe ser una cadena" });
       return;
     }
 
-    // 3. FORMATO DE FECHA
+    // Formato de fecha
     let formattedFecha: string | null = null;
     if (fecha_rutina) {
       try {
@@ -640,14 +636,13 @@ export const getRoutineByExerciseName = async (
       }
     }
 
-    // 4. CONSTRUCCIÓN DE CONSULTA
+    // Construcción de consulta
     let query = `
       SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed
       FROM complete_rutina
       WHERE user_id = ? AND LOWER(exercise_name) LIKE LOWER(?)
     `;
-    const params: (string | number)[] = [targetUserId, `%${exercise_name}%`];
-
+    const params: (string | number)[] = [userId, `%${exercise_name}%`];
     if (routine_name && typeof routine_name === "string") {
       query += " AND LOWER(routine_name) LIKE LOWER(?)";
       params.push(`%${routine_name}%`);
@@ -658,10 +653,10 @@ export const getRoutineByExerciseName = async (
     }
     query += " ORDER BY fecha_rutina DESC, rutina_id ASC, exercise_name LIMIT 100";
 
-    // 5. EJECUTAR CONSULTA
+    // Ejecutar consulta
     const [rows]: any = await pool.execute(query, params);
 
-    // 6. PROCESAR series_completed y avg_load
+    // Procesar series_completed y calcular avg_load
     const exerciseGroups = new Map<string, { row: RoutineRow; avg_load: number; fecha: Date; rutina_id: string }[]>();
 
     for (const item of rows) {
@@ -677,13 +672,15 @@ export const getRoutineByExerciseName = async (
         seriesCompletedParsed = item.series_completed;
       }
 
+      // Calcular avg_load
       let avg_load = 0;
       if (Array.isArray(seriesCompletedParsed) && seriesCompletedParsed.length > 0) {
         const sum_load = seriesCompletedParsed.reduce((acc: number, s: any) => acc + (Number(s.load) || 0), 0);
         avg_load = sum_load / seriesCompletedParsed.length;
-        avg_load = Math.round(avg_load * 100) / 100;
+        avg_load = Math.round(avg_load * 100) / 100; // Redondear a 2 decimales
       }
 
+      // Almacenar series parseadas
       item.series_completed = seriesCompletedParsed;
 
       const groupKey = item.exercise_name;
@@ -698,22 +695,24 @@ export const getRoutineByExerciseName = async (
       });
     }
 
-    // 7. CALCULAR last_weight_comparation
+    // Calcular last_weight_comparation
     for (const group of exerciseGroups.values()) {
+      // Ordenar DESC por fecha y ASC por rutina_id (como en la respuesta)
       group.sort((a, b) => {
         if (a.fecha.getTime() !== b.fecha.getTime()) {
-          return b.fecha.getTime() - a.fecha.getTime();
+          return b.fecha.getTime() - a.fecha.getTime(); // DESC
         }
-        return a.rutina_id.localeCompare(b.rutina_id);
+        return a.rutina_id.localeCompare(b.rutina_id); // ASC
       });
 
+      // Asignar diferencias
       for (let i = 0; i < group.length; i++) {
         const diff = i === 0 ? 0 : group[i].avg_load - group[i - 1].avg_load;
-        group[i].row.last_weight_comparation = Math.round(diff * 100) / 100;
+        group[i].row.last_weight_comparation = Math.round(diff * 100) / 100; // Redondear a 2 decimales
       }
     }
 
-    // 8. CONSTRUIR RESPUESTA
+    // Construir respuesta
     if (rows.length > 0) {
       const datesMap = new Map<string, { fecha_rutina: string; routines: Map<string, { rutina_id: string; routine_name: string; exercises: Exercise[] }> }>();
       for (const item of rows) {
@@ -747,13 +746,7 @@ export const getRoutineByExerciseName = async (
       if (routine_name) message += " en la rutina especificada";
       if (formattedFecha) message = `Rutina encontrada para la fecha y ejercicio especificado${routine_name ? " en la rutina especificada" : ""}`;
 
-      res.status(200).json({
-        error: false,
-        message,
-        response: responseData,
-        queried_user_id: targetUserId,
-        queried_by_admin: targetUserId !== currentUserId
-      });
+      res.status(200).json({ error: false, message, response: responseData });
       return;
     }
 
@@ -767,6 +760,7 @@ export const getRoutineByExerciseName = async (
     next(error);
   }
 };
+
 
 export const routinesSaved = async (
   req: Request,
@@ -997,6 +991,98 @@ export const editExercise = async (
   } catch (error) {
     console.error("Error editando ejercicio:", error);
     res.status(500).json({ error: true, message: "Error interno" });
+    next(error);
+  }
+};
+
+export const searchInGeneratedRoutine = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // 1. TOKEN
+    const token = req.headers["x-access-token"] as string;
+    if (!token) {
+      res.status(401).json({ error: true, message: "Token requerido" });
+      return;
+    }
+
+    let currentUserId: string;
+    let targetUserId: string;
+    try {
+      const decoded = verify(token, SECRET) as any;
+      currentUserId = decoded.userId;
+      targetUserId = currentUserId;
+    } catch {
+      res.status(401).json({ error: true, message: "Token inválido" });
+      return;
+    }
+    const { fecha_rutina, exercise_name } = req.query;
+    if (!fecha_rutina || !exercise_name) {
+      res.status(400).json({ error: true, message: "fecha_rutina y exercise_name son requeridos" });
+      return;
+    }
+
+    const formattedFecha = convertDate(fecha_rutina as string);
+
+    // 3. BUSCAR EN user_training_plans
+    const [planRows]: any = await pool.execute(
+      "SELECT training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+      [targetUserId]
+    );
+
+    if (planRows.length === 0) {
+      res.status(404).json({ error: true, message: "No hay rutina generada para este usuario" });
+      return;
+    }
+
+    let trainingPlan;
+    try {
+      trainingPlan = JSON.parse(planRows[0].training_plan);
+    } catch {
+      res.status(500).json({ error: true, message: "Error al parsear el plan" });
+      return;
+    }
+
+    const day = trainingPlan.find((d: any) =>
+      new Date(d.fecha).toISOString().split('T')[0] === formattedFecha
+    );
+
+    if (!day) {
+      res.status(404).json({ error: true, message: "Fecha no encontrada en la rutina generada" });
+      return;
+    }
+
+    const exercise = day.ejercicios.find((e: any) =>
+      e.nombre_ejercicio.toLowerCase().includes(exercise_name.toString().toLowerCase())
+    );
+
+    if (!exercise) {
+      res.status(404).json({ error: true, message: "Ejercicio no encontrado en esa fecha" });
+      return;
+    }
+
+    // 5. RESPUESTA
+    res.json({
+      error: false,
+      message: "Ejercicio encontrado en rutina generada",
+      response: {
+        fecha_rutina: formattedFecha,
+        user_id: targetUserId,
+        routine_name: day.nombre,
+        exercise: {
+          nombre_ejercicio: exercise.nombre_ejercicio,
+          description: exercise.description,
+          video_url: exercise.video_url || "",
+          thumbnail_url: exercise.thumbnail_url || "",
+          Esquema: exercise.Esquema
+        }
+      },
+      queried_by_admin: targetUserId !== currentUserId
+    });
+  } catch (error) {
+    console.error("Error:", error);
     next(error);
   }
 };
