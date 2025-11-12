@@ -1028,23 +1028,34 @@ export const searchInGeneratedRoutine = async (
 
     // 3. BUSCAR EN user_training_plans
     const [planRows]: any = await pool.execute(
-      "SELECT training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+      `SELECT training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
       [targetUserId]
     );
 
     if (planRows.length === 0) {
-      res.status(404).json({ error: true, message: "No hay rutina generada para este usuario" });
+      res.status(404).json({ error: true, message: "No hay rutina generada" });
       return;
     }
 
     let trainingPlan;
     try {
-      trainingPlan = JSON.parse(planRows[0].training_plan);
-    } catch {
-      res.status(500).json({ error: true, message: "Error al parsear el plan" });
+      const raw = planRows[0].training_plan
+        .toString()
+        .replace(/'/g, '"')
+        .replace(/\r\n|\r|\n/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      trainingPlan = JSON.parse(raw);
+    } catch (error) {
+      console.error("Error parseando training_plan:", error);
+      res.status(500).json({
+        error: true,
+        message: "Formato JSON inválido en training_plan",
+        raw_sample: planRows[0].training_plan.substring(0, 300)
+      });
       return;
     }
-
     const day = trainingPlan.find((d: any) =>
       new Date(d.fecha).toISOString().split('T')[0] === formattedFecha
     );
