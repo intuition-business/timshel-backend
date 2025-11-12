@@ -114,7 +114,7 @@ export const getWarmUps = async (req: Request, res: Response, next: NextFunction
     if (length) {
       const limit = Math.min(100, Math.max(1, parseInt(length as string, 10)));
       query += " LIMIT ?";
-      params.push(limit);
+      params.push(String(limit));  // ← CAMBIO: Convertir a cadena explícitamente
     }
 
     const [rows] = params.length > 0 ? await pool.execute(query, params) : await pool.query(query);
