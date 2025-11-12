@@ -1011,70 +1011,88 @@ export const searchInGeneratedRoutine = async (
     let currentUserId: string;
     let targetUserId: string;
     try {
-      const decoded = verify(token, SECRET) as any;
+      const decoded = verify(token, SECRET) as JwtPayload;
       currentUserId = decoded.userId;
-      targetUserId = currentUserId;
+      targetUserId = (req.query.user_id as string) || currentUserId;
     } catch {
       res.status(401).json({ error: true, message: "Token inválido" });
       return;
     }
+
+    // 2. PARÁMETROS
     const { fecha_rutina, exercise_name } = req.query;
     if (!fecha_rutina || !exercise_name) {
       res.status(400).json({ error: true, message: "fecha_rutina y exercise_name son requeridos" });
       return;
     }
 
-    const formattedFecha = convertDate(fecha_rutina as string);
+    // 3. NORMALIZAR NOMBRE DEL EJERCICIO
+    const normalize = (str: string): string =>
+      str.toString().toLowerCase().trim().replace(/\s+/g, " ");
 
-    // 3. BUSCAR EN user_training_plans
+    const searchName = normalize(exercise_name as string);
+
+    // 4. CONVERTIR FECHA (ISO o dd/mm/yyyy)
+    let formattedFecha: string;
+    try {
+      formattedFecha = convertDate(fecha_rutina as string);
+    } catch (error: any) {
+      res.status(400).json({ error: true, message: error.message });
+      return;
+    }
+
+    // 5. OBTENER RUTINA
     const [planRows]: any = await pool.execute(
       `SELECT training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
       [targetUserId]
     );
 
     if (planRows.length === 0) {
-      res.status(404).json({ error: true, message: "No hay rutina generada" });
+      res.status(404).json({ error: true, message: "No hay rutina generada para este usuario" });
       return;
     }
 
-    let trainingPlan;
+    // 6. PARSEAR training_plan (string o array)
+    let trainingPlan: any[];
     const rawData = planRows[0].training_plan;
 
     try {
-      if (typeof rawData === 'string') {
-        // Limpiar y parsear
+      if (typeof rawData === "string") {
         const cleaned = rawData
           .replace(/'/g, '"')
-          .replace(/\r\n|\r|\n/g, ' ')
-          .replace(/\s+/g, ' ')
+          .replace(/\r\n|\r|\n/g, " ")
+          .replace(/\s+/g, " ")
           .trim();
         trainingPlan = JSON.parse(cleaned);
       } else if (Array.isArray(rawData)) {
-        trainingPlan = rawData; // Ya es array
+        trainingPlan = rawData;
       } else {
-        throw new Error("Tipo no soportado");
+        throw new Error("Formato no soportado");
       }
     } catch (error) {
       console.error("Error parseando training_plan:", error);
       res.status(500).json({
         error: true,
-        message: "Formato JSON inválido",
-        raw_type: typeof rawData,
-        raw_sample: String(rawData).substring(0, 300)
+        message: "Formato JSON inválido en training_plan",
+        raw_sample: String(rawData).substring(0, 300),
       });
       return;
     }
-    const day = trainingPlan.find((d: any) =>
-      new Date(d.fecha).toISOString().split('T')[0] === formattedFecha
-    );
+
+    // 7. BUSCAR DÍA
+    const day = trainingPlan.find((d: any) => {
+      const dayDate = new Date(d.fecha).toISOString().split("T")[0];
+      return dayDate === formattedFecha;
+    });
 
     if (!day) {
       res.status(404).json({ error: true, message: "Fecha no encontrada en la rutina generada" });
       return;
     }
 
+    // 8. BUSCAR EJERCICIO (NORMALIZADO)
     const exercise = day.ejercicios.find((e: any) =>
-      e.nombre_ejercicio.toLowerCase().includes(exercise_name.toString().toLowerCase())
+      normalize(e.nombre_ejercicio).includes(searchName)
     );
 
     if (!exercise) {
@@ -1082,7 +1100,7 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 5. RESPUESTA
+    // 9. RESPUESTA
     res.json({
       error: false,
       message: "Ejercicio encontrado en rutina generada",
@@ -1092,16 +1110,17 @@ export const searchInGeneratedRoutine = async (
         routine_name: day.nombre,
         exercise: {
           nombre_ejercicio: exercise.nombre_ejercicio,
-          description: exercise.description,
+          description: exercise.description || "",
           video_url: exercise.video_url || "",
           thumbnail_url: exercise.thumbnail_url || "",
-          Esquema: exercise.Esquema
-        }
+          Esquema: exercise.Esquema,
+        },
       },
-      queried_by_admin: targetUserId !== currentUserId
+      queried_by_admin: targetUserId !== currentUserId,
     });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error en searchInGeneratedRoutine:", error);
     next(error);
   }
 };
+
