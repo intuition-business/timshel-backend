@@ -1039,20 +1039,20 @@ export const searchInGeneratedRoutine = async (
 
     let trainingPlan;
     try {
-      const raw = planRows[0].training_plan
-        .toString()
-        .replace(/'/g, '"')
-        .replace(/\r\n|\r|\n/g, ' ')
-        .replace(/\s+/g, ' ')
+      // 1. CONVERTIR Buffer → String
+      const raw = planRows[0].training_plan.toString()
+        .replace(/'/g, '"')           // comillas simples → dobles
+        .replace(/\r\n|\r|\n/g, ' ')  // saltos → espacio
+        .replace(/\s+/g, ' ')         // espacios múltiples → uno
         .trim();
 
       trainingPlan = JSON.parse(raw);
     } catch (error) {
-      console.error("Error parseando training_plan:", error);
+      console.error("JSON inválido:", planRows[0].training_plan.toString().substring(0, 200));
       res.status(500).json({
         error: true,
-        message: "Formato JSON inválido en training_plan",
-        raw_sample: planRows[0].training_plan.substring(0, 300)
+        message: "Formato JSON inválido",
+        raw_sample: planRows[0].training_plan.toString().substring(0, 300)
       });
       return;
     }
