@@ -915,9 +915,9 @@ export const editExercise = async (
     try {
       const decoded = verify(token, SECRET) as JwtPayload;
       currentUserId = decoded.userId;
-      targetUserId = req.query.user_id as string; // OBLIGATORIO
+      targetUserId = req.query.user_id as string;
       if (!targetUserId) {
-        res.status(400).json({ error: true, message: "user_id es requerido" });
+        res.status(400).json({ error: true, message: "user_id requerido en query" });
         return;
       }
     } catch {
@@ -932,70 +932,75 @@ export const editExercise = async (
       return;
     }
 
-    // 3. OBTENER RUTINA
+    // 3. OBTENER PLAN + VALIDAR rutina_id
     const [planRows]: any = await pool.execute(
-      `SELECT training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
-      [targetUserId]
+      `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND id = ?`,
+      [targetUserId, rutina_id]
     );
 
     if (planRows.length === 0) {
-      res.status(404).json({ error: true, message: "No hay rutina generada" });
+      res.status(404).json({ error: true, message: "Rutina no encontrada (user_id o rutina_id inválido)" });
       return;
     }
 
-    // 4. PARSEAR
     let trainingPlan: any[];
-    const rawData = planRows[0].training_plan;
     try {
-      trainingPlan = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+      trainingPlan = typeof planRows[0].training_plan === "string"
+        ? JSON.parse(planRows[0].training_plan)
+        : planRows[0].training_plan;
     } catch {
       res.status(500).json({ error: true, message: "JSON inválido" });
       return;
     }
 
-    // 5. BUSCAR DÍA POR rutina_id
-    const dayIndex = trainingPlan.findIndex((d: any) => d.rutina_id === rutina_id);
-    if (dayIndex === -1) {
-      res.status(404).json({ error: true, message: "rutina_id no encontrado" });
+    // 4. BUSCAR EJERCICIO EN TODO EL PLAN
+    let found = false;
+    let updatedExercise: any = null;
+
+    for (const day of trainingPlan) {
+      const exerciseIndex = day.ejercicios.findIndex((e: any) =>
+        e.nombre_ejercicio.toLowerCase() === exercise_name.toLowerCase()
+      );
+
+      if (exerciseIndex !== -1) {
+        const exercise = day.ejercicios[exerciseIndex];
+
+        // APLICAR CAMBIOS
+        if (updates.Series !== undefined) exercise.Esquema.Series = updates.Series;
+        if (updates.Descanso !== undefined) exercise.Esquema.Descanso = updates.Descanso;
+        if (updates["Detalle series"]) exercise.Esquema["Detalle series"] = updates["Detalle series"];
+        if (updates.description !== undefined) exercise.description = updates.description;
+        if (updates.video_url !== undefined) exercise.video_url = updates.video_url;
+        if (updates.thumbnail_url !== undefined) exercise.thumbnail_url = updates.thumbnail_url;
+
+        updatedExercise = {
+          fecha_rutina: new Date(day.fecha).toISOString().split("T")[0],
+          routine_name: day.nombre,
+          exercise_name: exercise.nombre_ejercicio,
+        };
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      res.status(404).json({ error: true, message: "Ejercicio no encontrado en la rutina" });
       return;
     }
 
-    const day = trainingPlan[dayIndex];
-
-    // 6. BUSCAR EJERCICIO
-    const exerciseIndex = day.ejercicios.findIndex((e: any) =>
-      e.nombre_ejercicio.toLowerCase() === exercise_name.toString().toLowerCase()
-    );
-
-    if (exerciseIndex === -1) {
-      res.status(404).json({ error: true, message: "Ejercicio no encontrado" });
-      return;
-    }
-
-    const exercise = day.ejercicios[exerciseIndex];
-
-    // 7. APLICAR CAMBIOS
-    if (updates.Series !== undefined) exercise.Esquema.Series = updates.Series;
-    if (updates.Descanso !== undefined) exercise.Esquema.Descanso = updates.Descanso;
-    if (updates["Detalle series"]) exercise.Esquema["Detalle series"] = updates["Detalle series"];
-    if (updates.description !== undefined) exercise.description = updates.description;
-    if (updates.video_url !== undefined) exercise.video_url = updates.video_url;
-    if (updates.thumbnail_url !== undefined) exercise.thumbnail_url = updates.thumbnail_url;
-
-    // 8. GUARDAR
+    // 5. GUARDAR
     await pool.execute(
-      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE user_id = ?`,
-      [JSON.stringify(trainingPlan), targetUserId]
+      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
+      [JSON.stringify(trainingPlan), rutina_id]
     );
 
     res.json({
       error: false,
-      message: "Ejercicio actualizado",
+      message: "Ejercicio actualizado en rutina generada",
       response: {
         user_id: targetUserId,
         rutina_id,
-        fecha_rutina: new Date(day.fecha).toISOString().split("T")[0],
-        exercise_name: exercise.nombre_ejercicio,
+        ...updatedExercise,
       },
     });
   } catch (error) {
