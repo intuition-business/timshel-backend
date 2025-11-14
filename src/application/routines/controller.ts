@@ -902,95 +902,104 @@ export const editExercise = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  const token = req.headers["x-access-token"] as string;
-  if (!token) {
-    res.status(401).json({ error: true, message: "Token requerido" });
-    return;
-  }
-
-  let userId: string;
   try {
-    const decoded = verify(token, SECRET) as any;
-    userId = decoded.userId;
-  } catch {
-    res.status(401).json({ error: true, message: "Token inválido" });
-    return;
-  }
-
-  const { fecha_rutina, exercise_name, rutina_id, updates } = req.body as EditExerciseRequest;
-
-  if (!fecha_rutina || !exercise_name || !updates || Object.keys(updates).length === 0) {
-    res.status(400).json({ error: true, message: "Faltan datos requeridos" });
-    return;
-  }
-
-  const formattedDate = convertDate(fecha_rutina);
-
-  try {
-    const connection = await pool.getConnection();
-    await connection.beginTransaction();
-
-    // 1. Buscar ejercicio
-    let sql = `
-      SELECT id, series_completed 
-      FROM complete_rutina 
-      WHERE user_id = ? AND fecha_rutina = ? AND exercise_name = ?
-    `;
-    const params: any[] = [userId, formattedDate, exercise_name];
-    if (rutina_id) {
-      sql += " AND rutina_id = ?";
-      params.push(rutina_id);
+    // 1. TOKEN
+    const token = req.headers["x-access-token"] as string;
+    if (!token) {
+      res.status(401).json({ error: true, message: "Token requerido" });
+      return;
     }
 
-    const [rows]: any = await connection.execute(sql, params);
-    if (rows.length === 0) {
-      await connection.rollback();
-      connection.release();
+    let currentUserId: string;
+    let targetUserId: string;
+    try {
+      const decoded = verify(token, SECRET) as JwtPayload;
+      currentUserId = decoded.userId;
+      targetUserId = req.query.user_id as string; // OBLIGATORIO
+      if (!targetUserId) {
+        res.status(400).json({ error: true, message: "user_id es requerido" });
+        return;
+      }
+    } catch {
+      res.status(401).json({ error: true, message: "Token inválido" });
+      return;
+    }
+
+    // 2. BODY
+    const { rutina_id, exercise_name, updates } = req.body;
+    if (!rutina_id || !exercise_name || !updates || Object.keys(updates).length === 0) {
+      res.status(400).json({ error: true, message: "Faltan: rutina_id, exercise_name, updates" });
+      return;
+    }
+
+    // 3. OBTENER RUTINA
+    const [planRows]: any = await pool.execute(
+      `SELECT training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [targetUserId]
+    );
+
+    if (planRows.length === 0) {
+      res.status(404).json({ error: true, message: "No hay rutina generada" });
+      return;
+    }
+
+    // 4. PARSEAR
+    let trainingPlan: any[];
+    const rawData = planRows[0].training_plan;
+    try {
+      trainingPlan = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+    } catch {
+      res.status(500).json({ error: true, message: "JSON inválido" });
+      return;
+    }
+
+    // 5. BUSCAR DÍA POR rutina_id
+    const dayIndex = trainingPlan.findIndex((d: any) => d.rutina_id === rutina_id);
+    if (dayIndex === -1) {
+      res.status(404).json({ error: true, message: "rutina_id no encontrado" });
+      return;
+    }
+
+    const day = trainingPlan[dayIndex];
+
+    // 6. BUSCAR EJERCICIO
+    const exerciseIndex = day.ejercicios.findIndex((e: any) =>
+      e.nombre_ejercicio.toLowerCase() === exercise_name.toString().toLowerCase()
+    );
+
+    if (exerciseIndex === -1) {
       res.status(404).json({ error: true, message: "Ejercicio no encontrado" });
       return;
     }
 
-    const row = rows[0];
-    let seriesCompleted = typeof row.series_completed === "string"
-      ? JSON.parse(row.series_completed)
-      : row.series_completed;
+    const exercise = day.ejercicios[exerciseIndex];
 
-    // 2. APLICAR CAMBIOS
-    if (updates.Series !== undefined) {
-      seriesCompleted = generateSeries(updates.Series, updates["Detalle series"]);
-    }
-    if (updates.Descanso !== undefined) {
-      seriesCompleted = seriesCompleted.map((s: any) => ({ ...s, breakTime: parseFloat(updates.Descanso!) }));
-    }
-    if (updates["Detalle series"]) {
-      seriesCompleted = generateSeries(seriesCompleted.length, updates["Detalle series"]);
-    }
+    // 7. APLICAR CAMBIOS
+    if (updates.Series !== undefined) exercise.Esquema.Series = updates.Series;
+    if (updates.Descanso !== undefined) exercise.Esquema.Descanso = updates.Descanso;
+    if (updates["Detalle series"]) exercise.Esquema["Detalle series"] = updates["Detalle series"];
+    if (updates.description !== undefined) exercise.description = updates.description;
+    if (updates.video_url !== undefined) exercise.video_url = updates.video_url;
+    if (updates.thumbnail_url !== undefined) exercise.thumbnail_url = updates.thumbnail_url;
 
-    // CAMPOS SIMPLES
-    if (updates.description) {
-      await connection.execute("UPDATE complete_rutina SET description = ? WHERE id = ?", [updates.description, row.id]);
-    }
-    if (updates.video_url !== undefined) {
-      await connection.execute("UPDATE complete_rutina SET video_url = ? WHERE id = ?", [updates.video_url, row.id]);
-    }
-    if (updates.thumbnail_url !== undefined) {
-      await connection.execute("UPDATE complete_rutina SET thumbnail_url = ? WHERE id = ?", [updates.thumbnail_url, row.id]);
-    }
-
-    // 3. GUARDAR SERIES
-    await connection.execute(
-      "UPDATE complete_rutina SET series_completed = ? WHERE id = ?",
-      [JSON.stringify(seriesCompleted), row.id]
+    // 8. GUARDAR
+    await pool.execute(
+      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE user_id = ?`,
+      [JSON.stringify(trainingPlan), targetUserId]
     );
 
-    await connection.commit();
-    connection.release();
-
-    // CORRECTO: SIN return
-    res.json({ error: false, message: "Ejercicio actualizado", data: { id: row.id } });
+    res.json({
+      error: false,
+      message: "Ejercicio actualizado",
+      response: {
+        user_id: targetUserId,
+        rutina_id,
+        fecha_rutina: new Date(day.fecha).toISOString().split("T")[0],
+        exercise_name: exercise.nombre_ejercicio,
+      },
+    });
   } catch (error) {
-    console.error("Error editando ejercicio:", error);
-    res.status(500).json({ error: true, message: "Error interno" });
+    console.error("Error:", error);
     next(error);
   }
 };
