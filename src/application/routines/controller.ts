@@ -1015,7 +1015,7 @@ export const searchInGeneratedRoutine = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // 1. TOKEN
+    // 1. Autenticación
     const token = req.headers["x-access-token"] as string;
     if (!token) {
       res.status(401).json({ error: true, message: "Token requerido" });
@@ -1035,7 +1035,6 @@ export const searchInGeneratedRoutine = async (
 
     const { fecha_rutina, routine_name, exercise_name } = req.query;
 
-    // REQUERIDO: fecha_rutina
     if (!fecha_rutina) {
       res.status(400).json({ error: true, message: "fecha_rutina es requerido" });
       return;
@@ -1043,17 +1042,24 @@ export const searchInGeneratedRoutine = async (
 
     const formattedFecha = convertDate(fecha_rutina as string);
 
-    // 2. OBTENER RUTINA
+    // 2. Obtener la rutina más reciente + su id
     const [planRows]: any = await pool.execute(
-      `SELECT training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+      `SELECT id, training_plan 
+       FROM user_training_plans 
+       WHERE user_id = ? 
+       ORDER BY created_at DESC 
+       LIMIT 1`,
       [targetUserId]
     );
 
     if (planRows.length === 0) {
-      res.status(404).json({ error: true, message: "No hay rutina generada" });
+      res.status(404).json({ error: true, message: "No hay rutina generada para este usuario" });
       return;
     }
 
+    const rutina_id = planRows[0].id;
+
+    // Parsear el plan de entrenamiento
     let trainingPlan: any[];
     const rawData = planRows[0].training_plan;
     try {
@@ -1070,36 +1076,43 @@ export const searchInGeneratedRoutine = async (
         throw new Error("Formato no soportado");
       }
     } catch (error) {
-      console.error("Error parseando:", error);
-      res.status(500).json({ error: true, message: "JSON inválido" });
+      console.error("Error parseando training_plan:", error);
+      res.status(500).json({ error: true, message: "JSON del plan inválido" });
       return;
     }
 
-    // 3. BUSCAR DÍA POR FECHA
+    // 3. Buscar el día correspondiente a la fecha
     const day = trainingPlan.find((d: any) =>
       new Date(d.fecha).toISOString().split("T")[0] === formattedFecha
     );
 
     if (!day) {
-      res.status(404).json({ error: true, message: "Fecha no encontrada" });
+      res.status(404).json({ error: true, message: "Fecha no encontrada en la rutina generada" });
       return;
     }
 
-    // 4. MODO 1: routine_name → DEVOLVER TODO EL DÍA
+    // 4. Respuesta común base
+    const baseResponse = {
+      error: false,
+      rutina_id,
+      user_id: targetUserId,
+      fecha_rutina: formattedFecha,
+      routine_name: day.nombre,
+      queried_by_admin: targetUserId !== currentUserId,
+    };
+
+    // 5. MODO 1: buscar toda la rutina del día (por routine_name)
     if (routine_name) {
       const searchRoutine = (routine_name as string).trim();
       if (day.nombre !== searchRoutine) {
-        res.status(404).json({ error: true, message: "Rutina no coincide con la fecha" });
+        res.status(404).json({ error: true, message: "El nombre de la rutina no coincide con la fecha indicada" });
         return;
       }
 
       res.json({
-        error: false,
-        message: "Día encontrado",
+        ...baseResponse,
+        message: "Día completo encontrado",
         response: {
-          fecha_rutina: formattedFecha,
-          user_id: targetUserId,
-          routine_name: day.nombre,
           ejercicios: day.ejercicios.map((e: any) => ({
             nombre_ejercicio: e.nombre_ejercicio,
             description: e.description || "",
@@ -1109,12 +1122,11 @@ export const searchInGeneratedRoutine = async (
           })),
           status: day.status || "pending",
         },
-        queried_by_admin: targetUserId !== currentUserId,
       });
       return;
     }
 
-    // 5. MODO 2: exercise_name → DEVOLVER 1 EJERCICIO
+    // 6. MODO 2: buscar un ejercicio específico
     if (exercise_name) {
       const searchExercise = normalize(exercise_name as string);
       const exercise = day.ejercicios.find((e: any) =>
@@ -1122,17 +1134,14 @@ export const searchInGeneratedRoutine = async (
       );
 
       if (!exercise) {
-        res.status(404).json({ error: true, message: "Ejercicio no encontrado" });
+        res.status(404).json({ error: true, message: "Ejercicio no encontrado en esta fecha" });
         return;
       }
 
       res.json({
-        error: false,
+        ...baseResponse,
         message: "Ejercicio encontrado",
         response: {
-          fecha_rutina: formattedFecha,
-          user_id: targetUserId,
-          routine_name: day.nombre,
           exercise: {
             nombre_ejercicio: exercise.nombre_ejercicio,
             description: exercise.description || "",
@@ -1141,16 +1150,17 @@ export const searchInGeneratedRoutine = async (
             Esquema: exercise.Esquema,
           },
         },
-        queried_by_admin: targetUserId !== currentUserId,
       });
       return;
     }
 
-    // 6. SI NO HAY routine_name NI exercise_name → ERROR
-    res.status(400).json({ error: true, message: "Debe pasar routine_name o exercise_name" });
-
+    // 7. Si no se pasa ni routine_name ni exercise_name → error
+    res.status(400).json({
+      error: true,
+      message: "Debe proporcionar al menos uno de los parámetros: routine_name o exercise_name",
+    });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error en searchInGeneratedRoutine:", error);
     next(error);
   }
 };
