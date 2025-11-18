@@ -1057,7 +1057,7 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    const rutina_id = planRows[0].id; // <-- Este es el ID que necesitas devolver
+    const rutina_id = planRows[0].id;
 
     // Parsear el plan de entrenamiento
     let trainingPlan: any[];
@@ -1094,7 +1094,7 @@ export const searchInGeneratedRoutine = async (
     // 4. Respuesta común base
     const baseResponse = {
       error: false,
-      rutina_id,                     // ← AQUÍ SE DEVUELVE SIEMPRE
+      rutina_id,
       user_id: targetUserId,
       fecha_rutina: formattedFecha,
       routine_name: day.nombre,
