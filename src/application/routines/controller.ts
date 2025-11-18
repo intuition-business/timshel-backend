@@ -1154,7 +1154,7 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 7. Si no se pasa ni routine_name ni exercise_name → error
+    // 7. Si no se pasa ni routine_name ni exercise_name 
     res.status(400).json({
       error: true,
       message: "Debe proporcionar al menos uno de los parámetros: routine_name o exercise_name",
