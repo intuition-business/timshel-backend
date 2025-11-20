@@ -1009,6 +1009,102 @@ export const editExercise = async (
   }
 };
 
+export const addExercise = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // 1. TOKEN
+    const token = req.headers["x-access-token"] as string;
+    if (!token) {
+      res.status(401).json({ error: true, message: "Token requerido" });
+      return;
+    }
+
+    let currentUserId: string;
+    let targetUserId: string;
+    try {
+      const decoded = verify(token, SECRET) as JwtPayload;
+      currentUserId = decoded.userId;
+      targetUserId = req.query.user_id as string;
+      if (!targetUserId) {
+        res.status(400).json({ error: true, message: "user_id requerido en query" });
+        return;
+      }
+    } catch {
+      res.status(401).json({ error: true, message: "Token inválido" });
+      return;
+    }
+
+    // 2. BODY
+    const { rutina_id, day_fecha, new_exercise } = req.body;
+    if (!rutina_id || !day_fecha || !new_exercise || Object.keys(new_exercise).length === 0) {
+      res.status(400).json({ error: true, message: "Faltan: rutina_id, day_fecha, new_exercise" });
+      return;
+    }
+
+    // 3. OBTENER PLAN + VALIDAR rutina_id
+    const [planRows]: any = await pool.execute(
+      `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND id = ?`,
+      [targetUserId, rutina_id]
+    );
+
+    if (planRows.length === 0) {
+      res.status(404).json({ error: true, message: "Rutina no encontrada (user_id o rutina_id inválido)" });
+      return;
+    }
+
+    let trainingPlan: any[];
+    try {
+      trainingPlan = typeof planRows[0].training_plan === "string"
+        ? JSON.parse(planRows[0].training_plan)
+        : planRows[0].training_plan;
+    } catch {
+      res.status(500).json({ error: true, message: "JSON inválido" });
+      return;
+    }
+
+    // 4. BUSCAR EL DÍA POR FECHA
+    let found = false;
+
+    for (const day of trainingPlan) {
+      if (new Date(day.fecha).toISOString().split("T")[0] === day_fecha) {
+        // AGREGAR EL NUEVO EJERCICIO
+        day.ejercicios.push(new_exercise);
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      res.status(404).json({ error: true, message: "Día no encontrado en la rutina" });
+      return;
+    }
+
+    // 5. GUARDAR
+    await pool.execute(
+      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
+      [JSON.stringify(trainingPlan), rutina_id]
+    );
+
+    res.json({
+      error: false,
+      message: "Nuevo ejercicio agregado a la rutina",
+      response: {
+        user_id: targetUserId,
+        rutina_id,
+        day_fecha,
+        exercise_name: new_exercise.nombre_ejercicio,
+      },
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    next(error);
+  }
+};
+
+
 export const searchInGeneratedRoutine = async (
   req: Request,
   res: Response,
@@ -1154,7 +1250,7 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 7. Si no se pasa ni routine_name ni exercise_name → error
+    // 7. Si no se pasa ni routine_name ni exercise_name 
     res.status(400).json({
       error: true,
       message: "Debe proporcionar al menos uno de los parámetros: routine_name o exercise_name",
