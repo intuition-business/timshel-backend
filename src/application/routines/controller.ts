@@ -1038,9 +1038,9 @@ export const addExercise = async (
     }
 
     // 2. BODY
-    const { rutina_id, day_fecha, new_exercise } = req.body;
-    if (!rutina_id || !day_fecha || !new_exercise || Object.keys(new_exercise).length === 0) {
-      res.status(400).json({ error: true, message: "Faltan: rutina_id, day_fecha, new_exercise" });
+    const { rutina_id, day_fecha, new_exercise, updates } = req.body;
+    if (!rutina_id || !day_fecha || !new_exercise || !updates || Object.keys(updates).length === 0) {
+      res.status(400).json({ error: true, message: "Faltan: rutina_id, day_fecha, new_exercise, updates" });
       return;
     }
 
@@ -1065,13 +1065,26 @@ export const addExercise = async (
       return;
     }
 
-    // 4. BUSCAR EL DÍA POR FECHA
+    // 4. CONSTRUIR EL NUEVO EJERCICIO
+    const constructedExercise = {
+      nombre_ejercicio: new_exercise,
+      Esquema: {
+        Series: updates.Series,
+        Descanso: updates.Descanso,
+        "Detalle series": updates["Detalle series"]
+      },
+      description: updates.description,
+      video_url: updates.video_url,
+      thumbnail_url: updates.thumbnail_url
+    };
+
+    // 5. BUSCAR EL DÍA POR FECHA Y AGREGAR EL EJERCICIO
     let found = false;
 
     for (const day of trainingPlan) {
       if (new Date(day.fecha).toISOString().split("T")[0] === day_fecha) {
         // AGREGAR EL NUEVO EJERCICIO
-        day.ejercicios.push(new_exercise);
+        day.ejercicios.push(constructedExercise);
         found = true;
         break;
       }
@@ -1082,7 +1095,7 @@ export const addExercise = async (
       return;
     }
 
-    // 5. GUARDAR
+    // 6. GUARDAR
     await pool.execute(
       `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
       [JSON.stringify(trainingPlan), rutina_id]
@@ -1095,7 +1108,7 @@ export const addExercise = async (
         user_id: targetUserId,
         rutina_id,
         day_fecha,
-        exercise_name: new_exercise.nombre_ejercicio,
+        exercise_name: new_exercise,
       },
     });
   } catch (error) {
@@ -1103,7 +1116,6 @@ export const addExercise = async (
     next(error);
   }
 };
-
 
 export const searchInGeneratedRoutine = async (
   req: Request,
