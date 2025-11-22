@@ -990,7 +990,8 @@ export const editExercise = async (
         if (exerciseIndex !== -1) {
           const exercise = day.ejercicios[exerciseIndex];
 
-          // APLICAR CAMBIOS (sin cambios)
+          // APLICAR CAMBIOS - Ajustado para exercise_name
+          if (updates.exercise_name !== undefined) exercise.nombre_ejercicio = updates.exercise_name;  // ← CORREGIDO: usa "exercise_name" en updates
           if (updates.Series !== undefined) exercise.Esquema.Series = updates.Series;
           if (updates.Descanso !== undefined) exercise.Esquema.Descanso = updates.Descanso;
           if (updates["Detalle series"]) exercise.Esquema["Detalle series"] = updates["Detalle series"];
@@ -1002,7 +1003,7 @@ export const editExercise = async (
             fecha_rutina: formattedFecha,
             routine_name: day.nombre,
             exercise_id: exercise.exercise_id,
-            nombre_ejercicio: exercise.nombre_ejercicio,  // Opcional, para referencia
+            exercise_name: exercise.nombre_ejercicio,  // Devuelve el nuevo nombre si cambió
           };
           found = true;
           break;
