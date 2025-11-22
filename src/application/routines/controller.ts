@@ -1254,6 +1254,7 @@ export const searchInGeneratedRoutine = async (
         response: {
           ejercicios: day.ejercicios.map((e: any) => ({
             nombre_ejercicio: e.nombre_ejercicio,
+            exercise_id: e.exercise_id,
             description: e.description || "",
             video_url: e.video_url || "",
             thumbnail_url: e.thumbnail_url || "",
@@ -1283,6 +1284,7 @@ export const searchInGeneratedRoutine = async (
         response: {
           exercise: {
             nombre_ejercicio: exercise.nombre_ejercicio,
+            exercise_id: exercise.exercise_id,
             description: exercise.description || "",
             video_url: exercise.video_url || "",
             thumbnail_url: exercise.thumbnail_url || "",
