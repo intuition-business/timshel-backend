@@ -10,6 +10,7 @@ import {
   editExercise,
   searchInGeneratedRoutine,
   addExercise,
+  deleteExercise,
 } from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";
 
@@ -24,6 +25,7 @@ router.get("/routinesByExerciseName", verifyToken, getRoutineByExerciseName);
 router.post("/routinesSave", verifyToken, routinesSaved);
 router.patch("/edit-exercise", verifyToken, editExercise);
 router.post("/add-exercise", verifyToken, addExercise);
+router.delete("/delete-exercise", verifyToken, deleteExercise);
 router.get("/search-in-generated", verifyToken, searchInGeneratedRoutine);
 
 export default router;

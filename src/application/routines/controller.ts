@@ -1148,6 +1148,115 @@ export const addExercise = async (
   }
 };
 
+export const deleteExercise = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // 1. TOKEN
+    const token = req.headers["x-access-token"] as string;
+    if (!token) {
+      res.status(401).json({ error: true, message: "Token requerido" });
+      return;
+    }
+
+    let currentUserId: string;
+    let targetUserId: string;
+    try {
+      const decoded = verify(token, SECRET) as JwtPayload;
+      currentUserId = decoded.userId;
+      targetUserId = req.query.user_id as string;
+      if (!targetUserId) {
+        res.status(400).json({ error: true, message: "user_id requerido en query" });
+        return;
+      }
+    } catch {
+      res.status(401).json({ error: true, message: "Token inválido" });
+      return;
+    }
+
+    // 2. BODY
+    const { rutina_id, fecha_rutina, exercise_id } = req.body;
+    if (!rutina_id || !fecha_rutina || !exercise_id) {
+      res.status(400).json({ error: true, message: "Faltan: rutina_id, fecha_rutina, exercise_id" });
+      return;
+    }
+
+    // Formatear fecha_rutina a YYYY-MM-DD
+    let formattedFecha: string;
+    try {
+      formattedFecha = convertDate(fecha_rutina);  // Asume tu función convertDate
+    } catch {
+      res.status(400).json({ error: true, message: "Formato de fecha_rutina inválido (usa DD/MM/YYYY)" });
+      return;
+    }
+
+    // 3. OBTENER PLAN + VALIDAR rutina_id
+    const [planRows]: any = await pool.execute(
+      `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND id = ?`,
+      [targetUserId, rutina_id]
+    );
+
+    if (planRows.length === 0) {
+      res.status(404).json({ error: true, message: "Rutina no encontrada (user_id o rutina_id inválido)" });
+      return;
+    }
+
+    let trainingPlan: any[];
+    try {
+      trainingPlan = typeof planRows[0].training_plan === "string"
+        ? JSON.parse(planRows[0].training_plan)
+        : planRows[0].training_plan;
+    } catch {
+      res.status(500).json({ error: true, message: "JSON inválido" });
+      return;
+    }
+
+    // 4. BUSCAR EL DÍA POR FECHA Y ELIMINAR EL EJERCICIO
+    let found = false;
+
+    for (const day of trainingPlan) {
+      const dayFecha = new Date(day.fecha).toISOString().split("T")[0];
+      if (dayFecha === formattedFecha) {
+        const exerciseIndex = day.ejercicios.findIndex((e: any) => e.exercise_id === exercise_id);
+
+        if (exerciseIndex !== -1) {
+          // ELIMINAR EL EJERCICIO DEL ARRAY
+          day.ejercicios.splice(exerciseIndex, 1);
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (!found) {
+      res.status(404).json({ error: true, message: "Ejercicio no encontrado en la fecha/rutina" });
+      return;
+    }
+
+    // 5. GUARDAR
+    await pool.execute(
+      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
+      [JSON.stringify(trainingPlan), rutina_id]
+    );
+
+    res.json({
+      error: false,
+      message: "Ejercicio eliminado exitosamente",
+      response: {
+        user_id: targetUserId,
+        rutina_id,
+        fecha_rutina: formattedFecha,
+        exercise_id,
+      },
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    next(error);
+  }
+};
+
 export const searchInGeneratedRoutine = async (
   req: Request,
   res: Response,
@@ -1172,7 +1281,7 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    const { fecha_rutina, routine_name, exercise_name } = req.query;
+    const { fecha_rutina, routine_name, exercise_name, exercise_id } = req.query;
 
     if (!fecha_rutina) {
       res.status(400).json({ error: true, message: "fecha_rutina es requerido" });
@@ -1240,7 +1349,33 @@ export const searchInGeneratedRoutine = async (
       queried_by_admin: targetUserId !== currentUserId,
     };
 
-    // 5. MODO 1: buscar toda la rutina del día (por routine_name)
+    // 5. MODO PRIORITARIO: búsqueda exacta por exercise_id (más rápido y preciso)
+    if (exercise_id) {
+      const exercise = day.ejercicios.find((e: any) => e.exercise_id === exercise_id);
+
+      if (!exercise) {
+        res.status(404).json({ error: true, message: "Ejercicio no encontrado con ese exercise_id en esta fecha" });
+        return;
+      }
+
+      res.json({
+        ...baseResponse,
+        message: "Ejercicio encontrado por exercise_id",
+        response: {
+          exercise: {
+            nombre_ejercicio: exercise.nombre_ejercicio,
+            exercise_id: exercise.exercise_id,
+            description: exercise.description || "",
+            video_url: exercise.video_url || "",
+            thumbnail_url: exercise.thumbnail_url || "",
+            Esquema: exercise.Esquema,
+          },
+        },
+      });
+      return;
+    }
+
+    // 6. MODO 2: buscar toda la rutina del día (por routine_name)
     if (routine_name) {
       const searchRoutine = (routine_name as string).trim();
       if (day.nombre !== searchRoutine) {
@@ -1266,7 +1401,7 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 6. MODO 2: buscar un ejercicio específico
+    // 7. MODO 3: búsqueda por exercise_name (fuzzy)
     if (exercise_name) {
       const searchExercise = normalize(exercise_name as string);
       const exercise = day.ejercicios.find((e: any) =>
@@ -1280,7 +1415,7 @@ export const searchInGeneratedRoutine = async (
 
       res.json({
         ...baseResponse,
-        message: "Ejercicio encontrado",
+        message: "Ejercicio encontrado por nombre",
         response: {
           exercise: {
             nombre_ejercicio: exercise.nombre_ejercicio,
@@ -1295,10 +1430,10 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 7. Si no se pasa ni routine_name ni exercise_name 
+    // 8. Si no se pasa ninguno de los parámetros
     res.status(400).json({
       error: true,
-      message: "Debe proporcionar al menos uno de los parámetros: routine_name o exercise_name",
+      message: "Debe proporcionar al menos uno de los parámetros: routine_name, exercise_name o exercise_id",
     });
   } catch (error) {
     console.error("Error en searchInGeneratedRoutine:", error);
