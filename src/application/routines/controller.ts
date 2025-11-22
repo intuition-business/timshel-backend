@@ -919,7 +919,7 @@ export const editExercise = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // 1. TOKEN
+    // 1. TOKEN (sin cambios)
     const token = req.headers["x-access-token"] as string;
     if (!token) {
       res.status(401).json({ error: true, message: "Token requerido" });
@@ -941,21 +941,30 @@ export const editExercise = async (
       return;
     }
 
-    // 2. BODY
-    const { rutina_id, exercise_name, updates } = req.body;
-    if (!rutina_id || !exercise_name || !updates || Object.keys(updates).length === 0) {
-      res.status(400).json({ error: true, message: "Faltan: rutina_id, exercise_name, updates" });
+    // 2. BODY - Ahora usa exercise_id + fecha_rutina para precisión
+    const { rutina_id, fecha_rutina, exercise_id, updates } = req.body;
+    if (!rutina_id || !fecha_rutina || !exercise_id || !updates || Object.keys(updates).length === 0) {
+      res.status(400).json({ error: true, message: "Faltan: rutina_id, fecha_rutina, exercise_id, updates" });
       return;
     }
 
-    // 3. OBTENER PLAN + VALIDAR rutina_id
+    // Formatear fecha_rutina a YYYY-MM-DD
+    let formattedFecha: string;
+    try {
+      formattedFecha = convertDate(fecha_rutina);  // Asume tu función convertDate
+    } catch {
+      res.status(400).json({ error: true, message: "Formato de fecha_rutina inválido (usa DD/MM/YYYY)" });
+      return;
+    }
+
+    // 3. OBTENER PLAN + VALIDAR rutina_id (sin cambios)
     const [planRows]: any = await pool.execute(
       `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND id = ?`,
       [targetUserId, rutina_id]
     );
 
     if (planRows.length === 0) {
-      res.status(404).json({ error: true, message: "Rutina no encontrada (user_id o rutina_id inválido)" });
+      res.status(404).json({ error: true, message: "Rutina no encontrada" });
       return;
     }
 
@@ -969,42 +978,44 @@ export const editExercise = async (
       return;
     }
 
-    // 4. BUSCAR EJERCICIO EN TODO EL PLAN
+    // 4. BUSCAR POR FECHA + EXERCISE_ID Y ACTUALIZAR
     let found = false;
     let updatedExercise: any = null;
 
     for (const day of trainingPlan) {
-      const exerciseIndex = day.ejercicios.findIndex((e: any) =>
-        e.nombre_ejercicio.toLowerCase() === exercise_name.toLowerCase()
-      );
+      const dayFecha = new Date(day.fecha).toISOString().split("T")[0];
+      if (dayFecha === formattedFecha) {
+        const exerciseIndex = day.ejercicios.findIndex((e: any) => e.exercise_id === exercise_id);
 
-      if (exerciseIndex !== -1) {
-        const exercise = day.ejercicios[exerciseIndex];
+        if (exerciseIndex !== -1) {
+          const exercise = day.ejercicios[exerciseIndex];
 
-        // APLICAR CAMBIOS
-        if (updates.Series !== undefined) exercise.Esquema.Series = updates.Series;
-        if (updates.Descanso !== undefined) exercise.Esquema.Descanso = updates.Descanso;
-        if (updates["Detalle series"]) exercise.Esquema["Detalle series"] = updates["Detalle series"];
-        if (updates.description !== undefined) exercise.description = updates.description;
-        if (updates.video_url !== undefined) exercise.video_url = updates.video_url;
-        if (updates.thumbnail_url !== undefined) exercise.thumbnail_url = updates.thumbnail_url;
+          // APLICAR CAMBIOS (sin cambios)
+          if (updates.Series !== undefined) exercise.Esquema.Series = updates.Series;
+          if (updates.Descanso !== undefined) exercise.Esquema.Descanso = updates.Descanso;
+          if (updates["Detalle series"]) exercise.Esquema["Detalle series"] = updates["Detalle series"];
+          if (updates.description !== undefined) exercise.description = updates.description;
+          if (updates.video_url !== undefined) exercise.video_url = updates.video_url;
+          if (updates.thumbnail_url !== undefined) exercise.thumbnail_url = updates.thumbnail_url;
 
-        updatedExercise = {
-          fecha_rutina: new Date(day.fecha).toISOString().split("T")[0],
-          routine_name: day.nombre,
-          exercise_name: exercise.nombre_ejercicio,
-        };
-        found = true;
-        break;
+          updatedExercise = {
+            fecha_rutina: formattedFecha,
+            routine_name: day.nombre,
+            exercise_id: exercise.exercise_id,
+            nombre_ejercicio: exercise.nombre_ejercicio,  // Opcional, para referencia
+          };
+          found = true;
+          break;
+        }
       }
     }
 
     if (!found) {
-      res.status(404).json({ error: true, message: "Ejercicio no encontrado en la rutina" });
+      res.status(404).json({ error: true, message: "Ejercicio no encontrado en la fecha/rutina" });
       return;
     }
 
-    // 5. GUARDAR
+    // 5. GUARDAR (sin cambios)
     await pool.execute(
       `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
       [JSON.stringify(trainingPlan), rutina_id]
@@ -1012,7 +1023,7 @@ export const editExercise = async (
 
     res.json({
       error: false,
-      message: "Ejercicio actualizado en rutina generada",
+      message: "Ejercicio actualizado exitosamente",
       response: {
         user_id: targetUserId,
         rutina_id,
@@ -1031,7 +1042,7 @@ export const addExercise = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // 1. TOKEN
+    // 1. TOKEN (sin cambios)
     const token = req.headers["x-access-token"] as string;
     if (!token) {
       res.status(401).json({ error: true, message: "Token requerido" });
@@ -1053,14 +1064,14 @@ export const addExercise = async (
       return;
     }
 
-    // 2. BODY
+    // 2. BODY (sin cambios)
     const { rutina_id, day_fecha, new_exercise, updates } = req.body;
     if (!rutina_id || !day_fecha || !new_exercise || !updates || Object.keys(updates).length === 0) {
       res.status(400).json({ error: true, message: "Faltan: rutina_id, day_fecha, new_exercise, updates" });
       return;
     }
 
-    // 3. OBTENER PLAN + VALIDAR rutina_id
+    // 3. OBTENER PLAN + VALIDAR rutina_id (sin cambios)
     const [planRows]: any = await pool.execute(
       `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND id = ?`,
       [targetUserId, rutina_id]
@@ -1081,9 +1092,10 @@ export const addExercise = async (
       return;
     }
 
-    // 4. CONSTRUIR EL NUEVO EJERCICIO
+    // 4. CONSTRUIR EL NUEVO EJERCICIO - AGREGAR exercise_id
     const constructedExercise = {
       nombre_ejercicio: new_exercise,
+      exercise_id: uuidv4(),  // ← Nuevo: genera UUID único
       Esquema: {
         Series: updates.Series,
         Descanso: updates.Descanso,
@@ -1094,7 +1106,7 @@ export const addExercise = async (
       thumbnail_url: updates.thumbnail_url
     };
 
-    // 5. BUSCAR EL DÍA POR FECHA Y AGREGAR EL EJERCICIO
+    // 5. BUSCAR EL DÍA POR FECHA Y AGREGAR EL EJERCICIO (sin cambios)
     let found = false;
 
     for (const day of trainingPlan) {
@@ -1111,12 +1123,13 @@ export const addExercise = async (
       return;
     }
 
-    // 6. GUARDAR
+    // 6. GUARDAR (sin cambios)
     await pool.execute(
       `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
       [JSON.stringify(trainingPlan), rutina_id]
     );
 
+    // 7. RESPUESTA - Agrego exercise_id en la response para que el frontend lo sepa
     res.json({
       error: false,
       message: "Nuevo ejercicio agregado a la rutina",
@@ -1125,6 +1138,7 @@ export const addExercise = async (
         rutina_id,
         day_fecha,
         exercise_name: new_exercise,
+        exercise_id: constructedExercise.exercise_id  // ← Nuevo: devuelve el ID generado
       },
     });
   } catch (error) {
