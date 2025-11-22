@@ -258,6 +258,14 @@ export const generateRoutinesIa = async (
         trainingPlan.forEach((day: any, index: number) => {
           const dateData = firstThreeDays[index];
           day.fecha = dateData ? dateData.date : null;
+
+          if (Array.isArray(day.ejercicios)) {
+            day.ejercicios.forEach((ex: any) => {
+              if (!ex.exercise_id) {
+                ex.exercise_id = uuidv4();
+              }
+            });
+          }
         });
 
         // Guardar los primeros 3 días en la DB (parcial)
@@ -299,6 +307,14 @@ export const generateRoutinesIa = async (
               fullTrainingPlan.forEach((day: any, index: number) => {
                 const dateData = daysData[index];
                 day.fecha = dateData ? dateData.date : null;
+
+                if (Array.isArray(day.ejercicios)) {
+                  day.ejercicios.forEach((ex: any) => {
+                    if (!ex.exercise_id) {
+                      ex.exercise_id = uuidv4();
+                    }
+                  });
+                }
               });
               const fullTrainingPlanJson = JSON.stringify(fullTrainingPlan);
               await pool.execute(
