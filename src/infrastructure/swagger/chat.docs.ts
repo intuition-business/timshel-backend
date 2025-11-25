@@ -1,5 +1,3 @@
-// src/router/chatRouter.ts (o integra en el router principal si quieres)
-// Usamos el mismo estilo que tu exercises router: verifyToken en la ruta, asyncHandler, y default export.
 
 import { Router } from "express";
 import { verifyToken } from "../../middleware/jwtVerify";
