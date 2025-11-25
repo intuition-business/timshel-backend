@@ -1,6 +1,3 @@
-// Este es el archivo principal: Server.ts (o como lo llames)
-// He extraído toda la lógica de Socket.IO a un archivo separado: socket.ts
-// Solo importo e inicializo io en este archivo.
 
 import express, { Application } from "express";
 import helmet from "helmet";
