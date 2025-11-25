@@ -20,4 +20,5 @@ export interface PathProps {
   specialCases: string;
   routineExercises: string;
   exercises: string;
+  chatUploadMedia: string;
 }
