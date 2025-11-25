@@ -1,3 +1,7 @@
+// Este es el archivo principal: Server.ts (o como lo llames)
+// He extraído toda la lógica de Socket.IO a un archivo separado: socket.ts
+// Solo importo e inicializo io en este archivo.
+
 import express, { Application } from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -13,28 +17,23 @@ import {
   ormHandlerError,
 } from "../middleware";
 import { conectionMysql } from "./../infrastructure/database";
-import { NODE_ENV, PORT, URL } from "../config";
+import { NODE_ENV, PORT, URL, SECRET } from "../config";  // Asegúrate de tener SECRET aquí
 import { openapiSpecification } from "../infrastructure/swagger";
 import cron from 'node-cron';
 import { renewRoutines } from "../application/routineDays/controller";
 
-// NUEVO: Importamos http y socket.io
+// NUEVO: Importamos http
 import { createServer } from "http";
-import { Server as SocketIOServer } from "socket.io";
+
+
+import { initSocket } from "../socket/socket";
 
 const Server = () => {
   const app: Application = express();
 
-  // CREAMOS EL SERVIDOR HTTP Y SOCKET.IO
   const httpServer = createServer(app);
-  const io = new SocketIOServer(httpServer, {
-    cors: {
-      origin: "*", // Cambia esto en producción
-      methods: ["GET", "POST"]
-    }
-  });
+  const io = initSocket(httpServer);
 
-  // Middlewares Express (igual que antes)
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   app.use(helmet());
@@ -47,7 +46,7 @@ const Server = () => {
       cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        maxAge: 24 * 60 * 60 * 1000,
+        maxAge: 24 * 60 * 60 * 1000,  // 1 día
       },
     })
   );
@@ -57,13 +56,6 @@ const Server = () => {
 
   app.get("/", (req, res) => {
     res.json({ auth: "on", version: "alpha" });
-  });
-
-  io.on("connection", (socket) => {
-    console.log("Cliente conectado:", socket.id);
-    socket.on("join-room", (room) => socket.join(room));
-    socket.on("new-order", (data) => io.to("kitchen").emit("order-received", data));
-    socket.on("disconnect", () => console.log("Cliente desconectado:", socket.id));
   });
 
   // Exportamos io para usarlo en controladores si quieres

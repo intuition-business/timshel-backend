@@ -16,8 +16,10 @@ import { warmUpRouter } from "../application/warm-ups";
 import { routineRouter } from "../application/routineDays";
 import { specialCaseRouter } from "../application/specialCase";
 import { exerciseRouter } from "../application/exercises";
+import { chatUploadMediaRouter } from "../application/chat";
 
-const { sendOtp, validateOtp, register, login, google, user, getRoutines, trainers, admins, profile, routineDays, specialCases, routineExercises, weight, warmUps, plans, exercises } =
+
+const { sendOtp, validateOtp, register, login, google, user, getRoutines, trainers, admins, profile, routineDays, specialCases, routineExercises, weight, warmUps, plans, exercises, chatUploadMedia } =
   path;
 
 const router = (app: Application) => {
@@ -40,6 +42,7 @@ const router = (app: Application) => {
   app.use(specialCases, specialCaseRouter);
   app.use(routineExercises, exerciseRouter);
   app.use(warmUps, warmUpRouter);
+  app.use(chatUploadMedia, chatUploadMediaRouter);
 
 };
 
