@@ -27,6 +27,8 @@ import { initSocket } from "../socket/socket";
 
 const Server = () => {
   const app: Application = express();
+  app.disable("strict routing");
+
 
   const httpServer = createServer(app);
   const io = initSocket(httpServer);
