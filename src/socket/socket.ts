@@ -99,15 +99,24 @@ export const initSocket = (httpServer: any) => {
     return io;  // Devolvemos io para usarlo en Server si es necesario
 };
 
-// HELPERS PARA DB (ajusta según tu schema)
+// Obtener imagen de perfil desde la tabla user_images
 async function getUserImage(userId: string): Promise<string | null> {
-    const [rows]: any = await pool.execute("SELECT image_url FROM users WHERE id = ?", [userId]);
-    return rows[0]?.image_url || null;
+    const [rows]: any = await pool.execute(
+        "SELECT image_path FROM user_images WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+        [userId]
+    );
+    return rows.length > 0 ? rows[0].image_path : null;
 }
 
+// Obtener nombre (desde auth)
 async function getUserName(userId: string): Promise<string> {
-    const [rows]: any = await pool.execute("SELECT name FROM users WHERE id = ?", [userId]);
-    return rows[0]?.name || "Unknown";
+    const [rows]: any = await pool.execute(
+        "SELECT name, telefono FROM auth WHERE id = ?",
+        [userId]
+    );
+    if (!rows.length) return "Usuario";
+    const user = rows[0];
+    return user.name || user.telefono || `Usuario ${userId}`;
 }
 
 async function saveMessageToDB(message: any) {

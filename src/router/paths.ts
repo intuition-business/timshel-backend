@@ -23,4 +23,5 @@ export const Path: PathProps = {
   profile: "/api/profile",
   exercises: "/api/exercises",
   chatUploadMedia: "/api/chat/upload-media",
+  chatMessages: "/api/chat/messages"
 };
