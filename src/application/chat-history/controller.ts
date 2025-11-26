@@ -6,6 +6,7 @@ import { SECRET } from "../../config";
 import { adapterConversations, adapterMessages } from "./adapter";
 import { getConversationsDto, getMessagesDto } from "./dto";
 
+// src/application/chat/controller.ts → getConversations (FUNCIONA EN MySQL)
 export const getConversations = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.headers["x-access-token"] as string;
@@ -24,8 +25,8 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
         u.name,
         u.telefono,
         ui.image_path,
-        lm.message AS last_message,
-        lm.created_at AS last_message_time,
+        m.message AS last_message,
+        m.created_at AS last_message_time,
         COALESCE(unseen.unseen_count, 0) AS unseen_count
       FROM (
         SELECT DISTINCT 
@@ -36,30 +37,30 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
       JOIN auth u ON u.id = conv.other_user_id
       LEFT JOIN user_images ui ON ui.user_id = u.id 
         AND ui.created_at = (SELECT MAX(created_at) FROM user_images WHERE user_id = u.id)
-      LEFT JOIN LATERAL (
-        SELECT message, created_at 
-        FROM messages 
+      LEFT JOIN messages m ON m.id = (
+        SELECT id FROM messages 
         WHERE (user_id_sender = ? AND user_id_receiver = u.id) 
            OR (user_id_sender = u.id AND user_id_receiver = ?)
-        ORDER BY created_at DESC 
+        ORDER BY created_at DESC, id DESC 
         LIMIT 1
-      ) lm ON TRUE
-      LEFT JOIN LATERAL (
-        SELECT COUNT(*) AS unseen_count
+      )
+      LEFT JOIN (
+        SELECT user_id_sender, COUNT(*) AS unseen_count
         FROM messages 
-        WHERE user_id_receiver = ? 
-          AND user_id_sender = u.id 
-          AND seen = 0
-      ) unseen ON TRUE
-      ORDER BY lm.created_at DESC NULLS LAST, u.id DESC
+        WHERE user_id_receiver = ? AND seen = 0
+        GROUP BY user_id_sender
+      ) unseen ON unseen.user_id_sender = u.id
+      ORDER BY 
+        m.created_at DESC,   -- Los que tienen mensaje reciente primero
+        u.id DESC            -- Si no hay mensaje, orden por ID
       LIMIT ? OFFSET ?
     `;
 
     const params = [
-      myId, myId, myId, // DISTINCT
-      myId, myId,       // last message
-      myId,             // unseen count
-      limit, offset
+      myId, myId, myId,   // 1-3: subquery DISTINCT
+      myId, myId,         // 4-5: último mensaje
+      myId,               // 6: conteo de no leídos
+      limit, offset       // 7-8: paginación
     ];
 
     const [rows]: any = await pool.execute(query, params);
