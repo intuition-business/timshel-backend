@@ -6,6 +6,7 @@ import { SECRET } from "../../config";
 import { adapterConversations, adapterMessages } from "./adapter";
 import { getConversationsDto, getMessagesDto } from "./dto";
 
+// src/application/chat/controller.ts → getConversations (CORREGIDO)
 export const getConversations = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.headers["x-access-token"] as string;
@@ -51,11 +52,18 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
         u.id DESC
       LIMIT ? OFFSET ?
     `, [
-      myId, myId, myId, myId,  // unseen_count
-      myId, myId, myId,        // subquery + exclude self
-      myId, myId,              // last message join
-      myId, myId,              // last message subquery
-      limit, offset
+      myId,           // 1. unseen_count
+      myId,           // 2. subquery WHERE
+      myId,           // 3. subquery WHERE
+      myId,           // 4. exclude self
+      myId,           // 5. last message join (sender = myId)
+      myId,           // 6. last message join (receiver = myId)
+      myId,           // 7. subquery MAX(id) sender
+      myId,           // 8. subquery MAX(id) receiver
+      myId,           // 9. subquery MAX(id) sender (segundo)
+      myId,           // 10. subquery MAX(id) receiver (segundo)
+      limit,          // 11. LIMIT
+      offset          // 12. OFFSET
     ]);
 
     res.json({
