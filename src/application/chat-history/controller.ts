@@ -10,7 +10,7 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
   try {
     const token = req.headers["x-access-token"] as string;
     const decoded = verify(token, SECRET) as { userId: string };
-    const myId = decoded.userId;
+    const myId = Number(decoded.userId);
 
     const { error, value } = getConversationsDto.validate(req.query);
     if (error) return res.status(400).json({ error: true, message: error.details[0].message });
@@ -35,9 +35,8 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
         WHERE user_id_sender = ? OR user_id_receiver = ?
       ) conv
       CROSS JOIN auth u ON (u.id = conv.u1 OR u.id = conv.u2) AND u.id != ?
-      LEFT JOIN user_images ui ON ui.user_id = u.id AND ui.created_at = (
-        SELECT MAX(created_at) FROM user_images WHERE user_id = u.id
-      )
+      LEFT JOIN user_images ui ON ui.user_id = u.id 
+        AND ui.created_at = (SELECT MAX(created_at) FROM user_images WHERE user_id = u.id)
       LEFT JOIN messages m ON (
         (m.user_id_sender = ? AND m.user_id_receiver = u.id) OR
         (m.user_id_sender = u.id AND m.user_id_receiver = ?)
@@ -47,16 +46,25 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
            OR (user_id_sender = u.id AND user_id_receiver = ?)
       )
       GROUP BY u.id, u.name, u.telefono, ui.image_path, m.message, m.created_at
-      ORDER BY m.created_at DESC NULLS LAST
+      ORDER BY 
+        COALESCE(m.created_at, '1970-01-01 00:00:00') DESC,
+        u.id DESC
       LIMIT ? OFFSET ?
-    `, [myId, myId, myId, myId, myId, myId, myId, myId, limit, offset]);
+    `, [
+      myId, myId, myId, myId,  // unseen_count
+      myId, myId, myId,        // subquery + exclude self
+      myId, myId,              // last message join
+      myId, myId,              // last message subquery
+      limit, offset
+    ]);
 
     res.json({
       error: false,
       message: "Conversaciones obtenidas",
       data: adapterConversations(rows)
     });
-  } catch (err) {
+  } catch (err: any) {
+    console.error("Error en getConversations:", err);
     next(err);
   }
 };
@@ -65,7 +73,7 @@ export const getMessages = async (req: Request, res: Response, next: NextFunctio
   try {
     const token = req.headers["x-access-token"] as string;
     const decoded = verify(token, SECRET) as { userId: string };
-    const myId = decoded.userId;
+    const myId = Number(decoded.userId);
 
     const { error, value } = getMessagesDto.validate(req.query);
     if (error) return res.status(400).json({ error: true, message: error.details[0].message });
@@ -81,12 +89,14 @@ export const getMessages = async (req: Request, res: Response, next: NextFunctio
       LIMIT ? OFFSET ?
     `, [myId, receiverId, receiverId, myId, limit, offset]);
 
+    // reverse() para que el más antiguo quede primero (orden cronológico)
     res.json({
       error: false,
       message: "Mensajes obtenidos",
-      data: adapterMessages(rows.reverse()) // reverse para orden cronológico
+      data: adapterMessages(rows.reverse())
     });
-  } catch (err) {
+  } catch (err: any) {
+    console.error("Error en getMessages:", err);
     next(err);
   }
 };
