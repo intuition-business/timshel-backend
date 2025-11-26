@@ -6,7 +6,7 @@ import { SECRET } from "../../config";
 import { adapterConversations, adapterMessages } from "./adapter";
 import { getConversationsDto, getMessagesDto } from "./dto";
 
-// src/application/chat/controller.ts → getConversations (FUNCIONA YA)
+// src/application/chat/controller.ts → getConversations
 export const getConversations = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.headers["x-access-token"] as string;
@@ -52,19 +52,19 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
     `;
 
     const params = [
-      myId, // unseen_count
-      myId, // WHERE sender
-      myId, // WHERE receiver
-      myId, // exclude self
-      myId, // last message sender = myId
-      myId, // last message receiver = myId
-      myId, // subquery MAX(id) sender
-      myId, // subquery MAX(id) receiver
-      limit,
-      offset
+      myId,  // 1. unseen_count
+      myId,  // 2. WHERE sender
+      myId,  // 3. WHERE receiver
+      myId,  // 4. exclude self
+      myId,  // 5. last message sender = myId
+      myId,  // 6. last message receiver = myId
+      myId,  // 7. subquery MAX(id) sender
+      myId,  // 8. subquery MAX(id) receiver
+      myId,  // 9. subquery MAX(id) sender (segundo bloque)
+      myId,  // 10. subquery MAX(id) receiver (segundo bloque)
+      limit, // 11. LIMIT
+      offset // 12. OFFSET
     ];
-
-    console.log("Parámetros:", params); // Para debuggear
 
     const [rows]: any = await pool.execute(query, params);
 
@@ -74,7 +74,7 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
       data: adapterConversations(rows)
     });
   } catch (err: any) {
-    console.error("Error en getConversations:", err);
+    console.error("Error completo en getConversations:", err);
     next(err);
   }
 };
