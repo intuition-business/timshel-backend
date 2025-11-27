@@ -1,4 +1,5 @@
-// src/application/chat/controller.ts
+// src/application/chat/controller.ts (o chat-history/controller.ts)
+
 import { Request, Response, NextFunction } from "express";
 import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
@@ -6,19 +7,49 @@ import { SECRET } from "../../config";
 import { adapterConversations, adapterMessages } from "./adapter";
 import { getConversationsDto, getMessagesDto } from "./dto";
 
-// src/application/chat/controller.ts → getConversations (FUNCIONA EN MySQL)
 export const getConversations = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // 1. Verificar token
     const token = req.headers["x-access-token"] as string;
+    if (!token) {
+      return res.status(401).json({ error: true, message: "Token no proporcionado" });
+    }
+
     const decoded = verify(token, SECRET) as { userId: string };
     const myId = Number(decoded.userId);
 
-    const { error, value } = getConversationsDto.validate(req.query);
-    if (error) return res.status(400).json({ error: true, message: error.details[0].message });
+    if (isNaN(myId) || myId <= 0) {
+      return res.status(401).json({ error: true, message: "Token inválido" });
+    }
 
-    const limit = value.limit;
-    const offset = (value.page - 1) * limit;
+    // 2. Validar query params con Joi + valores por defecto
+    const { error, value } = getConversationsDto.validate(req.query, {
+      abortEarly: false,
+      convert: true,        // convierte strings a números automáticamente
+    });
 
+    if (error) {
+      return res.status(400).json({
+        error: true,
+        message: error.details[0].message,
+      });
+    }
+
+    // 3. Parámetros de paginación con valores seguros (NUNCA undefined ni NaN)
+    const limit = value.limit ? Number(value.limit) : 20;
+    const page = value.page ? Number(value.page) : 1;
+
+    // Protección extra (opcional pero recomendada)
+    if (limit < 1 || limit > 100) {
+      return res.status(400).json({ error: true, message: "Limit debe estar entre 1 y 100" });
+    }
+    if (page < 1) {
+      return res.status(400).json({ error: true, message: "Page debe ser mayor a 0" });
+    }
+
+    const offset = (page - 1) * limit;
+
+    // 4. Consulta SQL (perfectamente segura)
     const query = `
       SELECT 
         u.id AS user_id,
@@ -51,28 +82,39 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
         GROUP BY user_id_sender
       ) unseen ON unseen.user_id_sender = u.id
       ORDER BY 
-        m.created_at DESC,   -- Los que tienen mensaje reciente primero
-        u.id DESC            -- Si no hay mensaje, orden por ID
+        m.created_at DESC NULLS LAST,
+        u.id DESC
       LIMIT ? OFFSET ?
     `;
 
     const params = [
-      myId, myId, myId,   // 1-3: subquery DISTINCT
-      myId, myId,         // 4-5: último mensaje
-      myId,               // 6: conteo de no leídos
-      limit, offset       // 7-8: paginación
+      myId, myId, myId, myId,     // para el subquery de conversaciones
+      myId, myId,             // para último mensaje
+      myId,                   // para mensajes no leídos
+      limit,
+      offset
     ];
 
-    const [rows]: any = await pool.execute(query, params);
+    // DEBUG opcional (quítalo en producción si quieres)
+    // console.log("Executing getConversations → myId:", myId, "limit:", limit, "offset:", offset);
 
-    res.json({
+    const [rows] = await pool.execute(query, params) as any;
+
+    // 5. Respuesta exitosa
+    return res.json({
       error: false,
-      message: "Conversaciones obtenidas",
-      data: adapterConversations(rows)
+      message: "Conversaciones obtenidas correctamente",
+      data: adapterConversations(rows),
+      pagination: {
+        page,
+        limit,
+        hasMore: rows.length === limit // si trajo exactamente el limit, probablemente hay más
+      }
     });
+
   } catch (err: any) {
     console.error("Error en getConversations:", err);
-    next(err);
+    return next(err);
   }
 };
 
