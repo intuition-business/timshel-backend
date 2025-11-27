@@ -71,7 +71,7 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
       LEFT JOIN messages m ON m.id = (
         SELECT id FROM messages 
         WHERE (user_id_sender = ? AND user_id_receiver = u.id) 
-           OR (user_id_sender = u.id AND user_id_receiver = ?)
+          OR (user_id_sender = u.id AND user_id_receiver = ?)
         ORDER BY created_at DESC, id DESC 
         LIMIT 1
       )
@@ -82,7 +82,8 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
         GROUP BY user_id_sender
       ) unseen ON unseen.user_id_sender = u.id
       ORDER BY 
-        m.created_at DESC NULLS LAST,
+        m.created_at IS NULL ASC,    -- NULLs al final
+        m.created_at DESC,           -- más reciente arriba
         u.id DESC
       LIMIT ? OFFSET ?
     `;
