@@ -118,42 +118,57 @@ export const getMessages = async (req: Request, res: Response, next: NextFunctio
     const myId = Number(decoded.userId);
     if (!myId || isNaN(myId)) return res.status(401).json({ error: true, message: "Token inválido" });
 
-    const { error, value } = getMessagesDto.validate(req.query, { convert: true });
-    if (error) return res.status(400).json({ error: true, message: error.details[0].message });
-
-    const receiverId = Number(value.receiverId);
-    const limit = Math.min(Math.max(Number(value.limit) || 30, 1), 100);
-    const page = Math.max(Number(value.page) || 1, 1);
-
+    const receiverId = Number(req.query.receiverId);
     if (!receiverId || receiverId <= 0) {
       return res.status(400).json({ error: true, message: "receiverId inválido" });
     }
 
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 30, 1), 100);
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
     const offset = (page - 1) * limit;
 
-    const [rows] = await pool.execute(
-      `SELECT 
-         id, user_id_sender, user_id_receiver, message, files, created_at, seen, received,
-         (user_id_sender = ?) AS is_mine
-       FROM messages 
-       WHERE (user_id_sender = ? AND user_id_receiver = ?) 
-          OR (user_id_sender = ? AND user_id_receiver = ?)
-       ORDER BY created_at DESC, id DESC
-       LIMIT ? OFFSET ?`,
-      [myId, myId, receiverId, receiverId, myId, limit, offset]
-    );
+    const query = `
+      SELECT 
+        id,
+        user_id_sender,
+        user_id_receiver,
+        message,
+        files,
+        created_at,
+        seen,
+        received,
+        (user_id_sender = ?) AS is_mine
+      FROM messages
+      WHERE (user_id_sender = ? AND user_id_receiver = ?)
+         OR (user_id_sender = ? AND user_id_receiver = ?)
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `;
 
-    // Más antiguo primero para el frontend
+    const params = [myId, myId, receiverId, receiverId, myId, limit, offset];
+
+    // AQUÍ ESTABA EL ERROR → CAMBIA execute POR query
+    const [rows] = await pool.query(query, params);  // <--- ESTA LÍNEA
+
     const messages = (rows as any[]).reverse();
 
     return res.json({
       error: false,
-      message: "Mensajes obtenidos",
-      data: adapterMessages(messages) // removed myId parameter
+      message: "Mensajes cargados",
+      data: messages.map(m => ({
+        id: m.id,
+        message: m.message || "",
+        files: m.files ? JSON.parse(m.files) : [],
+        createdAt: m.created_at,
+        seen: !!m.seen,
+        received: !!m.received,
+        isMine: !!m.is_mine
+      })),
+      pagination: { page, limit, hasMore: messages.length === limit }
     });
 
-  } catch (err) {
-    console.error("Error en getMessages:", err);
-    return next(err);
+  } catch (err: any) {
+    console.error("Error getMessages:", err);
+    return res.status(500).json({ error: true, message: "Error interno" });
   }
 };
