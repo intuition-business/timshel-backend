@@ -1,5 +1,4 @@
-// src/application/chat/controller.ts (o chat-history/controller.ts)
-
+// src/application/chat-history/controller.ts
 import { Request, Response, NextFunction } from "express";
 import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
@@ -9,47 +8,21 @@ import { getConversationsDto, getMessagesDto } from "./dto";
 
 export const getConversations = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // 1. Verificar token
     const token = req.headers["x-access-token"] as string;
-    if (!token) {
-      return res.status(401).json({ error: true, message: "Token no proporcionado" });
-    }
+    if (!token) return res.status(401).json({ error: true, message: "Token requerido" });
 
     const decoded = verify(token, SECRET) as { userId: string };
     const myId = Number(decoded.userId);
+    if (!myId || isNaN(myId)) return res.status(401).json({ error: true, message: "Token inválido" });
 
-    if (isNaN(myId) || myId <= 0) {
-      return res.status(401).json({ error: true, message: "Token inválido" });
-    }
+    // Validación + defaults seguros
+    const { error, value } = getConversationsDto.validate(req.query, { convert: true });
+    if (error) return res.status(400).json({ error: true, message: error.details[0].message });
 
-    // 2. Validar query params con Joi + valores por defecto
-    const { error, value } = getConversationsDto.validate(req.query, {
-      abortEarly: false,
-      convert: true,        // convierte strings a números automáticamente
-    });
-
-    if (error) {
-      return res.status(400).json({
-        error: true,
-        message: error.details[0].message,
-      });
-    }
-
-    // 3. Parámetros de paginación con valores seguros (NUNCA undefined ni NaN)
-    const limit = value.limit ? Number(value.limit) : 20;
-    const page = value.page ? Number(value.page) : 1;
-
-    // Protección extra (opcional pero recomendada)
-    if (limit < 1 || limit > 100) {
-      return res.status(400).json({ error: true, message: "Limit debe estar entre 1 y 100" });
-    }
-    if (page < 1) {
-      return res.status(400).json({ error: true, message: "Page debe ser mayor a 0" });
-    }
-
+    const limit = Math.min(Math.max(Number(value.limit) || 20, 1), 100);
+    const page = Math.max(Number(value.page) || 1, 1);
     const offset = (page - 1) * limit;
 
-    // 4. Consulta SQL (perfectamente segura)
     const query = `
       SELECT 
         u.id AS user_id,
@@ -71,7 +44,7 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
       LEFT JOIN messages m ON m.id = (
         SELECT id FROM messages 
         WHERE (user_id_sender = ? AND user_id_receiver = u.id) 
-          OR (user_id_sender = u.id AND user_id_receiver = ?)
+           OR (user_id_sender = u.id AND user_id_receiver = ?)
         ORDER BY created_at DESC, id DESC 
         LIMIT 1
       )
@@ -82,38 +55,24 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
         GROUP BY user_id_sender
       ) unseen ON unseen.user_id_sender = u.id
       ORDER BY 
-        m.created_at IS NULL ASC,    -- NULLs al final
-        m.created_at DESC,           -- más reciente arriba
+        m.created_at IS NULL ASC,
+        m.created_at DESC,
         u.id DESC
       LIMIT ? OFFSET ?
     `;
 
-    const params = [
-      myId, myId, myId, myId,     // para el subquery de conversaciones
-      myId, myId,             // para último mensaje
-      myId,                   // para mensajes no leídos
-      limit,
-      offset
-    ];
+    const params = [myId, myId, myId, myId, myId, myId, limit, offset];
 
-    // DEBUG opcional (quítalo en producción si quieres)
-    // console.log("Executing getConversations → myId:", myId, "limit:", limit, "offset:", offset);
+    const [rows] = await pool.execute(query, params);
 
-    const [rows] = await pool.execute(query, params) as any;
-
-    // 5. Respuesta exitosa
     return res.json({
       error: false,
-      message: "Conversaciones obtenidas correctamente",
-      data: adapterConversations(rows),
-      pagination: {
-        page,
-        limit,
-        hasMore: rows.length === limit // si trajo exactamente el limit, probablemente hay más
-      }
+      message: "Conversaciones obtenidas",
+      data: adapterConversations(rows as any[]),
+      pagination: { page, limit, hasMore: (rows as any[]).length === limit }
     });
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error en getConversations:", err);
     return next(err);
   }
@@ -122,31 +81,48 @@ export const getConversations = async (req: Request, res: Response, next: NextFu
 export const getMessages = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.headers["x-access-token"] as string;
+    if (!token) return res.status(401).json({ error: true, message: "Token requerido" });
+
     const decoded = verify(token, SECRET) as { userId: string };
     const myId = Number(decoded.userId);
+    if (!myId || isNaN(myId)) return res.status(401).json({ error: true, message: "Token inválido" });
 
-    const { error, value } = getMessagesDto.validate(req.query);
+    const { error, value } = getMessagesDto.validate(req.query, { convert: true });
     if (error) return res.status(400).json({ error: true, message: error.details[0].message });
 
-    const { receiverId, limit, page } = value;
+    const receiverId = Number(value.receiverId);
+    const limit = Math.min(Math.max(Number(value.limit) || 30, 1), 100);
+    const page = Math.max(Number(value.page) || 1, 1);
+
+    if (!receiverId || receiverId <= 0) {
+      return res.status(400).json({ error: true, message: "receiverId inválido" });
+    }
+
     const offset = (page - 1) * limit;
 
-    const [rows]: any = await pool.execute(`
-      SELECT * FROM messages 
-      WHERE (user_id_sender = ? AND user_id_receiver = ?) 
-         OR (user_id_sender = ? AND user_id_receiver = ?)
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `, [myId, receiverId, receiverId, myId, limit, offset]);
+    const [rows] = await pool.execute(
+      `SELECT 
+         id, user_id_sender, user_id_receiver, message, files, created_at, seen, received,
+         (user_id_sender = ?) AS is_mine
+       FROM messages 
+       WHERE (user_id_sender = ? AND user_id_receiver = ?) 
+          OR (user_id_sender = ? AND user_id_receiver = ?)
+       ORDER BY created_at DESC, id DESC
+       LIMIT ? OFFSET ?`,
+      [myId, myId, receiverId, receiverId, myId, limit, offset]
+    );
 
-    // reverse() para que el más antiguo quede primero (orden cronológico)
-    res.json({
+    // Más antiguo primero para el frontend
+    const messages = (rows as any[]).reverse();
+
+    return res.json({
       error: false,
       message: "Mensajes obtenidos",
-      data: adapterMessages(rows.reverse())
+      data: adapterMessages(messages) // removed myId parameter
     });
-  } catch (err: any) {
+
+  } catch (err) {
     console.error("Error en getMessages:", err);
-    next(err);
+    return next(err);
   }
 };
