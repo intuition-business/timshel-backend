@@ -37,7 +37,6 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
   };
 
   try {
-    // Validación con DTO
     const { error: dtoError } = getUsersListDto.validate(req.query);
     if (dtoError) {
       response.error = true;
@@ -49,13 +48,14 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10)));
     const offset = (pageNum - 1) * limitNum;
 
-    // === CONSTRUCCIÓN DINÁMICA DE WHERE ===
+    // === CONSTRUCCIÓN DE WHERE ===
     const whereConditions: string[] = ["auth.rol = 'user'"];
     const params: any[] = [];
 
     if (name) {
-      whereConditions.push(`u.nombre LIKE ?`);
-      params.push(`%${name}%`);
+      // Ahora buscamos en formulario.name también
+      whereConditions.push(`f.name LIKE ? OR u.nombre LIKE ?`);
+      params.push(`%${name}%`, `%${name}%`);
     }
 
     if (with_trainer === 'true') {
@@ -74,10 +74,11 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
     // === CONTAR TOTAL ===
-    let countQuery = `
+    const countQuery = `
       SELECT COUNT(*) AS total
       FROM auth
       LEFT JOIN usuarios u ON auth.usuario_id = u.id
+      LEFT JOIN formulario f ON u.id = f.user_id
       LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
       LEFT JOIN user_images ui ON u.id = ui.user_id
       ${whereClause}
@@ -87,11 +88,11 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const totalUsers = (countRows as any)[0].total;
     const totalPages = Math.ceil(totalUsers / limitNum);
 
-    // === CONSULTA PRINCIPAL ===
-    let query = `
+    // === CONSULTA PRINCIPAL (AQUÍ ESTÁ EL CAMBIO CLAVE) ===
+    const query = `
       SELECT 
         u.id,
-        u.nombre AS name,
+        COALESCE(f.name, u.nombre, 'Usuario sin nombre') AS name,  -- PRIORIDAD: formulario → usuarios → fallback
         auth.email,
         auth.telefono AS phone,
         u.fecha_registro,
@@ -102,11 +103,12 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
         a.plan_id
       FROM auth
       LEFT JOIN usuarios u ON auth.usuario_id = u.id
+      LEFT JOIN formulario f ON u.id = f.user_id           -- NUEVO JOIN
       LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
       LEFT JOIN user_images ui ON u.id = ui.user_id
       ${whereClause}
-      ORDER BY auth.id ASC
+      ORDER BY name ASC
       LIMIT ? OFFSET ?
     `;
 
@@ -120,7 +122,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     response.total_pages = totalPages;
 
     if (userRows.length > 0) {
-      response.data = adapterUsers(userRows);
+      response.data = adapterUsers(userRows); // tu adapter ya recibe "name" correctamente
       response.message = "Usuarios obtenidos exitosamente";
       return res.status(200).json(response);
     } else {
@@ -130,7 +132,6 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     }
   } catch (error) {
     console.error("Error al obtener usuarios:", error);
-    next(error);
     return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
