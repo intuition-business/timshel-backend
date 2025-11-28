@@ -48,13 +48,12 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10)));
     const offset = (pageNum - 1) * limitNum;
 
-    // === CONSTRUCCIÓN DE WHERE ===
+    // === WHERE CONDITIONS ===
     const whereConditions: string[] = ["auth.rol = 'user'"];
     const params: any[] = [];
 
     if (name) {
-      // Ahora buscamos en formulario.name también
-      whereConditions.push(`f.name LIKE ? OR u.nombre LIKE ?`);
+      whereConditions.push(`(f.name LIKE ? OR u.nombre LIKE ?)`);
       params.push(`%${name}%`, `%${name}%`);
     }
 
@@ -78,7 +77,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
       SELECT COUNT(*) AS total
       FROM auth
       LEFT JOIN usuarios u ON auth.usuario_id = u.id
-      LEFT JOIN formulario f ON u.id = f.user_id
+      LEFT JOIN formulario f ON u.id = f.usuario_id
       LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
       LEFT JOIN user_images ui ON u.id = ui.user_id
       ${whereClause}
@@ -88,11 +87,11 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const totalUsers = (countRows as any)[0].total;
     const totalPages = Math.ceil(totalUsers / limitNum);
 
-    // === CONSULTA PRINCIPAL (AQUÍ ESTÁ EL CAMBIO CLAVE) ===
+    // === CONSULTA PRINCIPAL (EL NAME AHORA VIENE DEL FORMULARIO) ===
     const query = `
       SELECT 
         u.id,
-        COALESCE(f.name, u.nombre, 'Usuario sin nombre') AS name,  -- PRIORIDAD: formulario → usuarios → fallback
+        COALESCE(f.name, u.nombre, 'Usuario sin nombre') AS name,
         auth.email,
         auth.telefono AS phone,
         u.fecha_registro,
@@ -103,7 +102,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
         a.plan_id
       FROM auth
       LEFT JOIN usuarios u ON auth.usuario_id = u.id
-      LEFT JOIN formulario f ON u.id = f.user_id           -- NUEVO JOIN
+      LEFT JOIN formulario f ON u.id = f.usuario_id
       LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
       LEFT JOIN user_images ui ON u.id = ui.user_id
@@ -122,7 +121,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     response.total_pages = totalPages;
 
     if (userRows.length > 0) {
-      response.data = adapterUsers(userRows); // tu adapter ya recibe "name" correctamente
+      response.data = adapterUsers(userRows);
       response.message = "Usuarios obtenidos exitosamente";
       return res.status(200).json(response);
     } else {
