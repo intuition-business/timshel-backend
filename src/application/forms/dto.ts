@@ -12,7 +12,28 @@ const main_goal = Joi.string();
 const favorite_muscular_group = Joi.array().items(Joi.string());
 
 // Nuevo campo
-const train_experience = Joi.string();
+const train_experience = Joi.string().custom((value, helpers) => {
+  let parsedValue = value;
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed === 'string') {
+      parsedValue = parsed;
+    } else if (Array.isArray(parsed) && parsed.length > 0) {
+      parsedValue = parsed[0];
+    }
+  } catch (e) {
+    // No es JSON válido, usamos el string original
+  }
+  if (typeof parsedValue !== 'string') {
+    return helpers.error('any.invalid');
+  }
+  const normalized = parsedValue.toLowerCase().trim();
+  const enumValues = ['basic', 'beginner', 'intermediate', 'advanced', 'expert'];
+  if (!enumValues.includes(normalized)) {
+    return helpers.error('any.invalid');
+  }
+  return normalized;
+}).allow(null);
 
 const training_place = Joi.string().valid("gym", "home", "outdoor");
 const age = Joi.number();

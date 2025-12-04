@@ -11,12 +11,23 @@ export const adapterForms = (data: any) => {
       weekly_availability: item?.actividad_semanal,
       hours_per_day: item?.horas_dia,
 
-      // Antes era string, ahora es array → aseguramos que siempre sea array
-      favorite_muscular_group: Array.isArray(item?.grupo_muscular_favorito)
-        ? item?.grupo_muscular_favorito
-        : item?.grupo_muscular_favorito
-          ? [item?.grupo_muscular_favorito] // si viene string, lo convertimos a array
-          : [],
+      favorite_muscular_group: (() => {
+        let value = item?.grupo_muscular_favorito;
+        if (!Array.isArray(value)) {
+          value = value ? [value] : [];
+        }
+        return value.flatMap((el: any) => {
+          if (typeof el === 'string') {
+            try {
+              const parsed = JSON.parse(el);
+              return Array.isArray(parsed) ? parsed : [el];
+            } catch (e) {
+              return [el];
+            }
+          }
+          return [el]; // Si no es string, lo dejamos como está
+        });
+      })(),
 
       training_place: item?.lugar_entrenamiento,
       age: item?.edad,
@@ -33,7 +44,30 @@ export const adapterForms = (data: any) => {
       foods_not_consumed: item?.alimentos_no_consumo,
 
       // Nuevo campo
-      train_experience: item?.experiencia_entrenamiento || item?.train_experience || null,
+      train_experience: (() => {
+        let value = item?.train_experience;
+        if (value == null) return null;
+
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            if (typeof parsed === 'string') {
+              value = parsed;
+            } else if (Array.isArray(parsed) && parsed.length > 0) {
+              value = parsed[0]; // Tomamos el primero si es array
+            }
+          } catch (e) {
+            // No es JSON válido, usamos el string original
+          }
+        }
+
+        if (typeof value !== 'string') return null;
+
+        const normalized = value.toLowerCase().trim();
+        const enumValues = ['basic', 'beginner', 'intermediate', 'advanced', 'expert'];
+
+        return enumValues.includes(normalized) ? normalized : null;
+      })(),
     };
   });
 
