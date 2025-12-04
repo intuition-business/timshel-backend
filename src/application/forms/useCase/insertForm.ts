@@ -22,6 +22,7 @@ export const InsertForm = async ({
   weekly_availability,
   birthday,
   name,
+  train_experience,
 }: any) => {
   const fieldsToUpdate = [];
   const queryParams = [];
@@ -69,6 +70,11 @@ export const InsertForm = async ({
   if (training_place !== undefined) {
     fieldsToUpdate.push("lugar_entrenamiento ");
     queryParams.push(training_place);
+    values.push("?");
+  }
+  if (hours_per_day !== undefined) {
+    fieldsToUpdate.push("horas_dia ");
+    queryParams.push(hours_per_day);
     values.push("?");
   }
   if (injury !== undefined) {
@@ -124,6 +130,11 @@ export const InsertForm = async ({
   if (name !== undefined) {
     fieldsToUpdate.push("name ");
     queryParams.push(name);
+    values.push("?");
+  }
+  if (train_experience !== undefined) {
+    fieldsToUpdate.push("train_experience ");
+    queryParams.push(train_experience);
     values.push("?");
   }
 
