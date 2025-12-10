@@ -4,8 +4,8 @@ import {
   getRoutineByUserId,
   updateRoutineDayStatus,
   deleteRoutineDay,
-} from "./controller";  // Importamos los controladores de rutina
-import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
+} from "./controller";
+import { verifyToken } from "../../middleware/jwtVerify";
 
 const router = Router();
 
@@ -19,30 +19,29 @@ function asyncHandler(fn: any) {
 // Ruta POST para crear una rutina
 router.post(
   "/create",
-  verifyToken,  // Verificación de token
-  asyncHandler(createRoutine)  // Llama a la función del controlador
+  verifyToken,
+  asyncHandler(createRoutine)
 );
 
 // Ruta GET para obtener la rutina del usuario
-// Este controlador no necesita el user_id en la URL, ya que se obtiene del token
 router.get(
   "/",
-  verifyToken,  // Verificación de token
-  asyncHandler(getRoutineByUserId)  // Llama al controlador para obtener la rutina
+  verifyToken,
+  asyncHandler(getRoutineByUserId)
 );
 
 // Ruta PUT para actualizar el estado de un día (completado o pendiente)
 router.put(
   "/update-status",
-  verifyToken,  // Verificación de token
-  asyncHandler(updateRoutineDayStatus)  // Llama al controlador para actualizar el estado del día
+  verifyToken,
+  asyncHandler(updateRoutineDayStatus)
 );
 
 // Ruta DELETE para eliminar un día de la rutina
 router.delete(
   "/delete",
-  verifyToken,  // Verificación de token
-  asyncHandler(deleteRoutineDay)  // Llama al controlador para eliminar el día
+  verifyToken,
+  asyncHandler(deleteRoutineDay)
 );
 
 export default router;

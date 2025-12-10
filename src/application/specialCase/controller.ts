@@ -45,8 +45,8 @@ export const generateLightRoutine = async (
     const failureId = uuidv4();
     console.log('Paso 2: Generando failureId:', failureId);
     await pool.execute(
-      "INSERT INTO user_routine_failures (id, user_id, reason, description, current_user_date, current_user_time) VALUES (?, ?, ?, ?, ?, ?)",
-      [failureId, userId, adaptedData.reason, adaptedData.description, formattedDate, adaptedData.current_user_time + ':00']
+      "INSERT INTO user_routine_failures (id, user_id, reason, description, current_user_date) VALUES (?, ?, ?, ?, ?)",
+      [failureId, userId, adaptedData.reason, adaptedData.description, formattedDate]
     );
     console.log('Paso 2: Datos guardados en user_routine_failures');
     // Paso 3: Obtener metadata eficiente
