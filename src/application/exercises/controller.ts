@@ -54,6 +54,7 @@ interface Exercise {
   category: string;
   exercise: string;
   description: string;
+  muscle_group?: string | null;
   video_url?: string;
   thumbnail_url?: string;
   at_home?: boolean;
@@ -61,7 +62,7 @@ interface Exercise {
 
 // Create con uploads integrados
 export const createExercise = async (req: Request, res: Response, next: NextFunction) => {
-  const { category, exercise, description, at_home } = req.body; // Campos de texto
+  const { category, exercise, description, at_home, muscle_group } = req.body; // Campos de texto
   const files = req.files as { [fieldname: string]: Express.MulterS3.File[] } | undefined;
 
   const response = { message: "", error: false };
@@ -125,7 +126,10 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
       query += ", thumbnail_url";
       values.push(thumbnail_url);
     }
-
+    if (muscle_group) {
+      query += ", muscle_group";
+      values.push(muscle_group);
+    }
     query += ") VALUES (?, ?, ?";
     if (at_home_value !== null) query += ", ?";
     if (video_url) query += ", ?";
@@ -137,7 +141,7 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
     if (result) {
       // Consulta el ejercicio creado para obtener todos los campos, incluyendo at_home
       const [newExercise]: any = await pool.execute(
-        "SELECT id, category, exercise, description, at_home, video_url, thumbnail_url FROM exercises WHERE id = ?",
+        "SELECT id, category, exercise, description, at_home, video_url, thumbnail_url, muscle_group FROM exercises WHERE id = ?",
         [result.insertId]
       );
       const createdExercise = newExercise[0] || {};
@@ -163,7 +167,7 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
 // Update con uploads integrados (sobrescribe si se suben nuevos archivos)
 export const updateExercise = async (req: Request, res: Response, next: NextFunction) => {
   const exerciseId = req.params.id; // De la ruta, ej: /api/exercises/59
-  const { new_category, new_exercise, new_description, new_at_home, new_video_url: bodyVideoUrl, new_thumbnail_url: bodyThumbnailUrl } = req.body; // Campos de texto opcionales
+  const { new_category, new_exercise, new_description, new_at_home, new_video_url: bodyVideoUrl, new_thumbnail_url: bodyThumbnailUrl, new_muscle_group } = req.body; // Campos de texto opcionales
   const files = req.files as { [fieldname: string]: Express.MulterS3.File[] } | undefined;
 
   const response = { message: "", error: false };
@@ -249,6 +253,10 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
       updateFields.push("thumbnail_url = ?");
       updateValues.push(new_thumbnail_url);
     }
+    if (new_muscle_group !== undefined) {
+      updateFields.push("muscle_group = ?");
+      updateValues.push(new_muscle_group || null);
+    }
 
     // Verifica si hay al menos un cambio (incluyendo files o body URLs)
     if (updateFields.length === 0) {
@@ -328,7 +336,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
 
       // Consulta paginada
       const [rows] = await pool.execute(
-        "SELECT id, category, exercise, description, video_url, thumbnail_url, at_home FROM exercises ORDER BY id ASC LIMIT ? OFFSET ?",
+        "SELECT id, category, exercise, description, video_url, thumbnail_url, at_home, muscle_group FROM exercises ORDER BY id ASC LIMIT ? OFFSET ?",
         [limitNum, offset]
       );
 
@@ -339,6 +347,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
         description: string;
         video_url?: string;
         thumbnail_url?: string;
+        muscle_group?: string | null;
         at_home?: number | null;  // De DB, mapea en adapter
       }>;
 
@@ -348,7 +357,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
     } else {
       // Traer todos sin paginación
       const [rows] = await pool.execute(
-        "SELECT id, category, exercise, description, video_url, thumbnail_url, at_home FROM exercises ORDER BY id ASC"
+        "SELECT id, category, exercise, description, video_url, thumbnail_url, at_home, muscle_group FROM exercises ORDER BY id ASC"
       );
 
       exerciseRows = rows as Array<{
@@ -358,6 +367,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
         description: string;
         video_url?: string;
         thumbnail_url?: string;
+        muscle_group?: string | null;
         at_home?: number | null;  // De DB, mapea en adapter
       }>;
 
@@ -415,7 +425,7 @@ export const getExercisesByCategory = async (req: Request, res: Response, next: 
     }
 
     const [rows] = await pool.execute(
-      "SELECT id, category, exercise, description, video_url, thumbnail_url FROM exercises WHERE category = ? ORDER BY exercise ASC",
+      "SELECT id, category, exercise, description, video_url, thumbnail_url, muscle_group FROM exercises WHERE category = ? ORDER BY exercise ASC",
       [category.toString().toUpperCase()]
     );
 
@@ -425,6 +435,7 @@ export const getExercisesByCategory = async (req: Request, res: Response, next: 
       exercise: string;
       description: string;
       video_url?: string;
+      muscle_group?: string | null;
       thumbnail_url?: string;
     }>;
 
