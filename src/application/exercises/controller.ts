@@ -134,6 +134,7 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
     if (at_home_value !== null) query += ", ?";
     if (video_url) query += ", ?";
     if (thumbnail_url) query += ", ?";
+    if (muscle_group) query += ", ?";
     query += ")";
 
     const [result]: any = await pool.query(query, values);
