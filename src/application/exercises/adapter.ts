@@ -7,7 +7,8 @@ export const adapterExercises = (data: any) => {
       description: item?.description,
       video_url: item?.video_url,
       thumbnail_url: item?.thumbnail_url,
-      at_home: item?.at_home
+      at_home: item?.at_home,
+      muscle_group: item?.muscleGroup || item?.muscle_group || null,
     };
   });
   return result;
