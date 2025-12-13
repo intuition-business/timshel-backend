@@ -28,7 +28,7 @@ pathologies: Medical conditions (e.g., scoliosis, herniated disc)
 diseases: Chronic diseases (e.g., diabetes, hypertension)
 Additionally, the user has selected the following training days (if available):
 ###DIAS###
-For each of these training days listed below, you need to create a customized workout routine. You must generate a unique routine for each specific date provided. For each training day, assign 6 or more exercises, specifying the sets and repetitions, and ensure that the exercises align with the user's profile and goals. Always generate more than 3 series (sets) per exercise, and vary the repetitions across the series (e.g., different reps in each set, like 12, 10, 8) to promote progression and avoid single-series routines.
+For each of these training days listed below, you need to create a customized workout routine. You must generate a unique routine for each specific date provided. For each training day, which focuses on a specific muscle category, assign exercises based on the muscle_group of that category: 4 exercises if muscle_group is "musculos grandes", or 3 exercises if muscle_group is "musculos pequeños". Specify the sets and repetitions, and ensure that the exercises align with the user's profile and goals. Always generate more than 3 series (sets) per exercise, with repetitions between 10 and 12 for each set (do not decrease repetitions gradually across sets) to promote progression and avoid single-series routines.
 Please ensure that every date listed gets a unique training routine.
 The training days provided are as follows:
 [###DIAS###]
@@ -41,8 +41,7 @@ Note:
 ###EJERCICIOS###
 To structure the routines across multiple weeks (assuming up to 4 weeks based on the dates provided), assign categories consistently by day of the week: For each day of the week (e.g., all Mondays), use the same muscle category (e.g., "PECHO" for Mondays), but select different exercises from that category for each subsequent week. Repeat this pattern for other days (e.g., Tuesdays always "ESPALDA" with varying exercises per week). Vary the exercises within the category to keep routines unique per date, while maintaining the category consistency per day of the week.
 Please generate a weekly training plan in JSON format with the following structure:
-It should be a list where each item corresponds to a training day, based on the days provided in [###DIAS###]. For each day, include at least 6 exercises. You may vary repetitions if needed.
-
+It should be a list where each item corresponds to a training day, based on the days provided in [###DIAS###]. For each day, include 3 or 4 exercises depending on the muscle_group of the category (4 for "musculos grandes", 3 for "musculos pequeños").
 #### JSON STRUCTURE:
 ```json
 [
@@ -55,12 +54,13 @@ It should be a list where each item corresponds to a training day, based on the 
                 "description": "Exact full description from CSV (copy verbatim, never modify)",
                 "video_url": "URL of the instructional video (or empty string if not available)",
                 "thumbnail_url": "URL of the thumbnail image (or empty string if not available)",
+                "muscle_group": "The muscle group from the CSV: either 'musculos grandes' or 'musculos pequeños'",
                 "Esquema": {
                     "Descanso": "Rest time in minutes (e.g., 1.5)",
                     "Series": "Number of sets (must be > 3)",
                     "Detalle series": [
                         {
-                            "Reps": "Number of repetitions (vary across sets, e.g., 12, 10, 8)"
+                            "Reps": "Number of repetitions (e.g., 10-12 for each set)"
                         }
                     ]
                 }
