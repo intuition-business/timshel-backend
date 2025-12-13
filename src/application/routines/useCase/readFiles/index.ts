@@ -24,7 +24,7 @@ export const readFiles = async (personData: any, daysData: any) => {
 
   // En lugar de leer el CSV, consultamos la base de datos
   const [rows] = await pool.execute(
-    "SELECT category, exercise, description, video_url, thumbnail_url FROM exercises ORDER BY category ASC, exercise ASC"
+    "SELECT category, exercise, description, video_url, thumbnail_url, muscle_group FROM exercises ORDER BY category ASC, exercise ASC"
   );
 
   const exerciseRows = rows as Array<{
@@ -33,6 +33,7 @@ export const readFiles = async (personData: any, daysData: any) => {
     description: string;
     video_url: string | null;
     thumbnail_url: string | null;
+    muscle_group: string;
   }>;
 
   // Formateamos los datos como un string CSV similar al original
@@ -43,7 +44,8 @@ export const readFiles = async (personData: any, daysData: any) => {
     // Manejo de null en video_url y thumbnail_url
     const videoUrl = row.video_url ?? '';
     const thumbnailUrl = row.thumbnail_url ?? '';
-    ejerciciosCsv += `${row.category};${row.exercise};"${desc}";${videoUrl};${thumbnailUrl}\n`;
+    const muscleGroup = row.muscle_group;
+    ejerciciosCsv += `${row.category};${row.exercise};"${desc}";${videoUrl};${thumbnailUrl};${muscleGroup}\n`;
   });
 
   // Generamos el prompt con los datos de la persona y los días
