@@ -30,9 +30,9 @@ Additionally, the user has selected the following training days (if available):
 ###DIAS###
 For each training day, which focuses on a specific muscle category, assign exercises based on the muscle_group values of the available exercises in that category:
 - Select only exercises from the corresponding Categoria.
-- Count how many exercises in that category have muscle_group = "musculos grandes" or "musculos pequeños".
-- If the majority (or all non-null) are "musculos grandes" → assign 4 exercises.
-- If the majority (or all non-null) are "musculos pequeños" → assign 3 exercises.
+- Count how many exercises in that category have muscle_group = "large muscle" or "small muscle".
+- If the majority (or all non-null) are "large muscle" → assign 4 exercises.
+- If the majority (or all non-null) are "small muscle" → assign 3 exercises.
 - If no exercise in the category has a non-null muscle_group → default to 4 exercises.
 - Never invent or change the muscle_group value — copy it exactly from the source data.
 
@@ -42,17 +42,17 @@ Next, I will give you the list of exercises you may suggest (in CSV or JSON form
 The columns/fields include: category, exercise, description, video_url, thumbnail_url, muscle_group
 Note:
 - Video_URL and Thumbnail_URL may be empty strings if no media is available.
-- muscle_group will be either "musculos grandes", "musculos pequeños", or null.
+- muscle_group will be either "large muscle", "small muscle", or null.
 - You MUST copy the `muscle_group` exactly as it appears in the exercise data (it may be null).
 - You MUST include `muscle_group` in the output JSON for each exercise, using the exact value from the data (including null if that's what's stored).
 - To decide the number of exercises per day:
-  - If ALL exercises in a category have muscle_group = "musculos grandes" → use 4 exercises
-  - If ALL exercises in a category have muscle_group = "musculos pequeños" → use 3 exercises
+  - If ALL exercises in a category have muscle_group = "large muscle" → use 4 exercises
+  - If ALL exercises in a category have muscle_group = "small muscle" → use 3 exercises
   - If the category has mixed values or null → default to 4 exercises (or decide based on the majority, but prefer 4 for safety)
 ###EJERCICIOS###
 To structure the routines across multiple weeks (assuming up to 4 weeks based on the dates provided), assign categories consistently by day of the week: For each day of the week (e.g., all Mondays), use the same muscle category (e.g., "PECHO" for Mondays), but select different exercises from that category for each subsequent week. Repeat this pattern for other days (e.g., Tuesdays always "ESPALDA" with varying exercises per week). Vary the exercises within the category to keep routines unique per date, while maintaining the category consistency per day of the week.
 Please generate a weekly training plan in JSON format with the following structure:
-It should be a list where each item corresponds to a training day, based on the days provided in [###DIAS###]. For each day, include 3 or 4 exercises depending on the muscle_group of the category (4 for "musculos grandes", 3 for "musculos pequeños").
+It should be a list where each item corresponds to a training day, based on the days provided in [###DIAS###]. For each day, include 3 or 4 exercises depending on the muscle_group of the category (4 for "large muscle", 3 for "small muscle").
 #### JSON STRUCTURE:
 ```json
 [
@@ -65,7 +65,7 @@ It should be a list where each item corresponds to a training day, based on the 
                 "description": "Exact full description from CSV (copy verbatim, never modify)",
                 "video_url": "URL of the instructional video (or empty string if not available)",
                 "thumbnail_url": "URL of the thumbnail image (or empty string if not available)",
-                "muscle_group": "Exact value from the exercise data ('musculos grandes', 'musculos pequeños', or null)",
+                "muscle_group": "Exact value from the exercise data ('large muscle', 'small muscle', or null)",
                 "Esquema": {
                     "Descanso": "Rest time in minutes (e.g., 1.5)",
                     "Series": "Number of sets (must be > 3)",
