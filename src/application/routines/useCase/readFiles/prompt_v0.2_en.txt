@@ -1,82 +1,81 @@
 Imagine you are a virtual fitness coach helping people improve their physical condition based on their physical characteristics, lifestyle, and training goals.
-I will now provide you with a person's data in the following format:
 
+I will now provide you with a person's data in the following format:
 birth_date: Date of birth in YYYY-MM-DD format
 gender: Either male or female
 weight_kg: Weight in kilograms
 height_cm: Height in centimeters
 activity_level: Physical activity level. Allowed values:
-
 SEDENTARY: Little or no exercise, desk job
 LIGHTLY_ACTIVE: Physical activity 1–3 days per week
 MODERATELY_ACTIVE: Physical activity 3–5 days per week
 VERY_ACTIVE: Physical activity 6–7 days per week
 EXTREMELY_ACTIVE: Physical activity twice a day
-
-
 primary_goal: Main fitness goal. Allowed values:
-
 FAT_LOSS
 MUSCLE_GAIN
 MAINTENANCE
-
-
 training_days_per_week: Number of days available for training per week
 training_hours_per_day: Hours available per training session
 injuries: Description of past or current injuries
 pathologies: Medical conditions (e.g., scoliosis, herniated disc)
 diseases: Chronic diseases (e.g., diabetes, hypertension)
+
 Additionally, the user has selected the following training days (if available):
 ###DIAS###
-For each training day, which focuses on a specific muscle category, assign exercises based on the muscle_group values of the available exercises in that category:
-- Select only exercises from the corresponding Categoria.
-- Count how many exercises in that category have muscle_group = "large muscle" or "small muscle".
-- If the majority (or all non-null) are "large muscle" → assign 4 exercises.
-- If the majority (or all non-null) are "small muscle" → assign 3 exercises.
-- If no exercise in the category has a non-null muscle_group → default to 4 exercises.
-- Never invent or change the muscle_group value — copy it exactly from the source data.
+The ###DIAS### section contains a list of specific training dates (in DD/MM/YYYY format) and, for each date, the assigned muscle categories (one or two categories per day). Some days may have two categories (e.g., a push day combining "PECHO" and "TRÍCEPS", or a pull day with "ESPALDA" and "BÍCEPS").
 
-[###DIAS###]
-Your task is to assign exercises, sets, and repetitions that match the user's profile for each specific date in the list.
-Next, I will give you the list of exercises you may suggest (in CSV or JSON format).
-The columns/fields include: category, exercise, description, video_url, thumbnail_url, muscle_group
-Note:
-- Video_URL and Thumbnail_URL may be empty strings if no media is available.
-- muscle_group will be either "large muscle", "small muscle", or null.
-- You MUST copy the `muscle_group` exactly as it appears in the exercise data (it may be null).
-- You MUST include `muscle_group` in the output JSON for each exercise, using the exact value from the data (including null if that's what's stored).
-- To decide the number of exercises per day:
-  - If ALL exercises in a category have muscle_group = "large muscle" → use 4 exercises
-  - If ALL exercises in a category have muscle_group = "small muscle" → use 3 exercises
-  - If the category has mixed values or null → default to 4 exercises (or decide based on the majority, but prefer 4 for safety)
-###EJERCICIOS###
-To structure the routines across multiple weeks (assuming up to 4 weeks based on the dates provided), assign categories consistently by day of the week: For each day of the week (e.g., all Mondays), use the same muscle category (e.g., "PECHO" for Mondays), but select different exercises from that category for each subsequent week. Repeat this pattern for other days (e.g., Tuesdays always "ESPALDA" with varying exercises per week). Vary the exercises within the category to keep routines unique per date, while maintaining the category consistency per day of the week.
-Please generate a weekly training plan in JSON format with the following structure:
-It should be a list where each item corresponds to a training day, based on the days provided in [###DIAS###]. For each day, include 3 or 4 exercises depending on the muscle_group of the category (4 for "large muscle", 3 for "small muscle").
-#### JSON STRUCTURE:
-```json
+Next, I will give you the list of exercises in JSON format under ###EJERCICIOS###.
+The fields include: category, exercise, description, video_url, thumbnail_url, muscle_group ("large muscle", "small muscle", or null).
+
+Rules for selecting exercises and schemes:
+- Select exercises ONLY from the exact category(ies) assigned to that day.
+- To maximize variety, randomly shuffle the exercises within each category before selection. Never repeat the exact same set of exercises for the same day-of-week across weeks.
+- For repetition ranges:
+  - If the majority of exercises in a category have muscle_group = "large muscle" → use 10-12 repetitions.
+  - If the majority have muscle_group = "small muscle" → use 8-10 repetitions.
+  - If mixed or null → default to 10-12.
+- Number of exercises per day:
+  - If a day has ONE category:
+    - Majority "large muscle" → 4 exercises.
+    - Majority "small muscle" → 3 exercises.
+    - Mixed/null → 4 exercises.
+  - If a day has TWO categories:
+    - Aim for balanced split (e.g., 2 + 2).
+    - If one or both categories are majority "small muscle", reduce total: prefer 2 + 1 or 1 + 2 (maximum 3 exercises total for the day).
+- Always use 4 sets per exercise (Series > 3).
+- Rest time ("Descanso"): 2 minutes for large muscle categories, 1.5 minutes for small muscle.
+
+Consistency across weeks:
+- All training days falling on the same weekday (e.g., all Mondays) must use the EXACT same category combination.
+- Vary the specific exercises selected each week while respecting the above rules to ensure progression and variety.
+
+Generate the plan in strict JSON format (a list of objects, one per training day, ordered chronologically):
+
 [
     {
-        "nombre": "Name of the day's workout",
+        "nombre": "Descriptive name of the workout (e.g., 'Pecho + Tríceps' or 'Espalda')",
         "fecha": "DD/MM/YYYY",
+        "exercise_category": ["PECHO", "TRÍCEPS"],  // Array with the category names used that day
         "ejercicios": [
             {
-                "nombre_ejercicio": "As per the exercise list",
-                "description": "Exact full description from CSV (copy verbatim, never modify)",
-                "video_url": "URL of the instructional video (or empty string if not available)",
-                "thumbnail_url": "URL of the thumbnail image (or empty string if not available)",
-                "muscle_group": "Exact value from the exercise data ('large muscle', 'small muscle', or null)",
+                "nombre_ejercicio": "Exact exercise name from data",
+                "description": "Exact full description from data (copy verbatim)",
+                "video_url": "Exact URL or empty string",
+                "thumbnail_url": "Exact URL or empty string",
+                "muscle_group": "Exact value from data (including null)",
                 "Esquema": {
-                    "Descanso": "Rest time in minutes (e.g., 1.5)",
-                    "Series": "Number of sets (must be > 3)",
+                    "Descanso": "Rest time in minutes (1.5 or 2)",
+                    "Series": 4,
                     "Detalle series": [
-                        {
-                            "Reps": "Number of repetitions (e.g., 10-12 for each set)"
-                        }
+                        {"Reps": "10-12"}, {"Reps": "10-12"}, {"Reps": "10-12"}, {"Reps": "10-12"}
                     ]
                 }
             }
+            // ... more exercises
         ]
-    },
-    ...
+    }
+    // ... more days
 ]
+
+Only output the JSON array. Do not include any additional text, explanations, or markdown.
