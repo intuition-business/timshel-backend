@@ -2,8 +2,8 @@ import Joi from "joi";
 
 // Definimos el enum directamente aquí en el mismo archivo
 enum MuscleGroup {
-  Small = "musculos pequeños",
-  Large = "musculos grandes"
+  Small = "small muscle",
+  Large = "large muscle"
 }
 
 // Validaciones existentes
