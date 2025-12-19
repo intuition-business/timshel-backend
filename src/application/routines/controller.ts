@@ -1281,16 +1281,20 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    const { fecha_rutina, routine_name, exercise_name, exercise_id } = req.query;
+    // 2. Parámetros requeridos (solo fecha_rutina y exercise_id)
+    const { fecha_rutina, exercise_id } = req.query;
 
-    if (!fecha_rutina) {
-      res.status(400).json({ error: true, message: "fecha_rutina es requerido" });
+    if (!fecha_rutina || !exercise_id) {
+      res.status(400).json({
+        error: true,
+        message: "Los parámetros 'fecha_rutina' y 'exercise_id' son obligatorios",
+      });
       return;
     }
 
     const formattedFecha = convertDate(fecha_rutina as string);
 
-    // 2. Obtener la rutina más reciente + su id
+    // 3. Obtener la rutina más reciente + su id
     const [planRows]: any = await pool.execute(
       `SELECT id, training_plan 
        FROM user_training_plans 
@@ -1329,7 +1333,7 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 3. Buscar el día correspondiente a la fecha
+    // 4. Buscar el día correspondiente a la fecha
     const day = trainingPlan.find((d: any) =>
       new Date(d.fecha).toISOString().split("T")[0] === formattedFecha
     );
@@ -1339,108 +1343,39 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 4. Respuesta común base
-    const baseResponse = {
+    // 5. Buscar el ejercicio por exercise_id
+    const exercise = day.ejercicios.find((e: any) => e.exercise_id === exercise_id);
+
+    if (!exercise) {
+      res.status(404).json({
+        error: true,
+        message: "Ejercicio no encontrado con ese exercise_id en esta fecha",
+      });
+      return;
+    }
+
+    // 6. Respuesta
+    res.json({
       error: false,
       rutina_id,
       user_id: targetUserId,
       fecha_rutina: formattedFecha,
       routine_name: day.nombre,
       queried_by_admin: targetUserId !== currentUserId,
-    };
-
-    // 5. MODO PRIORITARIO: búsqueda exacta por exercise_id (más rápido y preciso)
-    if (exercise_id) {
-      const exercise = day.ejercicios.find((e: any) => e.exercise_id === exercise_id);
-
-      if (!exercise) {
-        res.status(404).json({ error: true, message: "Ejercicio no encontrado con ese exercise_id en esta fecha" });
-        return;
-      }
-
-      res.json({
-        ...baseResponse,
-        message: "Ejercicio encontrado por exercise_id",
-        response: {
-          exercise: {
-            nombre_ejercicio: exercise.nombre_ejercicio,
-            exercise_id: exercise.exercise_id,
-            description: exercise.description || "",
-            video_url: exercise.video_url || "",
-            thumbnail_url: exercise.thumbnail_url || "",
-            Esquema: exercise.Esquema,
-          },
+      message: "Ejercicio encontrado",
+      response: {
+        exercise: {
+          nombre_ejercicio: exercise.nombre_ejercicio,
+          exercise_id: exercise.exercise_id,
+          description: exercise.description || "",
+          video_url: exercise.video_url || "",
+          thumbnail_url: exercise.thumbnail_url || "",
+          Esquema: exercise.Esquema,
         },
-      });
-      return;
-    }
-
-    // 6. MODO 2: buscar toda la rutina del día (por routine_name)
-    if (routine_name) {
-      const searchRoutine = (routine_name as string).trim();
-      if (day.nombre !== searchRoutine) {
-        res.status(404).json({ error: true, message: "El nombre de la rutina no coincide con la fecha indicada" });
-        return;
-      }
-
-      res.json({
-        ...baseResponse,
-        message: "Día completo encontrado",
-        response: {
-          ejercicios: day.ejercicios.map((e: any) => ({
-            nombre_ejercicio: e.nombre_ejercicio,
-            exercise_id: e.exercise_id,
-            description: e.description || "",
-            video_url: e.video_url || "",
-            thumbnail_url: e.thumbnail_url || "",
-            Esquema: e.Esquema,
-          })),
-          status: day.status || "pending",
-        },
-      });
-      return;
-    }
-
-    // 7. MODO 3: búsqueda por exercise_name (fuzzy)
-    if (exercise_name) {
-      const searchExercise = normalize(exercise_name as string);
-      const exercise = day.ejercicios.find((e: any) =>
-        normalize(e.nombre_ejercicio).includes(searchExercise)
-      );
-
-      if (!exercise) {
-        res.status(404).json({ error: true, message: "Ejercicio no encontrado en esta fecha" });
-        return;
-      }
-
-      res.json({
-        ...baseResponse,
-        message: "Ejercicio encontrado por nombre",
-        response: {
-          exercise: {
-            nombre_ejercicio: exercise.nombre_ejercicio,
-            exercise_id: exercise.exercise_id,
-            description: exercise.description || "",
-            video_url: exercise.video_url || "",
-            thumbnail_url: exercise.thumbnail_url || "",
-            Esquema: exercise.Esquema,
-          },
-        },
-      });
-      return;
-    }
-
-    // 8. Si no se pasa ninguno de los parámetros
-    res.status(400).json({
-      error: true,
-      message: "Debe proporcionar al menos uno de los parámetros: routine_name, exercise_name o exercise_id",
+      },
     });
   } catch (error) {
     console.error("Error en searchInGeneratedRoutine:", error);
     next(error);
   }
 };
-
-// NORMALIZAR
-const normalize = (str: string): string =>
-  str.toString().toLowerCase().trim().replace(/\s+/g, " ");
