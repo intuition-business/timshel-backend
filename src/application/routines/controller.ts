@@ -1281,13 +1281,13 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 2. Parámetros requeridos (solo fecha_rutina y exercise_id)
+    // 2. Parámetros
     const { fecha_rutina, exercise_id } = req.query;
 
-    if (!fecha_rutina || !exercise_id) {
+    if (!fecha_rutina) {
       res.status(400).json({
         error: true,
-        message: "Los parámetros 'fecha_rutina' y 'exercise_id' son obligatorios",
+        message: "El parámetro 'fecha_rutina' es obligatorio",
       });
       return;
     }
@@ -1343,35 +1343,61 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 5. Buscar el ejercicio por exercise_id
-    const exercise = day.ejercicios.find((e: any) => e.exercise_id === exercise_id);
-
-    if (!exercise) {
-      res.status(404).json({
-        error: true,
-        message: "Ejercicio no encontrado con ese exercise_id en esta fecha",
-      });
-      return;
-    }
-
-    // 6. Respuesta
-    res.json({
+    // 5. Base de la respuesta común
+    const baseResponse = {
       error: false,
       rutina_id,
       user_id: targetUserId,
       fecha_rutina: formattedFecha,
       routine_name: day.nombre,
       queried_by_admin: targetUserId !== currentUserId,
-      message: "Ejercicio encontrado",
-      response: {
-        exercise: {
-          nombre_ejercicio: exercise.nombre_ejercicio,
-          exercise_id: exercise.exercise_id,
-          description: exercise.description || "",
-          video_url: exercise.video_url || "",
-          thumbnail_url: exercise.thumbnail_url || "",
-          Esquema: exercise.Esquema,
+    };
+
+    // 6. Caso: se proporciona exercise_id → devolver solo ese ejercicio
+    if (exercise_id) {
+      const exercise = day.ejercicios.find((e: any) => e.exercise_id === exercise_id);
+
+      if (!exercise) {
+        res.status(404).json({
+          error: true,
+          message: "Ejercicio no encontrado con ese exercise_id en esta fecha",
+        });
+        return;
+      }
+
+      res.json({
+        ...baseResponse,
+        message: "Ejercicio específico encontrado",
+        response: {
+          exercise: {
+            nombre_ejercicio: exercise.nombre_ejercicio,
+            exercise_id: exercise.exercise_id,
+            description: exercise.description || "",
+            video_url: exercise.video_url || "",
+            thumbnail_url: exercise.thumbnail_url || "",
+            Esquema: exercise.Esquema,
+          },
         },
+      });
+      return;
+    }
+
+    // 7. Caso: solo fecha_rutina → devolver todos los ejercicios del día
+    const ejerciciosFormateados = day.ejercicios.map((e: any) => ({
+      nombre_ejercicio: e.nombre_ejercicio,
+      exercise_id: e.exercise_id,
+      description: e.description || "",
+      video_url: e.video_url || "",
+      thumbnail_url: e.thumbnail_url || "",
+      Esquema: e.Esquema,
+    }));
+
+    res.json({
+      ...baseResponse,
+      message: "Día completo encontrado",
+      response: {
+        ejercicios: ejerciciosFormateados,
+        status: day.status || "pending",
       },
     });
   } catch (error) {
