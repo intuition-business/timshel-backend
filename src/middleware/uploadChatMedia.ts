@@ -15,26 +15,43 @@ const storage = multerS3({
     s3,
     bucket: process.env.AWS_BUCKET_NAME!,
     metadata: (req, file, cb) => cb(null, { fieldName: file.fieldname }),
-    key: (req, file, cb) => {
+    key: (req: any, file, cb) => {
+        const file_type = req.body.file_type as "image" | "video" | "audio" | undefined;
+
+        let folder = "chat-unknown"; // fallback seguro
+        if (file_type === "image") folder = "chat-images";
+        else if (file_type === "video") folder = "chat-videos";
+        else if (file_type === "audio") folder = "chat-audios";
+
         const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
         const ext = path.extname(file.originalname);
-        const folder = file.mimetype.startsWith("image/") ? "chat-images" : "chat-videos";
         cb(null, `${folder}/${uniqueSuffix}${ext}`);
     },
 });
 
 export const uploadChatMedia = multer({
     storage,
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith("image/") || file.mimetype.startsWith("video/")) {
-            return cb(null, true);
-        }
-        cb(null, false);
-    },
-    limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB por archivo
-}).array("files", 10); // Acepta hasta 10 archivos en 'files'
+    limits: { fileSize: 100 * 1024 * 1024 },
+    fileFilter: (req: any, file, cb) => {
+        const file_type = req.body.file_type as string;
 
-// Función auxiliar segura para eliminar de S3 (igual a la tuya)
+        const validTypes = ["image", "video", "audio"];
+        if (!validTypes.includes(file_type)) {
+            return cb(new Error("file_type inválido. Debe ser image, video o audio"));
+        }
+
+        const mimePrefix = file.mimetype.split("/")[0];
+        const expectedPrefix = file_type === "audio" ? "audio" : file_type;
+
+        if (mimePrefix !== expectedPrefix) {
+            return cb(new Error("El MIME type del archivo no coincide con file_type"));
+        }
+
+        cb(null, true);
+    },
+}).single("file");
+
+// Mantengo tu función de eliminación
 export const deleteFromS3 = async (url?: string) => {
     if (!url) return;
     try {
