@@ -16,69 +16,33 @@ const storage = multerS3({
     bucket: process.env.AWS_BUCKET_NAME!,
     metadata: (req, file, cb) => cb(null, { fieldName: file.fieldname }),
     key: (req: any, file, cb) => {
-        const file_type = req.body.file_type as "image" | "video" | "audio" | undefined;
-
-        let folder = "chat-unknown"; // fallback seguro
-        if (file_type === "image") folder = "chat-images";
-        else if (file_type === "video") folder = "chat-videos";
-        else if (file_type === "audio") folder = "chat-audios";
-
+        // Carpeta temporal/neutra: todos los archivos van aquí inicialmente
+        // El nombre es único, por lo que no hay riesgo de colisión
         const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
         const ext = path.extname(file.originalname);
-        cb(null, `${folder}/${uniqueSuffix}${ext}`);
+        cb(null, `chat-media/${uniqueSuffix}${ext}`);
     },
 });
 
+export const uploadChatMedia = multer({
+    storage,
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
+    fileFilter: (req: any, file, cb) => {
+        const allowedMimes = [
+            "image/jpeg", "image/png", "image/gif", "image/webp",
+            "video/mp4", "video/quicktime", "video/webm", "video/3gpp",
+            "audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg",
+            "audio/webm", "audio/wav", "audio/amr", "audio/3gpp"
+        ];
 
-
-export const uploadChatMedia = async (req: any, res: any, next: any) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({
-                error: true,
-                message: "No se ha subido ningún archivo",
-            });
+        if (allowedMimes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error(`Tipo de archivo no permitido: ${file.mimetype}`));
         }
+    },
+}).single("file"); // ← ¡Importante: usar .single("file")
 
-        // Ahora req.body.file_type está garantizado disponible
-        const file_type = req.body.file_type as "image" | "video" | "audio" | undefined;
-
-        const validTypes = ["image", "video", "audio"];
-        if (!file_type || !validTypes.includes(file_type)) {
-            // Opcional: eliminar el archivo ya subido a S3 si la validación falla
-            await deleteFromS3(req.file.location);
-            return res.status(400).json({
-                error: true,
-                message: "file_type inválido. Debe ser image, video o audio",
-            });
-        }
-
-        // Validar coincidencia entre MIME y file_type
-        const mimePrefix = req.file.mimetype.split("/")[0];
-        const expectedPrefix = file_type;  // "image", "video" o "audio"
-
-        if (mimePrefix !== expectedPrefix) {
-            await deleteFromS3(req.file.location);
-            return res.status(400).json({
-                error: true,
-                message: "El MIME type del archivo no coincide con file_type",
-            });
-        }
-
-        // Si todo está bien, responder con la URL
-        res.status(200).json({
-            error: false,
-            message: "Archivo subido con éxito",
-            file_url: req.file.location,
-            file_type: file_type,
-        });
-
-    } catch (error) {
-        next(error);
-    }
-};
-
-// Mantengo tu función de eliminación
 export const deleteFromS3 = async (url?: string) => {
     if (!url) return;
     try {
