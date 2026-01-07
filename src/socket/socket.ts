@@ -13,9 +13,8 @@ export const initSocket = (httpServer: any) => {
         }
     });
 
-    // AUTENTICACIÓN EN SOCKET.IO (handshake con JWT)
     io.use((socket, next) => {
-        const token = socket.handshake.query.token as string;
+        const token = (socket.handshake.auth as { token?: string })?.token || socket.handshake.query.token as string;
         if (!token) return next(new Error("Token requerido"));
         try {
             const decoded = verify(token, SECRET) as { userId: string };
