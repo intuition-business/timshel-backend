@@ -8,7 +8,8 @@ import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import pool from "../../config/db";
 import { any } from "joi";
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
+let uuidv4Sync: () => string;
 
 interface Exercise {
   exercise_name: string;
@@ -67,7 +68,19 @@ interface RoutineResponse {
   fecha_rutina: string;
   routines: { rutina_id: number | string; routine_name: string; exercises: Exercise[] }[];
 }
+// Carga asíncrona una sola vez al iniciar el módulo
+(async () => {
+  const { v4 } = await import('uuid');
+  uuidv4Sync = v4;
+})();
 
+// Función helper para usar en contextos síncronos (lanzará error si se llama antes de que cargue)
+function getUuidv4(): string {
+  if (!uuidv4Sync) {
+    throw new Error('uuid no ha terminado de cargarse aún. Intenta nuevamente en unos milisegundos.');
+  }
+  return uuidv4Sync();
+}
 export const getRoutines = async (
   req: Request,
   res: Response,
@@ -231,7 +244,7 @@ export const generateRoutinesIa = async (
       "SELECT * FROM formulario WHERE usuario_id = ?",
       [userId]
     );
-
+    const newId = await getUuidv4();
     const personData = adapter(rows?.[0]);
 
     // Generar los primeros 3 días sincronamente
