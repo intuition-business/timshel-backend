@@ -11,6 +11,8 @@ const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 const TWILIO_NUMBER = process.env.TWILIO_NUMBER || "";
 
 const API_KEY_SENDGRID = process.env.API_KEY_SENDGRID || "";
+const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
+
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
@@ -31,4 +33,5 @@ export {
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
   OPENAI_KEY,
+  BREVO_API_KEY
 };

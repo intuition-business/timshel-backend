@@ -59,6 +59,7 @@ jobs:
             echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
             echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
             echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
+            echo BREVO_API_KEY=${{ secrets.BREVO_API_KEY }} >> .env
           fi
 
           # For Development (dev branch)
@@ -83,6 +84,7 @@ jobs:
             echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
             echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
             echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
+            echo BREVO_API_KEY=${{ secrets.BREVO_API_KEY }} >> .env
 
           fi
 
@@ -108,6 +110,7 @@ jobs:
             echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
             echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
             echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
+            echo BREVO_API_KEY=${{ secrets.BREVO_API_KEY }} >> .env
 
 
       # Validate .env file contents

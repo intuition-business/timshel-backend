@@ -77,7 +77,7 @@ const Server = () => {
         console.log(`Server + Socket.IO corriendo en puerto ${PORT}`);
         console.log(`App: ${URL}:${PORT}`);
 
-        cron.schedule('0 0 * * *', async () => {
+        cron.schedule('0 3 * * *', async () => {
           console.log("Ejecutando renovación de rutinas...");
           await renewRoutines();
         }, { timezone: 'America/Bogota' });
