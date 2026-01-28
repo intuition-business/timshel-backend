@@ -438,6 +438,7 @@ export const generateRoutinesIaBackground = async (
 
 // Función principal para renovar rutinas vencidas
 export const renewRoutines = async () => {
+  console.time('renewRoutines'); // Medición de tiempo total para optimización y depuración
   const currentDate = new Date(); // Para producción; para pruebas: new Date(2025, 8, 9); // Sept 09, 2025 (mes 8 es septiembre)
   const currentDateStr = getLocalDateString(currentDate);
 
@@ -458,92 +459,104 @@ export const renewRoutines = async () => {
 
     if (periods.length === 0) {
       console.log("No hay rutinas que vencen hoy.");
+      console.timeEnd('renewRoutines'); // Fin de medición si no hay nada que procesar
       return;
     }
 
-    for (const period of periods) {
-      const userId = period.user_id;
+    // Procesar en batches para evitar bloqueos largos (optimiza CPU en prod con muchos users)
+    const batchSize = 10; // Tamaño de batch ajustable; en dev usa pequeño, en prod prueba con 50+
+    for (let i = 0; i < periods.length; i += batchSize) {
+      const batch = periods.slice(i, i + batchSize);
 
-      // Paso 1: Actualizar 'pending' a 'failed' en los días anteriores (todo el periodo vencido)
-      await pool.execute(
-        `UPDATE user_routine 
-         SET status = 'failed' 
-         WHERE user_id = ? AND start_date = ? AND end_date = ? AND status = 'pending'`,
-        [userId, period.start_date, period.end_date]
-      );
-      console.log(`Actualizados a 'failed' los días pendientes para user ${userId} en periodo ${period.start_date} - ${period.end_date}`);
+      for (const period of batch) {
+        const userId = period.user_id;
 
-      // Paso 2: Extraer el patrón de días únicos (e.g., ['Friday', 'Monday'])
-      const [dayRows] = await pool.execute(
-        `SELECT DISTINCT day 
-         FROM user_routine 
-         WHERE user_id = ? AND start_date = ? AND end_date = ?`,
-        [userId, period.start_date, period.end_date]
-      );
-      const selectedDays = (dayRows as Array<{ day: string }>).map((row) => row.day);
+        // Paso 1: Actualizar 'pending' a 'failed' en los días anteriores (todo el periodo vencido)
+        await pool.execute(
+          `UPDATE user_routine 
+           SET status = 'failed' 
+           WHERE user_id = ? AND start_date = ? AND end_date = ? AND status = 'pending'`,
+          [userId, period.start_date, period.end_date]
+        );
+        console.log(`Actualizados a 'failed' los días pendientes para user ${userId} en periodo ${period.start_date} - ${period.end_date}`);
 
-      if (selectedDays.length === 0) {
-        console.log(`No se encontró patrón de días para user ${userId}. Saltando.`);
-        continue;
+        // Paso 2: Extraer el patrón de días únicos (e.g., ['Friday', 'Monday'])
+        const [dayRows] = await pool.execute(
+          `SELECT DISTINCT day 
+           FROM user_routine 
+           WHERE user_id = ? AND start_date = ? AND end_date = ?`,
+          [userId, period.start_date, period.end_date]
+        );
+        const selectedDays = (dayRows as Array<{ day: string }>).map((row) => row.day);
+
+        if (selectedDays.length === 0) {
+          console.log(`No se encontró patrón de días para user ${userId}. Saltando.`);
+          continue;
+        }
+
+        // Paso 3: Calcular nuevas fechas (mes siguiente: +1 día a end_date, +30 días para end)
+        const oldEndDate = new Date(period.end_date);
+        const newStartDate = new Date(oldEndDate);
+        newStartDate.setDate(newStartDate.getDate() + 1);
+        const newEndDate = new Date(newStartDate);
+        newEndDate.setDate(newEndDate.getDate() + 30);
+
+        const newStartStr = getLocalDateString(newStartDate);
+        const newEndStr = getLocalDateString(newEndDate);
+
+        // Verificar si ya existe un periodo para el mes siguiente (evitar duplicados)
+        const [existing] = await pool.execute(
+          `SELECT id FROM user_routine WHERE user_id = ? AND start_date = ?`,
+          [userId, newStartStr]
+        );
+        if ((existing as any).length > 0) {
+          console.log(`Ya existe rutina para user ${userId} empezando en ${newStartStr}. Saltando.`);
+          continue;
+        }
+
+        // Paso 4: Generar nuevas fechas con el patrón, horarios y current_user_time como '00:00' (para incluir todos)
+        const newRoutineData = generateGlobalRoutine(
+          selectedDays,
+          newStartDate,
+          newEndDate,
+          currentDateStr
+        );
+
+        if (newRoutineData.length === 0) {
+          console.log(`No se generaron fechas nuevas para user ${userId}.`);
+          continue;
+        }
+
+        // Paso 5: Insertar las nuevas filas (status default 'pending' en BD)
+        const insertValues = newRoutineData.map(item => [
+          userId,
+          item.day,
+          item.date,
+          newStartStr,
+          newEndStr
+        ]);
+
+        await pool.query(
+          `INSERT INTO user_routine (user_id, day, date, start_date, end_date) VALUES ?`,
+          [insertValues]
+        );
+        console.log(`Rutina renovada para user ${userId} en nuevo periodo ${newStartStr} - ${newEndStr}`);
+
+        // Paso 6: Generar la rutina con IA inmediatamente después de insertar las nuevas fechas
+        const genResult = await generateRoutinesIaBackground(userId, newStartStr, newEndStr);
+        if (genResult.error) {
+          console.error(`Error generando rutina IA para user ${userId}: ${genResult.message}`);
+        } else {
+          console.log(`Rutina IA generada exitosamente para user ${userId} con routine_id ${genResult.routine_id}`);
+        }
       }
 
-      // Paso 3: Calcular nuevas fechas (mes siguiente: +1 día a end_date, +30 días para end)
-      const oldEndDate = new Date(period.end_date);
-      const newStartDate = new Date(oldEndDate);
-      newStartDate.setDate(newStartDate.getDate() + 1);
-      const newEndDate = new Date(newStartDate);
-      newEndDate.setDate(newEndDate.getDate() + 30);
-
-      const newStartStr = getLocalDateString(newStartDate);
-      const newEndStr = getLocalDateString(newEndDate);
-
-      // Verificar si ya existe un periodo para el mes siguiente (evitar duplicados)
-      const [existing] = await pool.execute(
-        `SELECT id FROM user_routine WHERE user_id = ? AND start_date = ?`,
-        [userId, newStartStr]
-      );
-      if ((existing as any).length > 0) {
-        console.log(`Ya existe rutina para user ${userId} empezando en ${newStartStr}. Saltando.`);
-        continue;
-      }
-
-      // Paso 4: Generar nuevas fechas con el patrón, horarios y current_user_time como '00:00' (para incluir todos)
-      const newRoutineData = generateGlobalRoutine(
-        selectedDays,
-        newStartDate,
-        newEndDate,
-        currentDateStr
-      );
-
-      if (newRoutineData.length === 0) {
-        console.log(`No se generaron fechas nuevas para user ${userId}.`);
-        continue;
-      }
-
-      // Paso 5: Insertar las nuevas filas (status default 'pending' en BD)
-      const insertValues = newRoutineData.map(item => [
-        userId,
-        item.day,
-        item.date,
-        newStartStr,
-        newEndStr
-      ]);
-
-      await pool.query(
-        `INSERT INTO user_routine (user_id, day, date, start_date, end_date) VALUES ?`,
-        [insertValues]
-      );
-      console.log(`Rutina renovada para user ${userId} en nuevo periodo ${newStartStr} - ${newEndStr}`);
-
-      // Paso 6: Generar la rutina con IA inmediatamente después de insertar las nuevas fechas
-      const genResult = await generateRoutinesIaBackground(userId, newStartStr, newEndStr);
-      if (genResult.error) {
-        console.error(`Error generando rutina IA para user ${userId}: ${genResult.message}`);
-      } else {
-        console.log(`Rutina IA generada exitosamente para user ${userId} con routine_id ${genResult.routine_id}`);
-      }
+      // Pequeña pausa entre batches para no saturar CPU/DB (optimiza en entornos de bajo recurso)
+      await new Promise(resolve => setTimeout(resolve, 100)); // 100ms; ajusta si es necesario
     }
   } catch (error) {
     console.error("Error en renewRoutines:", error);
+  } finally {
+    console.timeEnd('renewRoutines'); // Siempre mide el tiempo total, incluso si hay error
   }
 };

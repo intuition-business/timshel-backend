@@ -308,18 +308,29 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       const assignedUsers = (assigned as any[]).map((a: any) => {
         let parsedDescriptionItems = [];
 
-        // Intenta parsear description_items, pero si falla, maneja el error
-        try {
-          parsedDescriptionItems = a.description_items ? JSON.parse(a.description_items) : [];
-        } catch (error) {
-          console.error("Error al parsear description_items para el usuario:", a.user_id, error);
-          parsedDescriptionItems = []; // Fallback si el JSON no es válido
+        if (a.description_items) {
+          if (Array.isArray(a.description_items)) {
+            // Ya es un array (parseado por mysql2)
+            parsedDescriptionItems = a.description_items;
+            console.log('✅ description_items ya es array:', parsedDescriptionItems);
+          } else if (typeof a.description_items === 'string') {
+            // Si por algún motivo es string, parsea
+            try {
+              parsedDescriptionItems = JSON.parse(a.description_items);
+            } catch (error) {
+              console.error("Error al parsear description_items string para el usuario:", a.user_id, error);
+              // Fallback: split por comas si parece lista
+              parsedDescriptionItems = a.description_items.split(',').map((item: any) => item.trim()).filter((item: any) => item);
+            }
+          } else {
+            console.warn('⚠️ description_items no es array ni string:', typeof a.description_items);
+          }
         }
 
         return {
           assignment_id: a.assignment_id,
           user_id: a.user_id,
-          user_email: a.user_email || `Usuario ${a.user_id}`, // Fallback si no hay email
+          user_email: a.user_email || `Usuario ${a.user_id}`,
           plan_id: a.plan_id,
           plan_title: a.plan_title || 'Plan no especificado',
           price_cop: a.price_cop || 0,
@@ -834,22 +845,27 @@ export const assignUserWithPlan = async (req: Request, res: Response, next: Next
         price_cop: assignmentData.price_cop,
         // 🔥 CORREGIDO: Parseo seguro de JSON con logs
         description_items: (() => {
-          try {
-            const parsedItems = assignmentData.description_items
-              ? JSON.parse(assignmentData.description_items)
-              : [];
-            console.log('✅ description_items parseado:', parsedItems);
-            return parsedItems;
-          } catch (parseError) {
-            console.log('⚠️ JSON parse error en description_items:', assignmentData.description_items, 'Error:', parseError);
-            if (typeof assignmentData.description_items === 'string' && assignmentData.description_items.trim()) {
-              const fallbackItems = assignmentData.description_items.split(',').map((item: any) => item.trim()).filter((item: any) => item);
-              console.log('🔧 Fallback description_items:', fallbackItems);
-              return fallbackItems;
+          let parsedItems = [];
+          if (assignmentData.description_items) {
+            if (Array.isArray(assignmentData.description_items)) {
+              // Ya es un array (parseado por mysql2)
+              parsedItems = assignmentData.description_items;
+              console.log('✅ description_items ya es array:', parsedItems);
+            } else if (typeof assignmentData.description_items === 'string') {
+              try {
+                parsedItems = JSON.parse(assignmentData.description_items);
+                console.log('✅ description_items parseado:', parsedItems);
+              } catch (parseError) {
+                console.log('⚠️ JSON parse error en description_items:', assignmentData.description_items, 'Error:', parseError);
+                // Fallback: split por comas
+                parsedItems = assignmentData.description_items.split(',').map((item: any) => item.trim()).filter((item: any) => item);
+                console.log('🔧 Fallback description_items:', parsedItems);
+              }
+            } else {
+              console.warn('⚠️ description_items no es array ni string:', typeof assignmentData.description_items);
             }
-            console.log('🔴 No se pudo parsear, retornando array vacío');
-            return [];
           }
+          return parsedItems;
         })(),
         status: assignmentData.status,
         assigned_date: formatDateWithSlash(assignmentData.fecha_asignacion) // Ajustado al formato DD/MM/YYYY
