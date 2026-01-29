@@ -22,6 +22,8 @@ export const InsertForm = async ({
   weekly_availability,
   birthday,
   name,
+  phone,
+  email,
   train_experience,
 }: any) => {
   const fieldsToUpdate = [];
@@ -135,6 +137,16 @@ export const InsertForm = async ({
   if (train_experience !== undefined) {
     fieldsToUpdate.push("train_experience ");
     queryParams.push(train_experience);
+    values.push("?");
+  }
+  if (phone !== undefined) {
+    fieldsToUpdate.push("phone ");
+    queryParams.push(phone);
+    values.push("?");
+  }
+  if (email !== undefined) {
+    fieldsToUpdate.push("email ");
+    queryParams.push(email);
     values.push("?");
   }
 
