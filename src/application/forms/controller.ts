@@ -38,6 +38,8 @@ export const createforms = async (
     weekly_availability,
     birthday,
     name,
+    phone,
+    email,
   } = req.body;
 
   const { headers } = req;
@@ -108,6 +110,8 @@ export const createforms = async (
         weekly_availability,
         birthday,
         name,
+        phone,
+        email,
       });
 
       if (updateResult.affectedRows > 0) {
@@ -145,6 +149,8 @@ export const createforms = async (
         weekly_availability,
         birthday,
         name,
+        phone,
+        email,
       });
 
       if (result.insertId) {
@@ -157,7 +163,7 @@ export const createforms = async (
 
     response.message = "Error al guardar el formulario en la base de datos";
     response.error = true;
-    res.status(4000).json(response);
+    res.status(400).json(response);
     return;
   } catch (error) {
     console.error("Error al insertar el formulario:", error);

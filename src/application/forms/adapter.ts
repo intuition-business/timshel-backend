@@ -3,6 +3,8 @@ export const adapterForms = (data: any) => {
     return {
       user_id: item?.usuario_id,
       name: item?.name,
+      phone: item?.phone,
+      email: item?.email,
       birthday: item?.fecha_nacimiento,
       gender: item?.genero,
       weight: item?.peso,

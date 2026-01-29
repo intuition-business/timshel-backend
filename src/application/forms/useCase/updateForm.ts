@@ -22,6 +22,8 @@ export const UpdateForm = async ({
   weekly_availability,
   birthday,
   name,
+  phone,
+  email,
   train_experience,
 }: any) => {
   const fieldsToUpdate = [];
@@ -110,6 +112,14 @@ export const UpdateForm = async ({
   if (name !== undefined) {
     fieldsToUpdate.push("name = ?");
     queryParams.push(name);
+  }
+  if (phone !== undefined) {
+    fieldsToUpdate.push("phone = ?");
+    queryParams.push(phone);
+  }
+  if (email !== undefined) {
+    fieldsToUpdate.push("email = ?");
+    queryParams.push(email);
   }
   if (train_experience !== undefined) {
     fieldsToUpdate.push("train_experience = ?");
