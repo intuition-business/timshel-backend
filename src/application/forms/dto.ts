@@ -1,6 +1,8 @@
 import Joi from "joi";
 
 const name = Joi.string();
+const phone = Joi.string();
+const email = Joi.string();
 const birthday = Joi.string();
 const gender = Joi.string();
 const weight = Joi.number();
@@ -72,6 +74,8 @@ export const createFormsDto = Joi.object({
   weekly_availability,
   birthday,
   name,
+  phone,
+  email,
 });
 
 export const getFormsDto = Joi.object({
