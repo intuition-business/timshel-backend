@@ -165,12 +165,22 @@ jobs:
 
       - name: SSH and deploy
         run: |
-          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} \
-          "cd /home/ec2-user/timshel-backend; \
-           sudo docker login -u "${{ secrets.USER_NAME }}" -p ${{ secrets.DOCKER_PASSWORD }} ghcr.io/intuition-business/timshel/backend:production; \
-           sudo docker compose down; \
-           sudo docker image rm ghcr.io/intuition-business/timshel/backend:production; \
-           sudo docker compose up -d;"
+          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} << 'EOF'
+            cd /home/ec2-user/timshel-backend
+
+            sudo docker login ghcr.io -u "${{ secrets.USER_NAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
+
+            sudo docker pull ghcr.io/intuition-business/timshel/backend:production
+
+            sudo docker stop timshel-backend || true
+            sudo docker rm timshel-backend || true
+
+            sudo docker run -d \
+              --name timshel-backend \
+              --env-file .env \
+              -p 3000:3000 \
+              ghcr.io/intuition-business/timshel/backend:production
+          EOF
 
   # Job to deploy the application to development (testing)
   deploy_dev:
@@ -200,7 +210,7 @@ jobs:
 
       - name: SSH and deploy
         run: |
-          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} \
+          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} << 'EOF'
           "cd /home/ec2-user/timshel-backend-dev; \
            sudo docker login -u "${{ secrets.USER_NAME }}" -p ${{ secrets.DOCKER_PASSWORD }} ghcr.io/intuition-business/timshel/backend:dev; \
            sudo docker compose down; \
