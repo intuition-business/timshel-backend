@@ -10,22 +10,10 @@ jobs:
   build_docker_image:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
-    services:
-      docker:
-        image: docker:dind
-        options: --privileged
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -34,179 +22,85 @@ jobs:
           username: ${{ secrets.USER_NAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Add environment variables to .env
-      - name: Add environment variables to .env
-        run: |
-          # For Production (main branch)
-          if [ "${GITHUB_REF}" == "refs/heads/main" ]; then
-            echo "Setting production variables"
-            echo PORT=${{ secrets.PORT }} >> .env
-            echo NODE_ENV=${{ secrets.NODE_ENV }} >> .env
-            echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
-            echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
-            echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
-            echo TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} >> .env
-            echo API_KEY_SENDGRID=${{ secrets.API_KEY_SENDGRID }} >> .env
-            echo GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} >> .env
-            echo GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} >> .env
-            echo HOST=${{ secrets.HOST }} >> .env
-            echo USER_DB=${{ secrets.USER_DB }} >> .env
-            echo PASSWORD_DB=${{ secrets.PASSWORD_DB }} >> .env
-            echo DATABASE=${{ secrets.DATABASE }} >> .env
-            echo PORT_DB=${{ secrets.PORT_DB }} >> .env
-            echo AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} >> .env
-            echo AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} >> .env
-            echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
-            echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
-            echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
-            echo BREVO_API_KEY=${{ secrets.BREVO_API_KEY }} >> .env
-          fi
-
-          # For Development (dev branch)
-          if [ "${GITHUB_REF}" == "refs/heads/main" ]; then
-            echo "Setting production variables"
-            echo PORT=${{ secrets.PORT }} >> .env
-            echo NODE_ENV=${{ secrets.NODE_ENV }} >> .env
-            echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
-            echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
-            echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
-            echo TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} >> .env
-            echo API_KEY_SENDGRID=${{ secrets.API_KEY_SENDGRID }} >> .env
-            echo GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} >> .env
-            echo GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} >> .env
-            echo HOST=${{ secrets.HOST }} >> .env
-            echo USER_DB=${{ secrets.USER_DB }} >> .env
-            echo PASSWORD_DB=${{ secrets.PASSWORD_DB }} >> .env
-            echo DATABASE=${{ secrets.DATABASE }} >> .env
-            echo PORT_DB=${{ secrets.PORT_DB }} >> .env
-            echo AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} >> .env
-            echo AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} >> .env
-            echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
-            echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
-            echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
-            echo BREVO_API_KEY=${{ secrets.BREVO_API_KEY }} >> .env
-
-          fi
-
-          # Common environment variables for both
-            echo "Setting production variables"
-            echo "Setting production variables"
-            echo PORT=${{ secrets.PORT }} >> .env
-            echo NODE_ENV=${{ secrets.NODE_ENV }} >> .env
-            echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
-            echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
-            echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
-            echo TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} >> .env
-            echo API_KEY_SENDGRID=${{ secrets.API_KEY_SENDGRID }} >> .env
-            echo GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} >> .env
-            echo GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} >> .env
-            echo HOST=${{ secrets.HOST }} >> .env
-            echo USER_DB=${{ secrets.USER_DB }} >> .env
-            echo PASSWORD_DB=${{ secrets.PASSWORD_DB }} >> .env
-            echo DATABASE=${{ secrets.DATABASE }} >> .env
-            echo PORT_DB=${{ secrets.PORT_DB }} >> .env
-            echo AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} >> .env
-            echo AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} >> .env
-            echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
-            echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
-            echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
-            echo BREVO_API_KEY=${{ secrets.BREVO_API_KEY }} >> .env
-
-
-      # Validate .env file contents
-      - name: Print .env file contents for debugging
-        run: cat .env
-
-      # Build Docker image for production
       - name: Build Production Docker image
         if: github.ref == 'refs/heads/main'
-        run: docker build --build-arg NODE_ENV=production --build-arg env_port=8080 -t ghcr.io/intuition-business/timshel/backend:production .
+        run: |
+          docker build \
+            --build-arg NODE_ENV=production \
+            -t ghcr.io/intuition-business/timshel/backend:production .
 
-      # Build Docker image for development
       - name: Build Development Docker image
-        if: github.ref == 'refs/heads/dev'
-        run: docker build --build-arg NODE_ENV=dev --build-arg env_port=8081 -t ghcr.io/intuition-business/timshel/backend:dev .
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          docker build \
+            --build-arg NODE_ENV=dev \
+            -t ghcr.io/intuition-business/timshel/backend:dev .
 
-      # Push Production Docker image to registry
-      - name: Push Production Docker image to registry
+      - name: Push Production Docker image
         if: github.ref == 'refs/heads/main'
         run: docker push ghcr.io/intuition-business/timshel/backend:production
 
-      # Push Development Docker image to registry
-      - name: Push Development Docker image to registry
-        if: github.ref == 'refs/heads/dev'
+      - name: Push Development Docker image
+        if: github.ref == 'refs/heads/develop'
         run: docker push ghcr.io/intuition-business/timshel/backend:dev
 
-  # Job to deploy the application to production
+
   deploy_production:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: build_docker_image
-    if: github.ref == 'refs/heads/main'  # Only for the master branch
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    if: github.ref == 'refs/heads/main'
 
-      - name: Install SSH and SSHPass
+    steps:
+      - name: Install SSH tools
         run: sudo apt-get update && sudo apt-get install -y openssh-client sshpass
 
-      - name: Set up deployment directory
+      - name: Decode SSH key
         run: |
-          mkdir timshel-backend
-          chmod +x timshel-backend
-          mv docker-compose-production.yml timshel-backend/docker-compose.yml
+          echo "${{ secrets.SERVER_SSH_KEY }}" | base64 -d > my_ssh
+          chmod 400 my_ssh
 
-      - name: Decode SSH Key and set permissions
-        run: echo "${{ secrets.SERVER_SSH_KEY }}" | base64 -d > my_ssh && chmod 400 my_ssh
-
-      - name: Copy files to server
+      - name: Create .env for production
         run: |
-          sshpass scp -i my_ssh -o StrictHostKeyChecking=no -r timshel-backend ec2-user@${{ secrets.SERVER_IP }}:/home/ec2-user/
+          echo PORT=${{ secrets.PORT }} > .env
+          echo NODE_ENV=production >> .env
+          echo SECRET_KEY_JWT=${{ secrets.SECRET_KEY_JWT }} >> .env
+          echo TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }} >> .env
+          echo TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }} >> .env
+          echo TWILIO_NUMBER=${{ secrets.TWILIO_NUMBER }} >> .env
+          echo API_KEY_SENDGRID=${{ secrets.API_KEY_SENDGRID }} >> .env
+          echo GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} >> .env
+          echo GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} >> .env
+          echo HOST=${{ secrets.HOST }} >> .env
+          echo USER_DB=${{ secrets.USER_DB }} >> .env
+          echo PASSWORD_DB=${{ secrets.PASSWORD_DB }} >> .env
+          echo DATABASE=${{ secrets.DATABASE }} >> .env
+          echo PORT_DB=${{ secrets.PORT_DB }} >> .env
+          echo AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} >> .env
+          echo AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} >> .env
+          echo AWS_REGION=${{ secrets.AWS_REGION }} >> .env
+          echo AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }} >> .env
+          echo OPENIA_KEY=${{ secrets.OPENIA_KEY }} >> .env
+          echo BREVO_API_KEY=${{ secrets.BREVO_API_KEY }} >> .env
 
       - name: Copy .env to server
         run: |
-          sshpass scp -i my_ssh -o StrictHostKeyChecking=no .env ec2-user@${{ secrets.SERVER_IP }}:/home/ec2-user/timshel-backend/.env
+          sshpass scp -i my_ssh -o StrictHostKeyChecking=no .env \
+          ec2-user@${{ secrets.SERVER_IP }}:/home/ec2-user/.env
 
-      - name: SSH and deploy
+      - name: Deploy on EC2
         run: |
-          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} \
-          "cd /home/ec2-user/timshel-backend; \
-           sudo docker login -u "${{ secrets.USER_NAME }}" -p ${{ secrets.DOCKER_PASSWORD }} ghcr.io/intuition-business/timshel/backend:production; \
-           sudo docker compose down; \
-           sudo docker image rm ghcr.io/intuition-business/timshel/backend:production; \
-           sudo docker compose up -d;"
+          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} << 'EOF'
+            sudo docker login ghcr.io -u "${{ secrets.USER_NAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
 
-  # Job to deploy the application to development (testing)
-  deploy_dev:
-    name: Deploy to Development (Testing)
-    runs-on: ubuntu-latest
-    needs: build_docker_image
-    if: github.ref == 'refs/heads/dev'  # Only for the dev branch
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+            sudo docker pull ghcr.io/intuition-business/timshel/backend:production
 
-      - name: Install SSH and SSHPass
-        run: sudo apt-get update && sudo apt-get install -y openssh-client sshpass
+            sudo docker stop timshel-backend || true
+            sudo docker rm timshel-backend || true
 
-      - name: Set up deployment directory
-        run: |
-          mkdir timshel-backend-dev
-          chmod +x timshel-backend-dev
-          mv docker-compose-dev.yml timshel-backend-dev/docker-compose.yml
-
-      - name: Decode SSH Key and set permissions
-        run: echo "${{ secrets.SERVER_SSH_KEY }}" | base64 -d > my_ssh && chmod 400 my_ssh
-
-      - name: Copy files to server
-        run: |
-          sshpass scp -i my_ssh -o StrictHostKeyChecking=no -r timshel-backend-dev ec2-user@${{ secrets.SERVER_IP }}:/home/ec2-user/
-
-      - name: SSH and deploy
-        run: |
-          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} \
-          "cd /home/ec2-user/timshel-backend-dev; \
-           sudo docker login -u "${{ secrets.USER_NAME }}" -p ${{ secrets.DOCKER_PASSWORD }} ghcr.io/intuition-business/timshel/backend:dev; \
-           sudo docker compose down; \
-           sudo docker image rm ghcr.io/intuition-business/timshel/backend:dev; \
-           sudo docker compose up -d;"
+            sudo docker run -d \
+              --name timshel-backend \
+              --env-file /home/ec2-user/.env \
+              -p 3000:3000 \
+              ghcr.io/intuition-business/timshel/backend:production
+          EOF
