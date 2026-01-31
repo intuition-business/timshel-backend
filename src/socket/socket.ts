@@ -4,6 +4,13 @@ import { v4 as uuidv4 } from 'uuid';
 import pool from "../config/db";
 import { SECRET } from "../config";
 
+interface UserDetails {
+    name: string;
+    email: string | null;
+    phone: string | null;
+    image: string | null;
+}
+
 // Función principal para inicializar Socket.IO
 export const initSocket = (httpServer: any) => {
     const io = new SocketIOServer(httpServer, {
@@ -29,7 +36,7 @@ export const initSocket = (httpServer: any) => {
     io.on("connection", (socket) => {
         console.log(`Usuario conectado: ${socket.data.userId} (socket: ${socket.id})`);
 
-        // Unirse a un chat privado (room basado en IDs ordenados para unicidad)
+        // Unirse a un chat privado
         socket.on("join-chat", async (receiverId: string) => {
             const userId = socket.data.userId;
             if (!receiverId || userId === receiverId) {
@@ -37,12 +44,22 @@ export const initSocket = (httpServer: any) => {
                 return;
             }
 
-            const room = [userId, receiverId].sort().join("_");  // Ej: "123_456"
+            const room = [userId, receiverId].sort().join("_");
             socket.join(room);
             console.log(`Usuario ${userId} se unió al chat con ${receiverId} (room: ${room})`);
 
-            // Cargar historial de mensajes
+            // Cargar historial
             loadChatHistory(userId, receiverId, socket);
+
+            // Enviar información del receptor (útil si no hay historial aún)
+            const receiverDetails = await getUserDetails(receiverId);
+            socket.emit("receiver-info", {
+                user_id: receiverId,
+                user_name: receiverDetails.name,
+                user_image: receiverDetails.image,
+                user_email: receiverDetails.email,
+                user_phone: receiverDetails.phone
+            });
         });
 
         // Enviar mensaje
@@ -56,26 +73,29 @@ export const initSocket = (httpServer: any) => {
 
             const room = [senderId, receiverId].sort().join("_");
 
-            // Generar mensaje según esquema
+            const senderDetails = await getUserDetails(senderId);
+            const receiverDetails = await getUserDetails(receiverId);
+
             const newMessage = {
                 id: uuidv4(),
                 user_id_sender: senderId,
-                user_image_sender: await getUserImage(senderId),
-                user_name_sender: await getUserName(senderId),
+                user_image_sender: senderDetails.image,
+                user_name_sender: senderDetails.name,
+                user_email_sender: senderDetails.email,
+                user_phone_sender: senderDetails.phone,
                 user_id_receiver: receiverId,
-                user_image_receiver: await getUserImage(receiverId),
-                user_name_receiver: await getUserName(receiverId),
+                user_image_receiver: receiverDetails.image,
+                user_name_receiver: receiverDetails.name,
+                user_email_receiver: receiverDetails.email,
+                user_phone_receiver: receiverDetails.phone,
                 message,
                 files,
                 created_at: new Date().toISOString(),
                 seen: false,
-                received: true,  // Asumimos recibido al emitir
+                received: true,
             };
 
-            // Guardar en DB
             await saveMessageToDB(newMessage);
-
-            // Emitir a la room (ambos usuarios en tiempo real)
             io.to(room).emit("receive-message", newMessage);
         });
 
@@ -86,8 +106,6 @@ export const initSocket = (httpServer: any) => {
                 return;
             }
             await updateMessageSeen(messageId, socket.data.userId);
-            // Opcional: Notificar al sender
-            // io.to(room).emit("message-seen", { messageId });
         });
 
         socket.on("disconnect", () => {
@@ -95,10 +113,34 @@ export const initSocket = (httpServer: any) => {
         });
     });
 
-    return io;  // Devolvemos io para usarlo en Server si es necesario
+    return io;
 };
 
-// Obtener imagen de perfil desde la tabla user_images
+// === NUEVA FUNCIÓN PRINCIPAL ===
+async function getUserDetails(userId: string): Promise<UserDetails> {
+    const [rows]: any = await pool.execute(
+        `SELECT name, email, phone FROM formulario WHERE usuario_id = ? ORDER BY id DESC LIMIT 1`,
+        [userId]
+    );
+
+    const image = await getUserImage(userId);
+
+    if (rows.length === 0) {
+        return { name: "Usuario desconocido", email: null, phone: null, image };
+    }
+
+    const user = rows[0];
+    const displayName = user.name?.trim() || user.email?.trim() || user.phone?.trim() || "Usuario desconocido";
+
+    return {
+        name: displayName,
+        email: user.email || null,
+        phone: user.phone || null,
+        image
+    };
+}
+
+// Mantengo la función original de imagen (se usa dentro de getUserDetails)
 async function getUserImage(userId: string): Promise<string | null> {
     const [rows]: any = await pool.execute(
         "SELECT image_path FROM user_images WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
@@ -107,26 +149,36 @@ async function getUserImage(userId: string): Promise<string | null> {
     return rows.length > 0 ? rows[0].image_path : null;
 }
 
-// Obtener nombre (desde auth)
-async function getUserName(userId: string): Promise<string> {
-    const [rows]: any = await pool.execute(
-        "SELECT name, telefono FROM auth WHERE id = ?",
-        [userId]
-    );
-    if (!rows.length) return "Usuario";
-    const user = rows[0];
-    return user.name || user.telefono || `Usuario ${userId}`;
-}
-
+// Guardar mensaje (actualizado con los nuevos campos)
 async function saveMessageToDB(message: any) {
     await pool.execute(
-        "INSERT INTO messages (id, user_id_sender, user_image_sender, user_name_sender, user_id_receiver, user_image_receiver, user_name_receiver, message, files, created_at, seen, received) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [message.id, message.user_id_sender, message.user_image_sender, message.user_name_sender, message.user_id_receiver, message.user_image_receiver, message.user_name_receiver, message.message, JSON.stringify(message.files), message.created_at, message.seen, message.received]
+        `INSERT INTO messages 
+        (id, user_id_sender, user_image_sender, user_name_sender, user_email_sender, user_phone_sender,
+         user_id_receiver, user_image_receiver, user_name_receiver, user_email_receiver, user_phone_receiver,
+         message, files, created_at, seen, received) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            message.id,
+            message.user_id_sender,
+            message.user_image_sender,
+            message.user_name_sender,
+            message.user_email_sender,
+            message.user_phone_sender,
+            message.user_id_receiver,
+            message.user_image_receiver,
+            message.user_name_receiver,
+            message.user_email_receiver,
+            message.user_phone_receiver,
+            message.message,
+            JSON.stringify(message.files),
+            message.created_at,
+            message.seen,
+            message.received
+        ]
     );
 }
 
 async function updateMessageSeen(messageId: string, userId: string) {
-    // Solo actualizar si el usuario es el receiver
     await pool.execute(
         "UPDATE messages SET seen = true WHERE id = ? AND user_id_receiver = ?",
         [messageId, userId]
@@ -135,7 +187,10 @@ async function updateMessageSeen(messageId: string, userId: string) {
 
 async function loadChatHistory(userId: string, receiverId: string, socket: any) {
     const [rows]: any = await pool.execute(
-        "SELECT * FROM messages WHERE (user_id_sender = ? AND user_id_receiver = ?) OR (user_id_sender = ? AND user_id_receiver = ?) ORDER BY created_at ASC",
+        `SELECT * FROM messages 
+         WHERE (user_id_sender = ? AND user_id_receiver = ?) 
+            OR (user_id_sender = ? AND user_id_receiver = ?) 
+         ORDER BY created_at ASC`,
         [userId, receiverId, receiverId, userId]
     );
     socket.emit("chat-history", rows);
