@@ -38,4 +38,4 @@ ENV PORT=$env_port
 EXPOSE $env_port
 
 # Comando para iniciar la aplicación
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "start"]
