@@ -2,7 +2,7 @@ require("dotenv").config();
 
 const DB_USER = process.env.DB_USER;
 const DB_PASSWORD = process.env.DB_PASSWORD;
-const PORT = Number(process.env.PORT) || 4000;
+const PORT = Number(process.env.PORT) || 3000;
 const URL = process.env.URL || "localhost";
 const NODE_ENV = process.env.NODE_ENV;
 const SECRET = process.env.SECRET_KEY_JWT || "SECRET.321";
