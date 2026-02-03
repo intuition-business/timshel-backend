@@ -1,5 +1,5 @@
-import { Router } from "express";
-import { authWithGoogle, logoutWithGoogle } from "./controller";
+import { Router, RequestHandler } from "express";
+import { authWithGoogle, authWithGoogleMobile, logoutWithGoogle } from "./controller";
 import passport from "passport";
 import "./../../middleware/google";
 
@@ -20,4 +20,7 @@ router.get(
 
 router.get("/google/logout", logoutWithGoogle);
 
+
+// Nueva ruta para móvil (Flutter)
+router.post("/google/mobile", authWithGoogleMobile as RequestHandler);
 export default router;

@@ -2,7 +2,7 @@ import passport from "passport";
 import { OAuth2Strategy as GoogleStrategy } from "passport-google-oauth";
 import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from "../config";
 
-const emails = ["gelvezz223@gmail.com"];
+const emails = ["urielmarciales@gmail.com"];
 
 // Deserializa al usuario de la sesión. Busca al usuario (en este caso, por correo electrónico)
 
