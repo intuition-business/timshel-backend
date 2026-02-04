@@ -19,23 +19,27 @@ ENV PUPPETEER_EXECUTABLE_PATH /usr/bin/chromium-browser
 # Ajustar la configuración de Node.js para aumentar la memoria
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
-# Directorio de trabajo y copia de la aplicación
+# Directorio de trabajo
 WORKDIR /usr/src/app
 
-# Copiar todos los archivos, incluyendo el archivo .env
+# Copiar package*.json primero para mejor cache
+COPY package*.json ./
+
+# Instalar solo dependencias de producción
+RUN npm ci --only=production
+
+# Copiar el resto del código
 COPY . .
 
-# Instalar dependencias de la aplicación
-RUN npm install
-RUN npm install typescript
-RUN npm install dotenv
+# Compilar TypeScript a JS (agrega este paso clave)
+RUN npm run build
 
 # Definir variables de entorno y exponer puerto
-ARG env_name
-ARG env_port
+ARG env_name=production
+ARG env_port=3000
 ENV NODE_ENV=$env_name
 ENV PORT=$env_port
 EXPOSE $env_port
 
-# Comando para iniciar la aplicación
-CMD ["npm", "run", "start"]
+# Comando para correr el código compilado (ajusta "dist/index.js" si es diferente)
+CMD ["node", "dist/index.js"]
