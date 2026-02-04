@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
-import { validateOtpSMS } from "./validateOtpSMS";
-import { validateOtpEmail } from "./validateOtpEmail";
+import { validateOtpEmail } from "../../otp/validateOtp/controller/validateOtpEmail";
+import { validateOtpSMS } from "../../otp/validateOtp/controller/validateOtpSMS";
 
 export const validateOtp = async (
   req: Request,
