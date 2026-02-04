@@ -30,6 +30,8 @@ RUN npm install
 RUN npm install typescript
 RUN npm install dotenv
 
+# Compilar
+RUN npm run build
 # Definir variables de entorno y exponer puerto
 ARG env_name
 ARG env_port
