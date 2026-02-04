@@ -1,11 +1,14 @@
 services:
-  oncater_backend:
+  timshel-backend:
     image: ghcr.io/intuition-business/timshel/backend:production
     mem_limit: 1G
     mem_reservation: 512M
     ports:
       - "3000:3000"
     restart: always
+    env_file:
+      - /home/ec2-user/.env
     environment:
       - NODE_ENV=production
       - PORT=3000
+    command: ["npm", "start"]
