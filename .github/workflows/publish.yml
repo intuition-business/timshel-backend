@@ -22,28 +22,39 @@ jobs:
           username: ${{ secrets.USER_NAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # 🔥 Build Production (NO CACHE)
       - name: Build Production Docker image
         if: github.ref == 'refs/heads/main'
         run: |
-          docker build \
+          docker build --no-cache \
             --build-arg NODE_ENV=production \
-            -t ghcr.io/intuition-business/timshel/backend:production .
+            -t ghcr.io/intuition-business/timshel/backend:production \
+            -t ghcr.io/intuition-business/timshel/backend:production-${{ github.sha }} \
+            .
 
+      # Build Development
       - name: Build Development Docker image
         if: github.ref == 'refs/heads/develop'
         run: |
-          docker build \
+          docker build --no-cache \
             --build-arg NODE_ENV=dev \
-            -t ghcr.io/intuition-business/timshel/backend:dev .
+            -t ghcr.io/intuition-business/timshel/backend:dev \
+            -t ghcr.io/intuition-business/timshel/backend:dev-${{ github.sha }} \
+            .
 
+      # Push Production
       - name: Push Production Docker image
         if: github.ref == 'refs/heads/main'
-        run: docker push ghcr.io/intuition-business/timshel/backend:production
+        run: |
+          docker push ghcr.io/intuition-business/timshel/backend:production
+          docker push ghcr.io/intuition-business/timshel/backend:production-${{ github.sha }}
 
+      # Push Development
       - name: Push Development Docker image
         if: github.ref == 'refs/heads/develop'
-        run: docker push ghcr.io/intuition-business/timshel/backend:dev
-
+        run: |
+          docker push ghcr.io/intuition-business/timshel/backend:dev
+          docker push ghcr.io/intuition-business/timshel/backend:dev-${{ github.sha }}
 
   deploy_production:
     name: Deploy to Production
@@ -90,17 +101,26 @@ jobs:
 
       - name: Deploy on EC2
         run: |
-          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} << 'EOF'
+          sshpass ssh -i my_ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.SERVER_IP }} << EOF
             sudo docker login ghcr.io -u "${{ secrets.USER_NAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
 
-            sudo docker pull ghcr.io/intuition-business/timshel/backend:production
+            # 🔥 liberar espacio antes del pull
+            sudo docker system prune -a -f || true
+
+            # pull tag exacto del commit (evita cache / confusión)
+            sudo docker pull ghcr.io/intuition-business/timshel/backend:production-${{ github.sha }}
 
             sudo docker stop timshel-backend || true
             sudo docker rm timshel-backend || true
 
+            # 🔥 fuerza a correr PROD real (npm start)
             sudo docker run -d \
               --name timshel-backend \
               --env-file /home/ec2-user/.env \
               -p 3000:3000 \
-              ghcr.io/intuition-business/timshel/backend:production
+              ghcr.io/intuition-business/timshel/backend:production-${{ github.sha }} \
+              npm start
+
+            # opcional: logs cortos
+            sudo docker logs --tail 50 timshel-backend
           EOF
