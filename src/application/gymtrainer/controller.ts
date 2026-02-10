@@ -13,8 +13,9 @@ interface Trainer {
   name: string;
   email: string;
   phone: string;
+  address: string;
   description: string;
-  goal: string;
+  /* goal: string; */
   rating: number;
   experience_years: number;
   certifications: string;
@@ -32,7 +33,7 @@ interface UserTrainerPlan {
 }
 // Crear un entrenador
 export const createTrainer = async (req: Request, res: Response, next: NextFunction) => {
-  const { name, email, phone, description, goal, rating, experience_years, certifications, image } = req.body;
+  const { name, email, phone, description, address, rating, experience_years, certifications, image } = req.body;
 
   const response = { message: "", error: false };
 
@@ -68,11 +69,11 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json(response);
     }
 
-    const query = "INSERT INTO entrenadores (name, email, phone, description, goal, rating, experience_years, certifications, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    const [result]: any = await pool.query(query, [name, email, phone, description, goal, rating, experience_years, certifications, image]);
+    const query = "INSERT INTO entrenadores (name, email, phone, description, address, rating, experience_years, certifications, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    const [result]: any = await pool.query(query, [name, email, phone, description, address, rating, experience_years, certifications, image]);
 
     if (result) {
-      // Crear auth asociado con rol 'entrenador'
+      // Crear auth asociado con rol 'trainer'
       const authData = {
         usuario_id: 0,
         name: name,
@@ -81,13 +82,13 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
         telefono: phone,
         id_apple: 0,
         tipo_login: email ? 'email' : 'phone',
-        rol: 'entrenador'
+        rol: 'trainer',
       };
       await OtpModel.createAuth(authData);
 
       response.message = "Entrenador creado exitosamente";
       return res.status(201).json({
-        trainer: { name, email, phone, description, goal, rating, experience_years, certifications, image },
+        trainer: { name, email, phone, description, address, rating, experience_years, certifications, image },
       });
     } else {
       response.error = true;
