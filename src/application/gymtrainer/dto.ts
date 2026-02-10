@@ -22,14 +22,17 @@ const phone = Joi.string().trim().required().messages({
   'string.base': 'El teléfono debe ser un string',
   'any.required': 'El teléfono es requerido'
 });
+const address = Joi.string().trim().optional().messages({
+  'string.base': 'La dirección debe ser un string'
+});
 
 const description = Joi.string().trim().optional().messages({
   'string.base': 'La descripción debe ser un string'
 });
 
-const goal = Joi.string().trim().optional().messages({
+/* const goal = Joi.string().trim().optional().messages({
   'string.base': 'La meta debe ser un string'
-});
+}); */
 
 const rating = Joi.number().min(0).max(5).optional().messages({
   'number.base': 'La calificación debe ser un número',
@@ -66,10 +69,13 @@ const new_phone = Joi.string().trim().optional().messages({
 const new_description = Joi.string().trim().optional().messages({
   'string.base': 'La nueva descripción debe ser un string'
 });
-
-const new_goal = Joi.string().trim().optional().messages({
-  'string.base': 'La nueva meta debe ser un string'
+const new_address = Joi.string().trim().optional().messages({
+  'string.base': 'La nueva dirección debe ser un string'
 });
+
+/* const new_goal = Joi.string().trim().optional().messages({
+  'string.base': 'La nueva meta debe ser un string'
+}); */
 
 const new_rating = Joi.number().min(0).max(5).optional().messages({
   'number.base': 'La nueva calificación debe ser un número',
@@ -122,8 +128,9 @@ export const createTrainerDto = Joi.object({
   name,
   email,
   phone,
+  address,
   description,
-  goal,
+  /* goal, */
   rating,
   experience_years,
   certifications,
@@ -140,13 +147,14 @@ export const updateTrainerDto = Joi.object({
   new_email,
   new_phone,
   new_description,
-  new_goal,
+  new_address,
+  /* new_goal, */
   new_rating,
   new_experience_years,
   new_certifications,
   new_image
-}).or('new_name', 'new_email', 'new_phone', 'new_description', 'new_goal', 'new_rating', 'new_experience_years', 'new_certifications', 'new_image').messages({
-  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_description, new_goal, new_rating, new_experience_years, new_certificaciones o new_image'
+}).or('new_name', 'new_email', 'new_phone', 'new_description', 'new_address', 'new_rating', 'new_experience_years', 'new_certifications', 'new_image').messages({
+  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_description, new_address, new_rating, new_experience_years, new_certificaciones o new_image'
 });
 
 export const deleteTrainerDto = Joi.object({
