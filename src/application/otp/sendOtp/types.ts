@@ -7,10 +7,10 @@ export interface ICreateOtp {
 }
 
 export interface ICreateAuth extends ICreateOtp {
-  usuario_id?: number;
+  usuario_id?: number | null;
   name?: string;
   plataforma?: string;
-  entrenador_id?: number;
+  entrenador_id?: number | null;
   email: string;
   telefono: string;
   id_apple: number;

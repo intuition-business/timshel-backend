@@ -6,6 +6,12 @@ import { SECRET } from "../../config";
 import { adapterTrainers } from "./adapter";
 import { createTrainerDto, getTrainerDto, updateTrainerDto, deleteTrainerDto, assignUserDto, getTrainersListDto, assignUserWithPlanDto } from "./dto"; // Importamos los DTOs
 import { OtpModel } from "../otp/model";
+import { sendWithEmail } from "../otp/sendOtp/controller/sendWithEmail";
+import { sendWithPhonenumber } from "../otp/sendOtp/controller/sendWithPhonenumber";
+import OtpService from "../otp/services";
+import { generateOTPEmail } from "../otp/sendOtp/controller/generateOTP";
+import { ICreateAuth } from "../otp/sendOtp/types";
+import { sendOTP } from "../otp/sendOtp/controller/sendOTP";
 
 
 interface Trainer {
@@ -69,27 +75,43 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json(response);
     }
 
+    // Crear registro en usuarios primero para obtener usuario_id válido (solo con 'nombre', asumiendo fecha_registro y planes_id son defaults)
+    const usuarioQuery = "INSERT INTO usuarios (nombre) VALUES (?)";
+    const [usuarioResult]: any = await pool.query(usuarioQuery, [name]);
+
     const query = "INSERT INTO entrenadores (name, email, phone, description, address, rating, experience_years, certifications, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    const [result]: any = await pool.query(query, [name, email, phone, description, address, rating, experience_years, certifications, image]);
+    const [result]: any = await pool.query(query, [name, email, phone, description || null, address || null, rating || null, experience_years || null, certifications || null, image || null]);
 
     if (result) {
-      // Crear auth asociado con rol 'trainer'
+      // Crear auth asociado con rol 'trainer', usando usuario_id válido
       const authData = {
-        usuario_id: 0,
-        name: name,
+        usuario_id: usuarioResult.insertId,
+        name: name || null,
         entrenador_id: result.insertId,
-        email: email,
-        telefono: phone,
+        email: email || null,
+        telefono: phone || null,
         id_apple: 0,
         tipo_login: email ? 'email' : 'phone',
         rol: 'trainer',
       };
       await OtpModel.createAuth(authData);
 
-      response.message = "Entrenador creado exitosamente";
-      return res.status(201).json({
-        trainer: { name, email, phone, description, address, rating, experience_years, certifications, image },
-      });
+      // Preparar req.body para llamar a sendOTP (con platform 'web' para entrenadores, ajusta si es 'mobile')
+      const originalBody = { ...req.body };  // Guardar original para restaurar si es necesario
+      req.body = {
+        email,
+        phonenumber: phone,
+        name,
+        platform: 'web',  // Asumiendo web para entrenadores; cambia a 'mobile' si aplica
+      };
+
+      // Llamar a sendOTP directamente (maneja la respuesta y OTP)
+      await sendOTP(req, res, next);
+
+      // Restaurar req.body original si es necesario (por si hay más lógica, pero aquí no hace falta)
+      req.body = originalBody;
+
+      // No necesitas retornar JSON aquí porque sendOTP lo hace; si falla, catch lo maneja
     } else {
       response.error = true;
       response.message = "No se pudo guardar el entrenador";
@@ -97,7 +119,6 @@ export const createTrainer = async (req: Request, res: Response, next: NextFunct
     }
   } catch (error) {
     console.error("Error al crear el entrenador:", error);
-    next(error);
     return res.status(500).json({ message: "Error al crear el entrenador." });
   }
 };
