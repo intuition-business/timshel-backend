@@ -101,31 +101,50 @@ jobs:
           scp -i my_ssh -o StrictHostKeyChecking=no .env \
             ubuntu@${{ secrets.SERVER_IP }}:/home/ubuntu/.env
 
-      - name: Deploy on EC2
+      - name: Deploy on EC2 (install Docker if needed)
         run: |
-          ssh -i my_ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.SERVER_IP }} << EOF
+          ssh -i my_ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
 
-            # Login a GHCR (mejor práctica: password-stdin)
+            # 1) Instalar Docker si no existe
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y ca-certificates curl gnupg
+
+              sudo install -m 0755 -d /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+              echo \
+                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+                sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+              sudo apt-get update -y
+              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+              sudo systemctl enable --now docker
+            fi
+
+            # 2) Login a GHCR
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login ghcr.io -u "${{ secrets.USER_NAME }}" --password-stdin
 
-            # 🔥 liberar espacio antes del pull
+            # 3) liberar espacio antes del pull
             sudo docker system prune -a -f || true
 
-            # pull tag exacto del commit (evita cache / confusión)
+            # 4) pull tag exacto del commit
             sudo docker pull ghcr.io/intuition-business/timshel/backend:production-${{ github.sha }}
 
             sudo docker stop timshel-backend || true
             sudo docker rm timshel-backend || true
 
-            # 🔥 fuerza a correr PROD real (npm start)
+            # 5) correr contenedor
             sudo docker run -d \
               --name timshel-backend \
+              --restart unless-stopped \
               --env-file /home/ubuntu/.env \
               -p 3000:3000 \
               ghcr.io/intuition-business/timshel/backend:production-${{ github.sha }} \
               npm start
 
-            # opcional: logs cortos
             sudo docker logs --tail 50 timshel-backend
           EOF
