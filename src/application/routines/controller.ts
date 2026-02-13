@@ -1327,6 +1327,8 @@ export const searchInGeneratedRoutine = async (
     // Parsear el plan de entrenamiento
     let trainingPlan: any[];
     const rawData = planRows[0].training_plan;
+    console.log("Longitud respuesta:", rawData.length);
+    console.log("Termina con:", rawData.slice(-50));
     try {
       if (typeof rawData === "string") {
         const cleaned = rawData
