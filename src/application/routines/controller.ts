@@ -265,7 +265,11 @@ export const generateRoutinesIa = async (
       }
 
       // Verificamos que parsed tenga la propiedad 'workouts' o 'training_plan' y que sea un array
-      let trainingPlan = parsed.workouts || parsed.training_plan || parsed.workout_plan; // Manejar variaciones
+      let trainingPlan =
+        parsed.workouts ||
+        parsed.training_plan ||
+        parsed.workout_plan ||
+        (Array.isArray(parsed) ? parsed : [parsed]);
       if (parsed && Array.isArray(trainingPlan)) {
         // Asociamos las fechas con la rutina generada
         trainingPlan.forEach((day: any, index: number) => {
