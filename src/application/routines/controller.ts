@@ -316,13 +316,37 @@ export const generateRoutinesIa = async (
         // Generar el resto en segundo plano
         setImmediate(async () => {
           try {
-            const fullPrompt = await readFiles(personData, daysData);
-            const { response: fullResponse } = await getOpenAI(fullPrompt);
-            let parsedFull = JSON.parse(fullResponse?.choices[0].message.content || "");
-            let fullTrainingPlan = parsedFull.workouts || parsedFull.training_plan || parsedFull.workout_plan;
-            if (Array.isArray(fullTrainingPlan)) {
-              fullTrainingPlan.forEach((day: any, index: number) => {
-                const dateData = daysData[index];
+            const remainingDays = daysData.slice(3);
+            const chunkSize = 3;
+
+            let accumulatedPlan: any[] = [...trainingPlan]; // ya tienes los primeros 3
+
+            for (let i = 0; i < remainingDays.length; i += chunkSize) {
+              const chunk = remainingDays.slice(i, i + chunkSize);
+
+              const chunkPrompt = await readFiles(personData, chunk);
+              const { response: chunkResponse } = await getOpenAI(chunkPrompt);
+
+              const raw = chunkResponse?.choices?.[0]?.message?.content || "";
+
+              let parsedChunk;
+              try {
+                parsedChunk = JSON.parse(raw);
+              } catch (err) {
+                console.error("Error parseando chunk:", err);
+                continue; // saltamos este bloque
+              }
+
+              let chunkPlan =
+                parsedChunk.workouts ||
+                parsedChunk.training_plan ||
+                parsedChunk.workout_plan ||
+                (Array.isArray(parsedChunk) ? parsedChunk : [parsedChunk]);
+
+              if (!Array.isArray(chunkPlan)) continue;
+
+              chunkPlan.forEach((day: any, index: number) => {
+                const dateData = chunk[index];
                 day.fecha = dateData ? dateData.date : null;
 
                 if (Array.isArray(day.ejercicios)) {
@@ -333,18 +357,23 @@ export const generateRoutinesIa = async (
                   });
                 }
               });
-              const fullTrainingPlanJson = JSON.stringify(fullTrainingPlan);
-              await pool.execute(
-                "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
-                [fullTrainingPlanJson, userId]
-              );
-              console.log('Rutina completa generada y guardada para user_id:', userId);
+
+              accumulatedPlan = [...accumulatedPlan, ...chunkPlan];
             }
+
+            const fullTrainingPlanJson = JSON.stringify(accumulatedPlan);
+
+            await pool.execute(
+              "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+              [fullTrainingPlanJson, userId]
+            );
+
+            console.log("Rutina completa generada por bloques para user_id:", userId);
+
           } catch (bgError) {
-            console.error('Error en generación de rutina completa en segundo plano:', bgError);
+            console.error("Error en generación por bloques:", bgError);
           }
         });
-
         return;
       } else {
         console.error("La propiedad 'workouts' o 'training_plan' no es un array:", parsed);
