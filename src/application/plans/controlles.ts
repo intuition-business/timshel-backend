@@ -150,81 +150,99 @@ export const getPlanById = async (req: Request, res: Response, next: NextFunctio
 
 // Actualizar un plan
 export const updatePlan = async (req: Request, res: Response, next: NextFunction) => {
+    // Validar solo los campos del body (id ya no está en el DTO)
     const { error } = updatePlanDto.validate(req.body);
     if (error) {
-        return res.status(400).json({ error: true, message: error.details[0].message });
+        return res.status(400).json({
+            error: true,
+            message: error.details[0].message
+        });
     }
 
-    const { id, new_title, new_price_cop, new_description_items } = req.body;
+    // ID viene de la ruta → /update/:id
+    const id = parseInt(req.params.id, 10);
+
+    if (isNaN(id) || id <= 0) {
+        return res.status(400).json({
+            error: true,
+            message: "ID de plan inválido"
+        });
+    }
+
+    const { new_title, new_price_cop, new_description_items } = req.body;
 
     const response = { message: "", error: false };
 
     try {
-        const { headers } = req;
-        const token = headers["x-access-token"];
-        const decode = token && verify(`${token}`, SECRET);
-        const userId = (<any>(<unknown>decode)).userId; // Extraído para auth
 
-        // Construir query dinámica basada en campos proporcionados
         const updates: string[] = [];
         const params: any[] = [];
 
-        if (new_title) {
+        // Solo agregamos campos que vengan definidos (!== undefined)
+        if (new_title !== undefined) {
             updates.push("title = ?");
             params.push(new_title);
         }
-        if (new_price_cop) {
+
+        if (new_price_cop !== undefined) {
             updates.push("price_cop = ?");
             params.push(new_price_cop);
         }
-        if (new_description_items) {
+
+        if (new_description_items !== undefined) {
+            if (!Array.isArray(new_description_items)) {
+                return res.status(400).json({
+                    error: true,
+                    message: "new_description_items debe ser un array de strings"
+                });
+            }
             updates.push("description_items = ?");
             params.push(JSON.stringify(new_description_items));
         }
 
         if (updates.length === 0) {
-            response.error = true;
-            response.message = "No se proporcionaron campos para actualizar";
-            return res.status(400).json(response);
+            return res.status(400).json({
+                error: true,
+                message: "Debe enviar al menos un campo para actualizar (new_title, new_price_cop o new_description_items)"
+            });
         }
 
+        // Query sin updated_at (porque la columna no existe en tu tabla)
         const query = `UPDATE planes SET ${updates.join(", ")} WHERE id = ?`;
         params.push(id);
 
         const [result] = await pool.execute(query, params);
-
         const updateResult = result as import('mysql2').ResultSetHeader;
 
-        if (updateResult && updateResult.affectedRows > 0) {
+        if (updateResult.affectedRows > 0) {
             response.message = "Plan actualizado exitosamente";
             return res.status(200).json(response);
-        } else {
-            response.error = true;
-            response.message = "No se encontró un plan para actualizar";
-            return res.status(400).json(response);
         }
+
+        // Mejor 404 cuando no existe el registro
+        response.error = true;
+        response.message = "Plan no encontrado";
+        return res.status(404).json(response);
+
     } catch (error) {
         console.error("Error al actualizar el plan:", error);
         next(error);
-        return res.status(500).json({ message: "Error al actualizar el plan." });
+        return res.status(500).json({
+            error: true,
+            message: "Error interno al actualizar el plan"
+        });
     }
 };
 
 // Eliminar un plan
 export const deletePlan = async (req: Request, res: Response, next: NextFunction) => {
-    const { error } = deletePlanDto.validate(req.body);
-    if (error) {
-        return res.status(400).json({ error: true, message: error.details[0].message });
+    const id = parseInt(req.params.id, 10);
+
+    if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ error: true, message: "ID inválido" });
     }
 
-    const { id } = req.body;
-
-    const { headers } = req;
-    const token = headers["x-access-token"];
-    const decode = token && verify(`${token}`, SECRET);
-    const userId = (<any>(<unknown>decode)).userId; // Extraído para auth
-
-    const response = { message: "", error: false };
+    // ... token verification ...
 
     try {
         const [result] = await pool.execute(
@@ -234,17 +252,20 @@ export const deletePlan = async (req: Request, res: Response, next: NextFunction
 
         const deleteResult = result as import('mysql2').ResultSetHeader;
 
-        if (deleteResult && deleteResult.affectedRows > 0) {
-            response.message = "Plan eliminado exitosamente";
-            return res.status(200).json(response);
+        if (deleteResult.affectedRows > 0) {
+            return res.status(200).json({
+                error: false,
+                message: "Plan eliminado exitosamente"
+            });
         } else {
-            response.error = true;
-            response.message = "No se encontró un plan para eliminar";
-            return res.status(400).json(response);
+            return res.status(404).json({
+                error: true,
+                message: "Plan no encontrado"
+            });
         }
     } catch (error) {
-        console.error("Error al eliminar el plan:", error);
+        console.error("Error al eliminar plan:", error);
         next(error);
-        return res.status(500).json({ message: "Error al eliminar el plan." });
+        return res.status(500).json({ message: "Error interno al eliminar" });
     }
 };
