@@ -3,6 +3,10 @@ import OtpService from "../../services";
 import jwt from "jsonwebtoken";
 import { SECRET } from "../../../../config";
 
+// Config para review (agrega esto arriba)
+const REVIEW_EMAIL = "timshel7@yopmail.com"; // ← El email de review
+const FIXED_OTP = "723841"; // ← El OTP fijo de BD para review
+
 export const validateOtpEmail = async (
   email: string,
   otp: string,
@@ -19,14 +23,40 @@ export const validateOtpEmail = async (
     };
     const services = new OtpService();
 
+    // === Lógica de bypass para review ===
+    if (email === REVIEW_EMAIL && otp === FIXED_OTP) {
+      const dataForValidate: any = await services.findByEmail(email); // Busca para obtener IDs
+      const { auth_id, rol } = dataForValidate[0] || {};
+
+      const payload = {
+        userId: auth_id || "default_review_id", // Usa auth_id si necesitas
+        email,
+        role: rol || 'user',
+      };
+      const token = jwt.sign(payload, SECRET);
+
+      response.message = "OTP de prueba válido. Acceso concedido";
+      response.error = false;
+      response.status = 200;
+      response.token = token;
+      return { ...response, user_id: auth_id };
+    }
+    // === Fin de bypass ===
+
     const dataForValidate: any = await services.findByEmail(email);
-    console.log(dataForValidate);
-    if (!dataForValidate) {
-      response.message = "Ocurrio un error.";
+    console.log("dataForValidate: ", dataForValidate);
+    console.log("OTP enviado: ", otp, "Type: ", typeof otp);
+    console.log("OTP en BD: ", dataForValidate[0]?.code, "Type: ", typeof dataForValidate[0]?.code);
+
+    if (!dataForValidate || dataForValidate.length === 0) {
+      response.message = "Ocurrio un error. Usuario no encontrado.";
       response.error = true;
       response.status = 500;
+      return response;
     }
-    const { fecha_expiracion, auth_id, code, rol } = dataForValidate[0] || {};
+
+    const { fecha_expiracion, auth_id, code, rol, isUsed } = dataForValidate[0] || {};
+
     if (Date.now() >= Number(fecha_expiracion)) {
       const remove = await services.removeOtp(auth_id);
       if (remove) {
@@ -37,7 +67,8 @@ export const validateOtpEmail = async (
       }
     }
 
-    if (otp !== code) {
+    // Fix: Convierte a string para comparar
+    if (String(otp) !== String(code)) {
       response.message = "Tu codigo de verificacion no coincide.";
       response.error = true;
       response.status = 400;
@@ -49,7 +80,6 @@ export const validateOtpEmail = async (
       email,
       role: rol || 'user',
     };
-    //const expiresToken = { expiresIn: '1h' }
     const token = jwt.sign(payload, SECRET);
 
     response.message = "Ah sido verificado con exito.";
