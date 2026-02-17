@@ -90,8 +90,10 @@ export const updateExerciseDto = Joi.object({
 
 // DELETE EXERCISE DTO (sin cambios)
 export const deleteExerciseDto = Joi.object({
-  category,
-  exercise,
-  video_url: new_video_url,
-  thumbnail_url: new_thumbnail_url
+  id: Joi.number().integer().positive().required().messages({
+    'number.base': 'El ID debe ser un número',
+    'number.integer': 'El ID debe ser un número entero',
+    'number.positive': 'El ID debe ser positivo',
+    'any.required': 'El ID es requerido'
+  })
 });
