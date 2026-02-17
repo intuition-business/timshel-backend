@@ -7,7 +7,7 @@ import {
   deleteExercise,
   uploadExerciseMedia,
 } from "./controller";
-import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
+import { verifyToken } from "../../middleware/jwtVerify";
 
 const router = Router();
 
@@ -21,37 +21,37 @@ function asyncHandler(fn: any) {
 // Ruta POST para crear un ejercicio (con upload de video y thumbnail)
 router.post(
   "/create",
-  verifyToken,  // Verificación de token
+  verifyToken,
   uploadExerciseMedia.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]),  // Middleware para manejar uploads
-  asyncHandler(createExercise)  // Llama a la función del controlador
+  asyncHandler(createExercise)
 );
 
 // Ruta GET para obtener todos los ejercicios
 router.get(
   "/all",
-  verifyToken,  // Verificación de token
-  asyncHandler(getAllExercises)  // Llama al controlador para obtener todos los ejercicios
+  verifyToken,
+  asyncHandler(getAllExercises)
 );
 
 // Ruta GET para obtener ejercicios por categoría (usando query param ?category=...)
 router.get(
   "/by-category",
-  verifyToken,  // Verificación de token
-  asyncHandler(getExercisesByCategory)  // Llama al controlador para obtener ejercicios por categoría
+  verifyToken,
+  asyncHandler(getExercisesByCategory)
 );
 
 // Ruta PATCH para actualizar un ejercicio, incluyendo el ID
 router.patch(
-  "/update/:id",  // Ahora la ruta espera un ID
-  verifyToken,  // Verificación de token
+  "/update/:id",
+  verifyToken,
   uploadExerciseMedia.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]),  // Middleware para manejar uploads
-  asyncHandler(updateExercise)  // Llama al controlador para actualizar el ejercicio
+  asyncHandler(updateExercise)
 );
 // Ruta DELETE para eliminar un ejercicio
 router.delete(
-  "/delete/:id",  // Ahora la ruta espera un ID
-  verifyToken,  // Verificación de token
-  asyncHandler(deleteExercise)  // Llama al controlador para eliminar el ejercicio
+  "/delete/:id",
+  verifyToken,
+  asyncHandler(deleteExercise)
 );
 
 export default router;

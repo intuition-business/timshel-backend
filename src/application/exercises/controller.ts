@@ -62,7 +62,7 @@ interface Exercise {
 
 // Create con uploads integrados
 export const createExercise = async (req: Request, res: Response, next: NextFunction) => {
-  const { category, exercise, description, at_home, muscle_group } = req.body; // Campos de texto
+  const { category, exercise, description, at_home, muscle_group } = req.body;
   const files = req.files as { [fieldname: string]: Express.MulterS3.File[] } | undefined;
 
   const response = { message: "", error: false };
@@ -167,7 +167,7 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
 
 // Update con uploads integrados (sobrescribe si se suben nuevos archivos)
 export const updateExercise = async (req: Request, res: Response, next: NextFunction) => {
-  const exerciseId = req.params.id; // De la ruta, ej: /api/exercises/59
+  const exerciseId = req.params.id;
   const { new_category, new_exercise, new_description, new_at_home, new_video_url: bodyVideoUrl, new_thumbnail_url: bodyThumbnailUrl, new_muscle_group } = req.body; // Campos de texto opcionales
   const files = req.files as { [fieldname: string]: Express.MulterS3.File[] } | undefined;
 
@@ -202,7 +202,7 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
     const currentData = (current as any[])[0] || {};
 
     // URLs nuevas: prioriza files, luego body (si soportas URLs en body)
-    let new_video_url = undefined; // undefined significa no cambiar
+    let new_video_url = undefined;
     let new_thumbnail_url = undefined;
 
     if (files && files['video'] && files['video'][0]) {
@@ -213,7 +213,7 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
         await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME!, Key: oldKey }));
       }
     } else if (bodyVideoUrl) {
-      new_video_url = bodyVideoUrl; // Usa URL de body si no hay file
+      new_video_url = bodyVideoUrl;
     }
 
     if (files && files['thumbnail'] && files['thumbnail'][0]) {
@@ -223,7 +223,7 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
         await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME!, Key: oldKey }));
       }
     } else if (bodyThumbnailUrl) {
-      new_thumbnail_url = bodyThumbnailUrl; // Usa URL de body si no hay file
+      new_thumbnail_url = bodyThumbnailUrl;
     }
 
     // Construir update
@@ -244,7 +244,7 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
     }
     if (new_at_home !== undefined) {
       updateFields.push("at_home = ?");
-      updateValues.push(new_at_home === null ? null : (new_at_home ? 1 : 0)); // Maneja null o 1/0
+      updateValues.push(new_at_home === null ? null : (new_at_home ? 1 : 0));
     }
     if (new_video_url !== undefined) {
       updateFields.push("video_url = ?");
@@ -287,11 +287,11 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
 };
 
 export const getAllExercises = async (req: Request, res: Response, next: NextFunction) => {
-  const { page, limit } = req.query; // page y limit opcionales para paginación
+  const { page, limit } = req.query;
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
-  const userId = (<any>(<unknown>decode)).userId; // Mantenemos auth
+  const userId = (<any>(<unknown>decode)).userId;
 
   // Response con paginación (o sin si no se pasa params)
   const response = {
@@ -320,7 +320,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
 
     if (shouldPaginate) {
       pageNum = Math.max(1, parseInt(page as string, 10));
-      limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10))); // Limita el límite entre 1 y 100
+      limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10)));
       offset = (pageNum - 1) * limitNum;
     }
 
@@ -349,7 +349,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
         video_url?: string;
         thumbnail_url?: string;
         muscle_group?: string | null;
-        at_home?: number | null;  // De DB, mapea en adapter
+        at_home?: number | null;
       }>;
 
       response.current_page = pageNum!;
@@ -369,7 +369,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
         video_url?: string;
         thumbnail_url?: string;
         muscle_group?: string | null;
-        at_home?: number | null;  // De DB, mapea en adapter
+        at_home?: number | null;
       }>;
 
       response.current_page = 1;
@@ -401,12 +401,12 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
 };
 
 export const getExercisesByCategory = async (req: Request, res: Response, next: NextFunction) => {
-  const { category } = req.query; // Asumimos que la categoría viene como query param, ej. ?category=PECHO
+  const { category } = req.query;
 
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
-  const userId = (<any>(<unknown>decode)).userId; // Mantenemos auth
+  const userId = (<any>(<unknown>decode)).userId;
 
   const response = { message: "", error: false, data: [] as Exercise[] };
 
@@ -455,35 +455,36 @@ export const getExercisesByCategory = async (req: Request, res: Response, next: 
     return res.status(500).json({ message: "Error al obtener los ejercicios por categoría." });
   }
 };
-// Eliminar un ejercicio por ID (cambiamos a usar exerciseId en body)
+
+// Eliminar un ejercicio por ID
 export const deleteExercise = async (req: Request, res: Response, next: NextFunction) => {
-  const { exerciseId } = req.body;
+  const { id } = req.params;
 
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
-  const userId = (<any>(<unknown>decode)).userId; // Mantenemos auth
+  const userId = (<any>(<unknown>decode)).userId;
 
   const response = { message: "", error: false };
 
   try {
-    // Validación con DTO (asumiendo actualización para exerciseId)
-    const { error: dtoError } = deleteExerciseDto.validate(req.body);
+    // Validación con DTO para asegurarnos que el ID es válido
+    const { error: dtoError } = deleteExerciseDto.validate({ id });
     if (dtoError) {
       response.error = true;
       response.message = dtoError.details[0].message;
       return res.status(400).json(response);
     }
 
-    if (!exerciseId) {
+    if (!id) {
       response.error = true;
-      response.message = "Falta el campo requerido: exerciseId.";
+      response.message = "Falta el campo requerido: id.";
       return res.status(400).json(response);
     }
 
     const [result] = await pool.execute(
       "DELETE FROM exercises WHERE id = ?",
-      [exerciseId]
+      [id]  // Eliminamos el ejercicio usando el ID
     );
 
     const deleteResult = result as import('mysql2').ResultSetHeader;
