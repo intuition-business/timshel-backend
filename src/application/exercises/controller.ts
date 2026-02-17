@@ -455,9 +455,10 @@ export const getExercisesByCategory = async (req: Request, res: Response, next: 
     return res.status(500).json({ message: "Error al obtener los ejercicios por categoría." });
   }
 };
-// Eliminar un ejercicio por ID (cambiamos a usar exerciseId en body)
+
+// Eliminar un ejercicio por ID
 export const deleteExercise = async (req: Request, res: Response, next: NextFunction) => {
-  const { exerciseId } = req.body;
+  const { id } = req.params;
 
   const { headers } = req;
   const token = headers["x-access-token"];
@@ -467,23 +468,23 @@ export const deleteExercise = async (req: Request, res: Response, next: NextFunc
   const response = { message: "", error: false };
 
   try {
-    // Validación con DTO (asumiendo actualización para exerciseId)
-    const { error: dtoError } = deleteExerciseDto.validate(req.body);
+    // Validación con DTO para asegurarnos que el ID es válido
+    const { error: dtoError } = deleteExerciseDto.validate({ id });
     if (dtoError) {
       response.error = true;
       response.message = dtoError.details[0].message;
       return res.status(400).json(response);
     }
 
-    if (!exerciseId) {
+    if (!id) {
       response.error = true;
-      response.message = "Falta el campo requerido: exerciseId.";
+      response.message = "Falta el campo requerido: id.";
       return res.status(400).json(response);
     }
 
     const [result] = await pool.execute(
       "DELETE FROM exercises WHERE id = ?",
-      [exerciseId]
+      [id]  // Eliminamos el ejercicio usando el ID
     );
 
     const deleteResult = result as import('mysql2').ResultSetHeader;
