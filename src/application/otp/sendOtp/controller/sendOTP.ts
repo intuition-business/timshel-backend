@@ -5,6 +5,9 @@ import { generateOTPEmail } from "./generateOTP";
 import OtpService from "../../services";
 import { ICreateAuth } from "../types";
 
+// Config para review (agrega esto arriba)
+const REVIEW_EMAIL = "timshel7@yopmail.com"; // ← Cámbialo al email real
+
 export const sendOTP = async (
   req: Request,
   res: Response,
@@ -43,7 +46,7 @@ export const sendOTP = async (
     tipo_login: "email",
     fecha_creacion: created_at,
     fecha_expiracion: expires_at,
-    isUsed: 1,
+    isUsed: 1, // ← Nota: Recomiendo cambiar a 0, pero lo dejo como en original
   };
 
   if (email !== undefined) {
@@ -63,6 +66,29 @@ export const sendOTP = async (
           return;
         }
       }
+
+      // === Nueva lógica para email de review (simplificada) ===
+      if (email === REVIEW_EMAIL) {
+        if (thereIsUser && thereIsUser.length > 0) {
+          // Usuario existe: Retornar éxito sin generar/enviar/crear OTP
+          res.status(200).json({
+            message: "Puedes ingresar con tu código OTP de prueba",
+            error: false,
+            user_id: thereIsUser[0].usuario_id || thereIsUser[0].auth_id, // Usa el ID correcto de tu BD
+            date,
+          });
+          return;
+        } else {
+          // Si no existe el usuario, error
+          res.status(500).json({
+            message: "Email de revisión no encontrado en la BD",
+            error: true,
+            date,
+          });
+          return;
+        }
+      }
+      // === Fin de lógica nueva ===
 
       response = await sendWithEmail(email, otp, name);
       if (!response.error) {

@@ -1,27 +1,23 @@
 export const generateOTPSmS = (length = 6): string => {
-  const characters = "0123456789";
-  let otp = "";
+  const charactersFirst = "123456789"; // No zero for first digit
+  const charactersRest = "0123456789";
+  let otp = charactersFirst[Math.floor(Math.random() * charactersFirst.length)];
 
-  for (let i = 0; i < length; i++) {
-    otp += characters.charAt(Math.floor(Math.random() * characters.length));
+  for (let i = 1; i < length; i++) {
+    otp += charactersRest[Math.floor(Math.random() * charactersRest.length)];
   }
 
-  // padStart es opcional aquí (el loop ya genera exactamente 'length' dígitos), pero no daña
-  otp = otp.padStart(length, '0');
-
-  return otp;  // Retorna como string para preservar ceros iniciales
+  return otp;  // Retorna como string sin ceros iniciales
 };
 
 export const generateOTPEmail = (length = 6): string => {
-  const characters = "0123456789";
-  let otp = "";
+  const charactersFirst = "123456789"; // No zero for first digit
+  const charactersRest = "0123456789";
+  let otp = charactersFirst[Math.floor(Math.random() * charactersFirst.length)];
 
-  for (let i = 0; i < length; i++) {
-    otp += characters.charAt(Math.floor(Math.random() * characters.length));
+  for (let i = 1; i < length; i++) {
+    otp += charactersRest[Math.floor(Math.random() * charactersRest.length)];
   }
 
-  // Igual, padStart opcional
-  otp = otp.padStart(length, '0');
-
-  return otp;  // Retorna como string
+  return otp;  // Retorna como string sin ceros iniciales
 };
