@@ -4,8 +4,8 @@ import jwt from "jsonwebtoken";
 import { SECRET } from "../../../../config";
 
 // Config para review (agrega esto arriba)
-const REVIEW_EMAIL = "timshel7@yopmail.com"; // ← El email de review
-const FIXED_OTP = "723841"; // ← El OTP fijo de BD para review
+const REVIEW_EMAIL = "timshel7@yopmail.com";
+const FIXED_OTP = "723841";
 
 export const validateOtpEmail = async (
   email: string,
@@ -29,7 +29,7 @@ export const validateOtpEmail = async (
       const { auth_id, rol } = dataForValidate[0] || {};
 
       const payload = {
-        userId: auth_id || "default_review_id", // Usa auth_id si necesitas
+        userId: auth_id || "58",
         email,
         role: rol || 'user',
       };
