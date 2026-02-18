@@ -46,7 +46,7 @@ export const sendOTP = async (
     tipo_login: "email",
     fecha_creacion: created_at,
     fecha_expiracion: expires_at,
-    isUsed: 1, // ← Nota: Recomiendo cambiar a 0, pero lo dejo como en original
+    isUsed: 0, // Corregido a 0 para que sea no usado al generar
   };
 
   if (email !== undefined) {

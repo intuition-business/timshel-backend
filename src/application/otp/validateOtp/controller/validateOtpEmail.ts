@@ -44,13 +44,16 @@ export const validateOtpEmail = async (
     // === Fin de bypass ===
 
     const dataForValidate: any = await services.findByEmail(email);
-    console.log(dataForValidate);
+    console.log("dataForValidate: ", dataForValidate);
+    console.log("OTP enviado: ", otp, "Type: ", typeof otp);
+    console.log("OTP en BD: ", dataForValidate[0]?.code, "Type: ", typeof dataForValidate[0]?.code);
+
     if (!dataForValidate) {
       response.message = "Ocurrio un error.";
       response.error = true;
       response.status = 500;
     }
-    const { fecha_expiracion, auth_id, code, rol } = dataForValidate[0] || {};
+    const { fecha_expiracion, auth_id, code, rol, isUsed } = dataForValidate[0] || {};
     if (Date.now() >= Number(fecha_expiracion)) {
       // Comentado: No borrar, solo error
       // const remove = await services.removeOtp(auth_id);
@@ -62,7 +65,16 @@ export const validateOtpEmail = async (
       // }
     }
 
-    if (otp !== code) {
+    // Chequeo de isUsed (agregado para error explícito)
+    if (isUsed === 1) {
+      response.message = "OTP ya usado.";
+      response.error = true;
+      response.status = 400;
+      return response;
+    }
+
+    // Fix: Convierte a string para comparar
+    if (String(otp) !== String(code)) {
       response.message = "Tu codigo de verificacion no coincide.";
       response.error = true;
       response.status = 400;
@@ -74,7 +86,6 @@ export const validateOtpEmail = async (
       email,
       role: rol || 'user',
     };
-    //const expiresToken = { expiresIn: '1h' }
     const token = jwt.sign(payload, SECRET);
 
     response.message = "Ah sido verificado con exito.";
