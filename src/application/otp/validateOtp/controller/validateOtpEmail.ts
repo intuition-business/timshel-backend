@@ -25,8 +25,26 @@ export const validateOtpEmail = async (
 
     // === Lógica de bypass para review ===
     if (email === REVIEW_EMAIL && otp === FIXED_OTP) {
-      const dataForValidate: any = await services.findByEmail(email); // Busca para obtener IDs
-      const { auth_id, rol } = dataForValidate[0] || {};
+      const dataForValidate: any = await services.findByEmail(email);
+
+      if (!dataForValidate || dataForValidate.length === 0) {
+        response.message = "Email de revisión no encontrado en la base de datos.";
+        response.error = true;
+        response.status = 404;
+        return response;
+      }
+
+      const user = dataForValidate[0];
+
+      // Chequeo de cuenta eliminada también en modo review (por seguridad)
+      if (user.is_deleted === 1 || user.deleted_at !== null) {
+        response.message = "Esta cuenta de revisión ha sido eliminada permanentemente.";
+        response.error = true;
+        response.status = 403;
+        return response;
+      }
+
+      const { auth_id, rol } = user;
 
       const payload = {
         userId: auth_id || "58",
@@ -46,41 +64,52 @@ export const validateOtpEmail = async (
     const dataForValidate: any = await services.findByEmail(email);
     console.log("dataForValidate: ", dataForValidate);
     console.log("OTP enviado: ", otp, "Type: ", typeof otp);
-    console.log("OTP en BD: ", dataForValidate[0]?.code, "Type: ", typeof dataForValidate[0]?.code);
 
-    if (!dataForValidate) {
-      response.message = "Ocurrio un error.";
+    if (!dataForValidate || dataForValidate.length === 0) {
+      response.message = "No se encontró cuenta asociada a este email.";
       response.error = true;
-      response.status = 500;
+      response.status = 404;
+      return response;
     }
-    const { fecha_expiracion, auth_id, code, rol, isUsed } = dataForValidate[0] || {};
+
+    const user = dataForValidate[0];
+    console.log("OTP en BD: ", user.code, "Type: ", typeof user.code);
+
+    // === VALIDACIÓN DE CUENTA ELIMINADA (lo más temprano posible) ===
+    if (user.is_deleted === 1 || user.deleted_at !== null) {
+      response.message = "Tu cuenta ha sido eliminada permanentemente. No puedes acceder con este email.";
+      response.error = true;
+      response.status = 403; // Forbidden - o usa 410 si prefieres "Gone"
+      return response;
+    }
+    // === Fin validación eliminada ===
+
+    const { fecha_expiracion, auth_id, code, rol, isUsed } = user;
+
     if (Date.now() >= Number(fecha_expiracion)) {
-      // Comentado: No borrar, solo error
-      // const remove = await services.removeOtp(auth_id);
-      // if (remove) {
-      response.message = "Tu codigo de verificacion ha expirado.";
+      response.message = "Tu código de verificación ha expirado.";
       response.error = true;
       response.status = 400;
       return response;
-      // }
     }
 
-    // Chequeo de isUsed (agregado para error explícito)
+    // Chequeo de isUsed
     if (isUsed === 1) {
-      response.message = "OTP ya usado.";
+      response.message = "Este código OTP ya fue utilizado.";
       response.error = true;
       response.status = 400;
       return response;
     }
 
-    // Fix: Convierte a string para comparar
+    // Comparación segura de OTP (string)
     if (String(otp) !== String(code)) {
-      response.message = "Tu codigo de verificacion no coincide.";
+      response.message = "El código de verificación no coincide.";
       response.error = true;
       response.status = 400;
       return response;
     }
 
+    // Todo OK → generar token
     const payload = {
       userId: auth_id,
       email,
@@ -88,12 +117,21 @@ export const validateOtpEmail = async (
     };
     const token = jwt.sign(payload, SECRET);
 
-    response.message = "Ah sido verificado con exito.";
+    response.message = "Has sido verificado con éxito.";
     response.error = false;
     response.status = 200;
     response.token = token;
-    return { ...response, user_id: dataForValidate[0]?.auth_id };
+    return { ...response, user_id: auth_id };
+
   } catch (error) {
+    console.error("Error en validateOtpEmail:", error);
     next(error);
+    // Opcional: retornar error genérico si no quieres exponer detalles
+    return {
+      message: "Ocurrió un error interno al validar el código.",
+      error: true,
+      status: 500,
+      date: new Date(),
+    };
   }
 };
