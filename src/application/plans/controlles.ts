@@ -19,7 +19,7 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
         return res.status(400).json({ error: true, message: error.details[0].message });
     }
 
-    const { title, price_cop, description_items } = req.body;
+    const { title, price_cop, description_items, description, activo = true } = req.body;
 
     const response = { message: "", error: false };
 
@@ -43,8 +43,8 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
 
         // Insertar el nuevo plan (description_items como JSON stringified)
         const [result]: any = await pool.execute(
-            "INSERT INTO planes (title, price_cop, description_items) VALUES (?, ?, ?)",
-            [title, price_cop, JSON.stringify(description_items)]
+            "INSERT INTO planes (title, price_cop, description_items, description, activo) VALUES (?, ?, ?, ?, ?)",
+            [title, price_cop, JSON.stringify(description_items), description, activo]
         );
 
         if (result) {
@@ -53,6 +53,8 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
                 title,
                 price_cop,
                 description_items,
+                description,
+                activo
             });
         } else {
             response.error = true;
@@ -77,14 +79,16 @@ export const getPlans = async (req: Request, res: Response, next: NextFunction) 
 
     try {
         const [rows] = await pool.execute(
-            "SELECT id, title, price_cop, description_items FROM planes ORDER BY title ASC"
+            "SELECT id, title, price_cop, description_items, description, activo FROM planes ORDER BY title ASC"
         );
 
         const planRows = rows as Array<{
             id: number;
             title: string;
             price_cop: number;
-            description_items: string; // Viene como string JSON desde DB
+            description_items: string;
+            description: string;
+            activo: boolean;
         }>;
 
         if (planRows.length > 0) {
@@ -121,7 +125,7 @@ export const getPlanById = async (req: Request, res: Response, next: NextFunctio
 
     try {
         const [rows] = await pool.execute(
-            "SELECT id, title, price_cop, description_items FROM planes WHERE id = ?",
+            "SELECT id, title, price_cop, description_items, description, activo FROM planes WHERE id = ?",
             [id]
         );
 
@@ -130,6 +134,8 @@ export const getPlanById = async (req: Request, res: Response, next: NextFunctio
             title: string;
             price_cop: number;
             description_items: string;
+            description: string;
+            activo: boolean;
         }>;
 
         if (planRows.length > 0) {
@@ -169,7 +175,7 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
         });
     }
 
-    const { new_title, new_price_cop, new_description_items } = req.body;
+    const { new_title, new_price_cop, new_description_items, new_description, new_activo } = req.body;
 
     const response = { message: "", error: false };
 
@@ -200,10 +206,20 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
             params.push(JSON.stringify(new_description_items));
         }
 
+        if (new_description !== undefined) {
+            updates.push("description = ?");
+            params.push(new_description);
+        }
+
+        if (new_activo !== undefined) {
+            updates.push("activo = ?");
+            params.push(new_activo);
+        }
+
         if (updates.length === 0) {
             return res.status(400).json({
                 error: true,
-                message: "Debe enviar al menos un campo para actualizar (new_title, new_price_cop o new_description_items)"
+                message: "Debe enviar al menos un campo para actualizar (new_title, new_price_cop, new_description o new_activo)"
             });
         }
 
@@ -234,17 +250,43 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
     }
 };
 
-// Eliminar un plan
+// Eliminar un plan (versión completa con autenticación)
 export const deletePlan = async (req: Request, res: Response, next: NextFunction) => {
     const id = parseInt(req.params.id, 10);
 
     if (isNaN(id) || id <= 0) {
-        return res.status(400).json({ error: true, message: "ID inválido" });
+        return res.status(400).json({
+            error: true,
+            message: "ID de plan inválido"
+        });
     }
 
-    // ... token verification ...
+    const response = { message: "", error: false };
 
     try {
+        // Verificación del token (igual que en los otros endpoints)
+        const { headers } = req;
+        const token = headers["x-access-token"];
+
+        if (!token) {
+            return res.status(401).json({
+                error: true,
+                message: "Token de autenticación requerido"
+            });
+        }
+
+        let decode;
+        try {
+            decode = verify(`${token}`, SECRET);
+        } catch (err) {
+            return res.status(401).json({
+                error: true,
+                message: "Token inválido o expirado"
+            });
+        }
+
+        const userId = (<any>decode).userId;
+
         const [result] = await pool.execute(
             "DELETE FROM planes WHERE id = ?",
             [id]
@@ -253,19 +295,20 @@ export const deletePlan = async (req: Request, res: Response, next: NextFunction
         const deleteResult = result as import('mysql2').ResultSetHeader;
 
         if (deleteResult.affectedRows > 0) {
-            return res.status(200).json({
-                error: false,
-                message: "Plan eliminado exitosamente"
-            });
+            response.message = "Plan eliminado exitosamente";
+            return res.status(200).json(response);
         } else {
-            return res.status(404).json({
-                error: true,
-                message: "Plan no encontrado"
-            });
+            response.error = true;
+            response.message = "Plan no encontrado";
+            return res.status(404).json(response);
         }
+
     } catch (error) {
         console.error("Error al eliminar plan:", error);
         next(error);
-        return res.status(500).json({ message: "Error interno al eliminar" });
+        return res.status(500).json({
+            error: true,
+            message: "Error interno al eliminar el plan"
+        });
     }
 };

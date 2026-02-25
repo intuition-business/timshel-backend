@@ -43,6 +43,21 @@ const description_items = Joi.array()
         'any.required': 'Los items de descripción son requeridos'
     });
 
+const description = Joi.string()
+    .trim()
+    .max(2000)
+    .optional()
+    .messages({
+        'string.base': 'La descripción debe ser un string',
+        'string.max': 'La descripción no puede exceder 2000 caracteres'
+    });
+
+const activo = Joi.boolean()
+    .optional()
+    .messages({
+        'boolean.base': 'El estado activo debe ser true o false'
+    });
+
 const new_title = Joi.string()
     .trim()
     .min(3)
@@ -72,11 +87,27 @@ const new_description_items = Joi.array()
         'array.min': 'Debe haber al menos 1 item de descripción'
     });
 
+const new_description = Joi.string()
+    .trim()
+    .max(2000)
+    .optional()
+    .messages({
+        'string.base': 'La nueva descripción debe ser un string',
+        'string.max': 'La nueva descripción no puede exceder 2000 caracteres'
+    });
+
+const new_activo = Joi.boolean()
+    .optional()
+    .messages({
+        'boolean.base': 'El nuevo estado activo debe ser true o false'
+    });
 
 export const createPlanDto = Joi.object({
     title,
     price_cop,
-    description_items
+    description_items,
+    description,
+    activo
 }).unknown(false);
 
 export const getPlanDto = Joi.object({
@@ -86,13 +117,14 @@ export const getPlanDto = Joi.object({
 export const updatePlanDto = Joi.object({
     new_title,
     new_price_cop,
-    new_description_items
+    new_description_items,
+    new_description,
+    new_activo
 })
-    .or('new_title', 'new_price_cop', 'new_description_items')
+    .or('new_title', 'new_price_cop', 'new_description_items', 'new_description', 'new_activo')
     .messages({
-        'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_title, new_price_cop o new_description_items'
+        'object.missing': 'Debe proporcionar al menos un campo para actualizar'
     })
     .unknown(false);
 
-export const deletePlanDto = Joi.object({
-}).unknown(false);
+export const deletePlanDto = Joi.object({}).unknown(false);
