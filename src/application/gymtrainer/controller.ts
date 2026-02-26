@@ -12,6 +12,7 @@ import OtpService from "../otp/services";
 import { generateOTPEmail } from "../otp/sendOtp/controller/generateOTP";
 import { ICreateAuth } from "../otp/sendOtp/types";
 import { sendOTP } from "../otp/sendOtp/controller/sendOTP";
+import { deleteFromS3 } from "../../middleware/uploadWarmUpMedia";
 
 
 interface Trainer {
@@ -21,11 +22,10 @@ interface Trainer {
   phone: string;
   address: string;
   description: string;
-  /* goal: string; */
+  goal: string;
   rating: number;
   experience_years: number;
   certifications: string;
-  image: string;
 }
 
 
@@ -37,89 +37,127 @@ interface UserTrainerPlan {
   plan_title: string;
   inscription_date: string | null;
 }
-// Crear un entrenador
-export const createTrainer = async (req: Request, res: Response, next: NextFunction) => {
-  const { name, email, phone, description, address, rating, experience_years, certifications, image } = req.body;
-
-  const response = { message: "", error: false };
-
+export const createTrainer = async (req: Request, res: Response) => {
   try {
-    const { headers } = req;
-    const token = headers["x-access-token"];
-    const decode = token && verify(`${token}`, SECRET);
-    const userId = (<any>(<unknown>decode)).userId;
-
-    // Validación con DTO
-    const { error: dtoError } = createTrainerDto.validate(req.body);
-    if (dtoError) {
-      response.error = true;
-      response.message = dtoError.details[0].message;
-      return res.status(400).json(response);
+    // 1. Verificar token
+    const token = req.headers["x-access-token"];
+    if (!token) {
+      return res.status(401).json({ error: true, message: "Token requerido" });
     }
 
-    if (!name || !email || !phone) {
-      response.error = true;
-      response.message = "Faltan campos requeridos: name, email, phone.";
-      return res.status(400).json(response);
+    const decoded = verify(token as string, SECRET);
+    const adminId = (decoded as any).userId; // quien crea
+
+    // 2. Extraer datos del body
+    const {
+      name,
+      email,
+      phone,
+      description,
+      address,
+      goal,
+      rating = 0,
+      experience_years = 0,
+    } = req.body;
+
+    // 3. Validación con DTO
+    const { error } = createTrainerDto.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        error: true,
+        message: error.details[0].message,
+      });
     }
 
-    // Verificar si ya existe el entrenador por email (asumimos unique)
-    const [existingTrainer] = await pool.execute(
-      "SELECT id FROM entrenadores WHERE email = ?",
-      [email]
+    // 4. Manejo de archivos subidos por Multer
+    let imageUrl: string | null = null;
+    let certificationsUrls: string[] = [];
+
+    const files = req.files as { [key: string]: Express.MulterS3.File[] } | undefined;
+
+    if (files?.image?.[0]) {
+      imageUrl = files.image[0].location;
+    }
+
+    if (files?.certifications) {
+      certificationsUrls = files.certifications.map((file) => file.location);
+    }
+
+    // 5. Crear usuario base
+    const [userRes]: any = await pool.execute(
+      "INSERT INTO usuarios (nombre) VALUES (?)",
+      [name]
+    );
+    const usuarioId = userRes.insertId;
+
+    // 6. Crear entrenador
+    const [trainerRes]: any = await pool.execute(
+      `INSERT INTO entrenadores (
+        name, email, phone, description, address, goal, rating, experience_years,
+        image, certifications, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        name,
+        email,
+        phone,
+        description || null,
+        address || null,
+        goal || null,
+        rating,
+        experience_years,
+        imageUrl,
+        certificationsUrls.length > 0 ? JSON.stringify(certificationsUrls) : null,
+      ]
     );
 
-    if ((existingTrainer as any).length > 0) {
-      response.error = true;
-      response.message = `Ya existe un entrenador con el email "${email}".`;
-      return res.status(400).json(response);
+    const trainerId = trainerRes.insertId;
+
+    // 7. Crear auth para trainer
+    const authData = {
+      usuario_id: usuarioId,
+      name: name || null,
+      entrenador_id: trainerId,
+      email: email || null,
+      telefono: phone || null,
+      id_apple: 0,
+      tipo_login: email ? "email" : "phone",
+      rol: "trainer",
+    };
+    await OtpModel.createAuth(authData);
+
+    // 8. Preparar y enviar OTP
+    // → Aquí DEJAMOS QUE sendOTP envíe SU respuesta
+    req.body = {
+      email,
+      phonenumber: phone,
+      name,
+      platform: "web",
+    };
+
+    // Llamamos sendOTP y dejamos que maneje la respuesta
+    await sendOTP(req, res, (err?: any) => {
+      if (err) {
+        console.error("Error en callback de sendOTP:", err);
+      }
+    });
+
+    // ¡NO PONER NADA MÁS AQUÍ!
+    // No return, no res.json, no res.status después de sendOTP
+    // La respuesta la envía sendOTP directamente
+
+  } catch (error: any) {
+    console.error("Error al crear entrenador:", error);
+
+    // Solo enviamos respuesta de error si NO se ha enviado nada aún
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: true,
+        message: "Error al crear el entrenador: " + (error.message || "desconocido"),
+      });
     }
 
-    // Crear registro en usuarios primero para obtener usuario_id válido (solo con 'nombre', asumiendo fecha_registro y planes_id son defaults)
-    const usuarioQuery = "INSERT INTO usuarios (nombre) VALUES (?)";
-    const [usuarioResult]: any = await pool.query(usuarioQuery, [name]);
-
-    const query = "INSERT INTO entrenadores (name, email, phone, description, address, rating, experience_years, certifications, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    const [result]: any = await pool.query(query, [name, email, phone, description || null, address || null, rating || null, experience_years || null, certifications || null, image || null]);
-
-    if (result) {
-      // Crear auth asociado con rol 'trainer', usando usuario_id válido
-      const authData = {
-        usuario_id: usuarioResult.insertId,
-        name: name || null,
-        entrenador_id: result.insertId,
-        email: email || null,
-        telefono: phone || null,
-        id_apple: 0,
-        tipo_login: email ? 'email' : 'phone',
-        rol: 'trainer',
-      };
-      await OtpModel.createAuth(authData);
-
-      // Preparar req.body para llamar a sendOTP (con platform 'web' para entrenadores, ajusta si es 'mobile')
-      const originalBody = { ...req.body };  // Guardar original para restaurar si es necesario
-      req.body = {
-        email,
-        phonenumber: phone,
-        name,
-        platform: 'web',  // Asumiendo web para entrenadores; cambia a 'mobile' si aplica
-      };
-
-      // Llamar a sendOTP directamente (maneja la respuesta y OTP)
-      await sendOTP(req, res, next);
-
-      // Restaurar req.body original si es necesario (por si hay más lógica, pero aquí no hace falta)
-      req.body = originalBody;
-
-      // No necesitas retornar JSON aquí porque sendOTP lo hace; si falla, catch lo maneja
-    } else {
-      response.error = true;
-      response.message = "No se pudo guardar el entrenador";
-      return res.status(400).json(response);
-    }
-  } catch (error) {
-    console.error("Error al crear el entrenador:", error);
-    return res.status(500).json({ message: "Error al crear el entrenador." });
+    // Si ya se envió headers (por sendOTP o error previo), no hacemos nada
+    // Express ya manejará el cierre de la conexión
   }
 };
 
@@ -189,7 +227,6 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
         e.rating, 
         e.experience_years, 
         e.certifications, 
-        e.image, 
         e.created_at,
         COUNT(DISTINCT a.usuario_id) AS user_count,
         IFNULL(
@@ -215,7 +252,6 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
         e.rating, 
         e.experience_years, 
         e.certifications, 
-        e.image, 
         e.created_at
       ORDER BY e.name ASC
       LIMIT ? OFFSET ?
@@ -234,7 +270,6 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       rating: number;
       experience_years: number;
       certifications: string;
-      image: string;
       created_at: Date;
       user_count: number;
       assigned_users: string; // JSON string from the query
@@ -289,7 +324,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
     }
 
     // 1. Obtener datos del entrenador
-    const query = "SELECT id, name, email, phone, description, goal, rating, experience_years, certifications, image, created_at FROM entrenadores WHERE id = ?";
+    const query = "SELECT id, name, email, phone, description, goal, rating, experience_years, certifications, created_at FROM entrenadores WHERE id = ?";
     const [rows] = await pool.execute(query, [id]);
 
     const trainerRow = rows as Array<{
@@ -302,7 +337,6 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       rating: number;
       experience_years: number;
       certifications: string;
-      image: string;
       created_at: Date;
     }>;
 
@@ -462,155 +496,153 @@ export const getUserTrainerAndPlan = async (req: Request, res: Response, next: N
   }
 };
 
-// Actualizar un entrenador (CORREGIDO)
-export const updateTrainer = async (req: Request, res: Response, next: NextFunction) => {
-  const { id, new_name, new_email, new_phone, new_description, new_goal, new_rating, new_experience_years, new_certifications, new_image } = req.body;
-
-  const response = { message: "", error: false };
-
+// Actualizar entrenador (PUT /update)
+export const updateTrainer = async (req: Request, res: Response) => {
   try {
-    const { headers } = req;
-    const token = headers["x-access-token"];
-    const decode = token && verify(`${token}`, SECRET);
-    const userId = (<any>(<unknown>decode)).userId;
+    const token = req.headers["x-access-token"];
+    const decoded = verify(token as string, SECRET);
+    const adminId = (decoded as any).userId;
 
-    // Validación con DTO
-    const { error: dtoError } = updateTrainerDto.validate(req.body);
-    if (dtoError) {
-      response.error = true;
-      response.message = dtoError.details[0].message;
-      return res.status(400).json(response);
-    }
+    const {
+      id, // ← importante: debe venir en el body o params
+      new_name,
+      new_email,
+      new_phone,
+      new_description,
+      new_goal,
+      new_rating,
+      new_experience_years,
+    } = req.body;
 
     if (!id) {
-      response.error = true;
-      response.message = "Falta el campo requerido: id para identificar el entrenador a actualizar.";
-      return res.status(400).json(response);
+      return res.status(400).json({
+        error: true,
+        message: "El campo 'id' es requerido para actualizar",
+      });
     }
 
-    // 1. Verificar que el entrenador existe antes de actualizar
-    const [existingTrainer] = await pool.execute(
-      "SELECT id FROM entrenadores WHERE id = ?",
+    // Validación con DTO
+    const { error } = updateTrainerDto.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        error: true,
+        message: error.details[0].message,
+      });
+    }
+
+    // Obtener datos actuales
+    const [currentRows]: any = await pool.execute(
+      "SELECT image, certifications FROM entrenadores WHERE id = ?",
       [id]
     );
-    if ((existingTrainer as any[]).length === 0) {
-      response.error = true;
-      response.message = "El entrenador no existe";
-      return res.status(404).json(response);
-    }
 
-    const updateFields: string[] = [];
-    const updateValues: any[] = [];
-
-    // ✅ phone -> phone (no telefono)
-    if (new_phone) {
-      updateFields.push("phone = ?");  // ✅ CORREGIDO
-      updateValues.push(new_phone);
-    }
-
-    // ✅ name -> name (no name, ya está correcto)
-    if (new_name) {
-      updateFields.push("name = ?");
-      updateValues.push(new_name);
-    }
-
-    // ✅ email -> email (no email, ya está correcto)
-    if (new_email) {
-      updateFields.push("email = ?");
-      updateValues.push(new_email);
-    }
-
-    // ✅ description -> description (no description, ya está correcto)
-    if (new_description) {
-      updateFields.push("description = ?");
-      updateValues.push(new_description);
-    }
-
-    // ✅ goal -> goal (no goal, ya está correcto)
-    if (new_goal) {
-      updateFields.push("goal = ?");
-      updateValues.push(new_goal);
-    }
-
-    // ✅ rating -> rating (no rating, ya está correcto)
-    if (new_rating !== undefined) {
-      updateFields.push("rating = ?");
-      updateValues.push(new_rating);
-    }
-
-    // ❌ PROBLEMA: experience_years vs experiencia
-    if (new_experience_years !== undefined) {
-      updateFields.push("experience_years = ?");
-      updateValues.push(new_experience_years);
-    }
-
-    // ❌ PROBLEMA: certifications vs certificaciones
-    if (new_certifications) {
-      updateFields.push("certifications = ?");
-      updateValues.push(new_certifications);
-    }
-
-    // ❌ PROBLEMA: image vs foto_perfil
-    if (new_image) {
-      updateFields.push("image = ?");
-      updateValues.push(new_image);
-    }
-
-    if (updateFields.length === 0) {
-      response.error = true;
-      response.message = "No se proporcionaron campos para actualizar.";
-      return res.status(400).json(response);
-    }
-
-    // 3. Verificación adicional para email único (si se actualiza)
-    if (new_email) {
-      const [emailConflict] = await pool.execute(
-        "SELECT id FROM entrenadores WHERE email = ? AND id != ?",
-        [new_email, id]
-      );
-      if ((emailConflict as any[]).length > 0) {
-        response.error = true;
-        response.message = `El email "${new_email}" ya está registrado por otro entrenador.`;
-        return res.status(400).json(response);
-      }
-    }
-
-    // 4. Ejecutar actualización
-    const query = `UPDATE entrenadores SET ${updateFields.join(", ")} WHERE id = ?`;
-    updateValues.push(id);
-
-    const [result]: any = await pool.execute(query, updateValues);  // ✅ Usar execute en lugar de query para consistencia
-
-    if (result.affectedRows > 0) {
-      response.message = "Entrenador actualizado exitosamente";
-
-      // Opcional: retornar los datos actualizados
-      const [updatedTrainer] = await pool.execute(
-        "SELECT id, name, email, phone, description, goal, rating, experience_years, certifications, image FROM entrenadores WHERE id = ?",
-        [id]
-      );
-
-      return res.status(200).json({
-        ...response,
-        data: adapterTrainers(updatedTrainer as any[])[0]  // Retornar entrenador actualizado
+    if (currentRows.length === 0) {
+      return res.status(404).json({
+        error: true,
+        message: "Entrenador no encontrado",
       });
-    } else {
-      response.error = true;
-      response.message = "No se encontró el entrenador para actualizar";
-      return res.status(404).json(response);
     }
 
+    const current = currentRows[0];
+    let updatedImage = current.image;
+    let updatedCerts: string[] = current.certifications
+      ? JSON.parse(current.certifications)
+      : [];
+
+    // Manejo de archivos nuevos
+    const files = req.files as { [key: string]: Express.MulterS3.File[] } | undefined;
+
+    // Foto de perfil (reemplaza si se envía)
+    if (files?.image?.[0]) {
+      const newImageUrl = files.image[0].location;
+      if (updatedImage) {
+        await deleteFromS3(updatedImage); // borra la anterior de S3
+      }
+      updatedImage = newImageUrl;
+    }
+
+    // Certificados (reemplaza todos si se envían nuevos)
+    if (files?.certifications && files.certifications.length > 0) {
+      // Borrar los anteriores (opcional, comenta si prefieres acumular)
+      for (const oldUrl of updatedCerts) {
+        await deleteFromS3(oldUrl);
+      }
+      updatedCerts = files.certifications.map((file) => file.location);
+    }
+
+    // Construir actualización dinámica
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (new_name) {
+      updates.push("name = ?");
+      values.push(new_name);
+    }
+    if (new_email) {
+      updates.push("email = ?");
+      values.push(new_email);
+    }
+    if (new_phone) {
+      updates.push("phone = ?");
+      values.push(new_phone);
+    }
+    if (new_description !== undefined) {
+      updates.push("description = ?");
+      values.push(new_description);
+    }
+    if (new_goal !== undefined) {
+      updates.push("goal = ?");
+      values.push(new_goal);
+    }
+    if (new_rating !== undefined) {
+      updates.push("rating = ?");
+      values.push(new_rating);
+    }
+    if (new_experience_years !== undefined) {
+      updates.push("experience_years = ?");
+      values.push(new_experience_years);
+    }
+
+    // Siempre incluir image y certifications si hubo cambios o no
+    updates.push("image = ?");
+    values.push(updatedImage);
+    updates.push("certifications = ?");
+    values.push(updatedCerts.length > 0 ? JSON.stringify(updatedCerts) : null);
+
+    values.push(id);
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        error: true,
+        message: "No se proporcionaron campos para actualizar",
+      });
+    }
+
+    const query = `UPDATE entrenadores SET ${updates.join(", ")} WHERE id = ?`;
+    const [result]: any = await pool.execute(query, values);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: true,
+        message: "No se pudo actualizar el entrenador",
+      });
+    }
+
+    return res.json({
+      error: false,
+      message: "Entrenador actualizado exitosamente",
+      data: {
+        id,
+        image: updatedImage,
+        certifications: updatedCerts,
+      },
+    });
   } catch (error: any) {
-    // Manejo específico de errores
-    if (error.code === 'ER_DUP_ENTRY') {
-      response.error = true;
-      response.message = "Error: El email ya está registrado por otro entrenador.";
-      return res.status(400).json(response);
-    }
-
-    console.error("Error al actualizar el entrenador:", error);
-    next(error);
-    return res.status(500).json({ message: "Error al actualizar el entrenador." });
+    console.error("Error al actualizar entrenador:", error);
+    return res.status(500).json({
+      error: true,
+      message: "Error interno al actualizar el entrenador",
+    });
   }
 };
 
