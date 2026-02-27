@@ -400,6 +400,69 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
   }
 };
 
+// Obtener un ejercicio por ID
+export const getExerciseById = async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+
+  const response = {
+    message: "",
+    error: false,
+    data: null as Exercise | null,
+  };
+
+  try {
+    // Verificación de token (igual que las otras rutas)
+    const { headers } = req;
+    const token = headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    // Validación básica del ID
+    if (!id || isNaN(Number(id))) {
+      response.error = true;
+      response.message = "ID de ejercicio inválido o faltante.";
+      return res.status(400).json(response);
+    }
+
+    // Consulta por ID
+    const [rows] = await pool.execute(
+      `SELECT id, category, exercise, description, video_url, thumbnail_url, at_home, muscle_group 
+       FROM exercises 
+       WHERE id = ?`,
+      [id]
+    );
+
+    const exerciseRows = rows as Array<{
+      id: number;
+      category: string;
+      exercise: string;
+      description: string;
+      video_url?: string;
+      thumbnail_url?: string;
+      muscle_group?: string | null;
+      at_home?: number | null;
+    }>;
+
+    if (exerciseRows.length === 0) {
+      response.error = true;
+      response.message = `No se encontró el ejercicio con ID ${id}`;
+      return res.status(404).json(response);
+    }
+
+    // Adaptamos el resultado (usamos el mismo adapter que en getAll)
+    const exerciseData = adapterExercises(exerciseRows)[0]; // Solo el primero
+
+    response.data = exerciseData;
+    response.message = "Ejercicio obtenido exitosamente";
+    return res.status(200).json(response);
+
+  } catch (error) {
+    console.error("Error al obtener ejercicio por ID:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno al obtener el ejercicio." });
+  }
+};
+
 export const getExercisesByCategory = async (req: Request, res: Response, next: NextFunction) => {
   const { category } = req.query;
 

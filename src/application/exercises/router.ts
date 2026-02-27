@@ -6,6 +6,7 @@ import {
   updateExercise,
   deleteExercise,
   uploadExerciseMedia,
+  getExerciseById,
 } from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";
 
@@ -31,6 +32,12 @@ router.get(
   "/all",
   verifyToken,
   asyncHandler(getAllExercises)
+);
+
+router.get(
+  "/single/:id",
+  verifyToken,
+  asyncHandler(getExerciseById)
 );
 
 // Ruta GET para obtener ejercicios por categoría (usando query param ?category=...)
