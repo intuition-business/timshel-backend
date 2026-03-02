@@ -10,6 +10,7 @@ export const adapterTrainers = (data: any) => {
       description: item?.description,
       goal: item?.goal,
       price: item?.price,
+      image: item?.image,
       rating: item?.rating,
       experience_years: item?.experience_years,
       certifications: item?.certifications,
