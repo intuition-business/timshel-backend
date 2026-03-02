@@ -152,13 +152,13 @@ export const updateTrainerDto = Joi.object({
   new_phone,
   new_description,
   new_address,
-  /* new_goal, */
+  new_goal,
   new_rating,
   new_experience_years,
   new_certifications,
   new_price,
-}).or('new_name', 'new_email', 'new_phone', 'new_description', 'new_address', 'new_rating', 'new_experience_years', 'new_certifications', 'new_price').messages({
-  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_description, new_address, new_rating, new_experience_years, new_certificaciones, o new_price'
+}).or('new_name', 'new_email', 'new_phone', 'new_description', 'new_address', 'new_goal', 'new_rating', 'new_experience_years', 'new_certifications', 'new_price').messages({
+  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_description, new_address, new_goal, new_rating, new_experience_years, new_certifications, o new_price'
 });
 
 export const deleteTrainerDto = Joi.object({
