@@ -23,6 +23,7 @@ interface Trainer {
   address: string;
   description: string;
   goal: string;
+  price: number;
   rating: number;
   experience_years: number;
   certifications: string;
@@ -56,6 +57,7 @@ export const createTrainer = async (req: Request, res: Response) => {
       description,
       address,
       goal,
+      price,
       rating = 0,
       experience_years = 0,
     } = req.body;
@@ -122,9 +124,9 @@ export const createTrainer = async (req: Request, res: Response) => {
     // 7. Crear entrenador CON REFERENCIA a usuario_id
     const [trainerRes]: any = await pool.execute(
       `INSERT INTO entrenadores (
-        usuario_id, name, email, phone, description, address, goal, rating, experience_years,
+        usuario_id, name, email, phone, description, address, goal, price, rating, experience_years,
         image, certifications, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         usuarioId,
         name,
@@ -133,6 +135,7 @@ export const createTrainer = async (req: Request, res: Response) => {
         description || null,
         address || null,
         goal || null,
+        price || null,
         rating,
         experience_years,
         imageUrl,
@@ -545,6 +548,7 @@ export const updateTrainer = async (req: Request, res: Response) => {
       new_phone,
       new_description,
       new_goal,
+      new_price,
       new_rating,
       new_experience_years,
     } = req.body;
@@ -628,6 +632,10 @@ export const updateTrainer = async (req: Request, res: Response) => {
     if (new_goal !== undefined) {
       updates.push("goal = ?");
       values.push(new_goal);
+    }
+    if (new_price !== undefined) {
+      updates.push("price = ?");
+      values.push(new_price);
     }
     if (new_rating !== undefined) {
       updates.push("rating = ?");
