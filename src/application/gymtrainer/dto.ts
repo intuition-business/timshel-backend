@@ -44,10 +44,6 @@ const experience_years = Joi.number().optional().messages({
   'number.base': 'Los años de experiencia deben ser un número'
 });
 
-const certifications = Joi.string().trim().optional().messages({
-  'string.base': 'Las certificaciones deben ser un string'
-});
-
 const price = Joi.number().min(0).optional().messages({
   'number.base': 'El precio debe ser un número',
   'number.min': 'El precio no puede ser negativo'
@@ -87,10 +83,6 @@ const new_rating = Joi.number().min(0).max(5).optional().messages({
 
 const new_experience_years = Joi.number().optional().messages({
   'number.base': 'Los nuevos años de experiencia deben ser un número'
-});
-
-const new_certifications = Joi.string().trim().optional().messages({
-  'string.base': 'Las nuevas certificaciones deben ser un string'
 });
 
 const new_price = Joi.number().min(0).optional().messages({
@@ -137,7 +129,6 @@ export const createTrainerDto = Joi.object({
   goal,
   rating,
   experience_years,
-  certifications,
   price,
 });
 
@@ -155,10 +146,9 @@ export const updateTrainerDto = Joi.object({
   new_goal,
   new_rating,
   new_experience_years,
-  new_certifications,
   new_price,
-}).or('new_name', 'new_email', 'new_phone', 'new_description', 'new_address', 'new_goal', 'new_rating', 'new_experience_years', 'new_certifications', 'new_price').messages({
-  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_description, new_address, new_goal, new_rating, new_experience_years, new_certifications, o new_price'
+}).or('new_name', 'new_email', 'new_phone', 'new_description', 'new_address', 'new_goal', 'new_rating', 'new_experience_years', 'new_price').messages({
+  'object.missing': 'Debe proporcionar al menos un campo para actualizar: new_name, new_email, new_phone, new_description, new_address, new_goal, new_rating, new_experience_years, o new_price'
 });
 
 export const deleteTrainerDto = Joi.object({
