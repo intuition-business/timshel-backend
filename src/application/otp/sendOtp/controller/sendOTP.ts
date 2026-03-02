@@ -18,7 +18,7 @@ export const sendOTP = async (
   const services = new OtpService();
   const created_at = Date.now();
   const expires_at = Date.now() + OTP_EXPIRATION_TIME;
-  const { email, phonenumber, name = "", platform } = req?.body || {};
+  const { email, phonenumber, name = "", platform, usuario_id = 0, entrenador_id = 0, rol = "user" } = req?.body || {};
 
   // Hacer 'platform' opcional: si no se proporciona, asumir "mobile"
   let effectivePlatform = platform || "mobile";
@@ -37,8 +37,8 @@ export const sendOTP = async (
   let response;
   const otpData: ICreateAuth = {
     name: name !== undefined ? name : null,
-    usuario_id: 0,
-    entrenador_id: 0,
+    usuario_id: usuario_id,
+    entrenador_id: entrenador_id,
     email: email !== undefined ? email : null,
     code: otp,
     telefono: phonenumber !== undefined ? phonenumber : null,

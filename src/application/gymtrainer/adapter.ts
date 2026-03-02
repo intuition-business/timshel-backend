@@ -8,11 +8,10 @@ export const adapterTrainers = (data: any) => {
       phone: item?.phone,
       address: item?.address,
       description: item?.description,
-      /* goal: item?.goal, */
+      goal: item?.goal, 
       rating: item?.rating,
       experience_years: item?.experience_years,
       certifications: item?.certifications,
-      image: item?.image,
       assigned_users: typeof item?.assigned_users === 'string'
         ? JSON.parse(item.assigned_users)
         : (item?.assigned_users || []),

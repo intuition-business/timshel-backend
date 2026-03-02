@@ -15,4 +15,5 @@ export interface ICreateAuth extends ICreateOtp {
   telefono: string;
   id_apple: number;
   tipo_login: string;
+  rol?: string;
 }

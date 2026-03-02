@@ -69,7 +69,36 @@ export const createTrainer = async (req: Request, res: Response) => {
       });
     }
 
-    // 4. Manejo de archivos subidos por Multer
+    // 4. VALIDAR QUE EMAIL Y TELÉFONO NO EXISTAN (NUEVAS VALIDACIONES)
+    // Verificar si el email ya existe en la tabla auth
+    if (email) {
+      const [existingEmail]: any = await pool.execute(
+        "SELECT id FROM auth WHERE email = ?",
+        [email]
+      );
+      if (existingEmail.length > 0) {
+        return res.status(409).json({
+          error: true,
+          message: `El email ${email} ya está registrado en el sistema`,
+        });
+      }
+    }
+
+    // Verificar si el teléfono ya existe en la tabla auth
+    if (phone) {
+      const [existingPhone]: any = await pool.execute(
+        "SELECT id FROM auth WHERE telefono = ?",
+        [phone]
+      );
+      if (existingPhone.length > 0) {
+        return res.status(409).json({
+          error: true,
+          message: `El teléfono ${phone} ya está registrado en el sistema`,
+        });
+      }
+    }
+
+    // 5. Manejo de archivos subidos por Multer
     let imageUrl: string | null = null;
     let certificationsUrls: string[] = [];
 
@@ -83,20 +112,21 @@ export const createTrainer = async (req: Request, res: Response) => {
       certificationsUrls = files.certifications.map((file) => file.location);
     }
 
-    // 5. Crear usuario base
+    // 6. Crear usuario base
     const [userRes]: any = await pool.execute(
       "INSERT INTO usuarios (nombre) VALUES (?)",
       [name]
     );
     const usuarioId = userRes.insertId;
 
-    // 6. Crear entrenador
+    // 7. Crear entrenador CON REFERENCIA a usuario_id
     const [trainerRes]: any = await pool.execute(
       `INSERT INTO entrenadores (
-        name, email, phone, description, address, goal, rating, experience_years,
+        usuario_id, name, email, phone, description, address, goal, rating, experience_years,
         image, certifications, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
+        usuarioId,
         name,
         email,
         phone,
@@ -112,7 +142,7 @@ export const createTrainer = async (req: Request, res: Response) => {
 
     const trainerId = trainerRes.insertId;
 
-    // 7. Crear auth para trainer
+    // 8. Crear auth para trainer para permitir flujo OTP web
     const authData = {
       usuario_id: usuarioId,
       name: name || null,
@@ -125,13 +155,18 @@ export const createTrainer = async (req: Request, res: Response) => {
     };
     await OtpModel.createAuth(authData);
 
-    // 8. Preparar y enviar OTP
+    console.log(`✅ Entrenador creado exitosamente - Usuario ID: ${usuarioId}, Trainer ID: ${trainerId}`);
+
+    // 9. Preparar y enviar OTP
     // → Aquí DEJAMOS QUE sendOTP envíe SU respuesta
     req.body = {
       email,
       phonenumber: phone,
       name,
       platform: "web",
+      usuario_id: usuarioId,
+      entrenador_id: trainerId,
+      rol: "trainer",
     };
 
     // Llamamos sendOTP y dejamos que maneje la respuesta

@@ -18,8 +18,12 @@ class OtpService {
         ...data,
         usuario_id: user.insertId,
         name: data.name || '',
-        entrenador_id: 0,
-        rol: 'user'
+        rol: data.rol || 'user',
+        entrenador_id: data.entrenador_id || 0,
+        email: data.email,
+        telefono: data.telefono,
+        id_apple: data.id_apple,
+        tipo_login: data.tipo_login
       });
 
       const otp = await OtpModel.createOtp({
@@ -32,15 +36,27 @@ class OtpService {
       if (user && auth && otp) return { ok: true, user_id: user?.insertId };
       return { ok: false, user_id: user?.insertId };
     } else {
-      const otp = await OtpModel.updateOtp({
+      const otp: any = await OtpModel.updateOtp({
         auth_id: thereIsUser[0].auth_id,
         code: data.code,
         fecha_creacion: data.fecha_creacion,
         fecha_expiracion: data.fecha_expiracion,
         isUsed: data.isUsed,
       });
-      if (otp) return { ok: true, user_id: thereIsUser[0].auth_id };
-      return { ok: false, user_id: thereIsUser[0].auth_id };
+      if (otp && otp.affectedRows > 0) {
+        return { ok: true, user_id: thereIsUser[0].usuario_id || thereIsUser[0].auth_id };
+      }
+
+      const createdOtp = await OtpModel.createOtp({
+        auth_id: thereIsUser[0].auth_id,
+        code: data.code,
+        fecha_creacion: data.fecha_creacion,
+        fecha_expiracion: data.fecha_expiracion,
+        isUsed: data.isUsed,
+      });
+
+      if (createdOtp) return { ok: true, user_id: thereIsUser[0].usuario_id || thereIsUser[0].auth_id };
+      return { ok: false, user_id: thereIsUser[0].usuario_id || thereIsUser[0].auth_id };
     }
   }
 

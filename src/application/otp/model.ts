@@ -90,8 +90,22 @@ const findByEmail = async (email: string) => {
     const [rows] = await pool.execute(
       `
         SELECT
-            a.*,
-            o.*
+            a.id as auth_id,
+            a.usuario_id,
+            a.name,
+            a.email,
+            a.telefono,
+            a.id_apple,
+            a.tipo_login,
+            a.rol,
+            a.is_deleted,
+            a.deleted_at,
+            a.entrenador_id,
+            o.id as otp_id,
+            o.code,
+            o.fecha_creacion,
+            o.fecha_expiracion,
+            o.isUsed
         FROM
             ${OTP_AUTH_TABLE} a
         LEFT JOIN
@@ -114,8 +128,22 @@ const findByPhone = async (phone: string) => {
     const [rows] = await pool.execute(
       `
         SELECT
-            a.*,
-            o.*
+            a.id as auth_id,
+            a.usuario_id,
+            a.name,
+            a.email,
+            a.telefono,
+            a.id_apple,
+            a.tipo_login,
+            a.rol,
+            a.is_deleted,
+            a.deleted_at,
+            a.entrenador_id,
+            o.id as otp_id,
+            o.code,
+            o.fecha_creacion,
+            o.fecha_expiracion,
+            o.isUsed
         FROM
             ${OTP_AUTH_TABLE} a
         LEFT JOIN
