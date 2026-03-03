@@ -44,14 +44,14 @@ export const initSocket = (httpServer: any) => {
     io.on("connection", async (socket) => {
         const userId = socket.data.userId;
         console.log(`Usuario conectado: ${userId} (socket: ${socket.id})`);
+        socket.join(`user:${userId}`);
 
         // ───────────────────────────────────────────────
         // NUEVO: Enviar lista de chats automáticamente al conectar
         // ───────────────────────────────────────────────
         try {
-            const chats = await getUserChatList(userId);
-            socket.emit("my-chats-list", chats);
-            console.log(`Lista de chats enviada a ${userId} → ${chats.length} conversaciones`);
+            await emitUserChatsList(io, userId);
+            console.log(`Lista de chats enviada a ${userId}`);
         } catch (err) {
             console.error("Error al enviar lista inicial de chats:", err);
             socket.emit("error", "No se pudo cargar la lista de conversaciones");
@@ -78,8 +78,8 @@ export const initSocket = (httpServer: any) => {
             socket.join(room);
             console.log(`Usuario ${userId} se unió al chat con ${receiverId} (room: ${room})`);
 
-            // Cargar historial
-            await loadChatHistory(userId, receiverId, socket);
+            // Cargar historial reactivo al room (si ambos están conectados en esa conversación)
+            await emitChatHistoryToRoom(io, userId, receiverId);
 
             // Enviar información del receptor
             const receiverDetails = await getUserDetails(receiverId);
@@ -90,6 +90,21 @@ export const initSocket = (httpServer: any) => {
                 user_email: receiverDetails.email,
                 user_phone: receiverDetails.phone
             });
+        });
+
+        // Permite pedir refresco de historial sin reconectar/reingresar al chat
+        socket.on("refresh-chat-history", async (receiverId: string) => {
+            if (!receiverId || userId === receiverId) {
+                socket.emit("error", "ID de receptor inválido");
+                return;
+            }
+
+            await emitChatHistoryToRoom(io, userId, receiverId);
+        });
+
+        // Permite refrescar lista de conversaciones bajo demanda
+        socket.on("get-my-chats", async () => {
+            await emitUserChatsList(io, userId);
         });
 
         // Enviar mensaje
@@ -128,6 +143,11 @@ export const initSocket = (httpServer: any) => {
 
             await saveMessageToDB(newMessage);
             io.to(room).emit("receive-message", newMessage);
+
+            // Historial y previews reactivas sin recarga manual
+            await emitChatHistoryToRoom(io, senderId, receiverId);
+            await emitUserChatsList(io, senderId);
+            await emitUserChatsList(io, receiverId);
         });
 
         // Marcar como visto
@@ -137,6 +157,13 @@ export const initSocket = (httpServer: any) => {
                 return;
             }
             await updateMessageSeen(messageId, userId);
+
+            const messageData = await getMessageById(messageId);
+            if (messageData) {
+                await emitChatHistoryToRoom(io, messageData.user_id_sender, messageData.user_id_receiver);
+                await emitUserChatsList(io, messageData.user_id_sender);
+                await emitUserChatsList(io, messageData.user_id_receiver);
+            }
             // Opcional: notificar al emisor que ya fue visto
             // const msg = await getMessage(messageId); // si quieres
             // if (msg) io.to([msg.user_id_sender, userId].sort().join("_")).emit("message-seen", messageId);
@@ -278,7 +305,7 @@ async function updateMessageSeen(messageId: string, userId: string) {
     );
 }
 
-async function loadChatHistory(userId: string, receiverId: string, socket: any) {
+async function getChatHistory(userId: string, receiverId: string) {
     const [rows]: any = await pool.execute(
         `SELECT * FROM messages 
          WHERE (user_id_sender = ? AND user_id_receiver = ?) 
@@ -287,5 +314,31 @@ async function loadChatHistory(userId: string, receiverId: string, socket: any) 
          LIMIT 100`,  // ← límite razonable para evitar sobrecarga
         [userId, receiverId, receiverId, userId]
     );
-    socket.emit("chat-history", rows);
+
+    return rows;
+}
+
+async function emitChatHistoryToRoom(io: SocketIOServer, userA: string, userB: string) {
+    const room = [userA, userB].sort().join("_");
+    const rows = await getChatHistory(userA, userB);
+    io.to(room).emit("chat-history", rows);
+}
+
+async function emitUserChatsList(io: SocketIOServer, userId: string) {
+    const chats = await getUserChatList(userId);
+    io.to(`user:${userId}`).emit("my-chats-list", chats);
+}
+
+async function getMessageById(messageId: string): Promise<{ user_id_sender: string; user_id_receiver: string } | null> {
+    const [rows]: any = await pool.execute(
+        `SELECT user_id_sender, user_id_receiver FROM messages WHERE id = ? LIMIT 1`,
+        [messageId]
+    );
+
+    if (!rows || rows.length === 0) return null;
+
+    return {
+        user_id_sender: String(rows[0].user_id_sender),
+        user_id_receiver: String(rows[0].user_id_receiver),
+    };
 }
