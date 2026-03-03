@@ -72,15 +72,18 @@ const Server = () => {
       app.use(handleErrors);
 
       // CAMBIO CLAVE: ahora escucha httpServer, no app
+      // Aumentar timeout para requests largas (generación IA con chunks)
+      httpServer.requestTimeout = 10 * 60 * 1000; // 10 minutos
+      httpServer.timeout = 12 * 60 * 1000; // 12 minutos socket timeout
       httpServer.listen(PORT, () => {
         console.log(`NODE_ENV=${NODE_ENV}`);
         console.log(`Server + Socket.IO corriendo en puerto ${PORT}`);
         console.log(`App: ${URL}:${PORT}`);
 
-        /* cron.schedule('0 3 * * *', async () => {
-          console.log("Ejecutando renovación de rutinas...");
+        cron.schedule('0 0 * * *', async () => {
+          console.log("Ejecutando renovación de rutinas (cron medianoche)...");
           await renewRoutines();
-        }, { timezone: 'America/Bogota' }); */
+        }, { timezone: 'America/Bogota' });
       });
     } catch (error) {
       console.log("Error:", error);
