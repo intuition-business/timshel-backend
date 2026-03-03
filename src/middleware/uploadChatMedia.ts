@@ -7,6 +7,7 @@ import { createReadStream } from "fs";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
+import sharp from "sharp";
 
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
 // Configurar FFmpeg (una vez en la aplicación, puedes moverlo a un archivo de inicialización)
@@ -78,7 +79,7 @@ export async function uploadToS3(filePath: string, key: string, contentType: str
     return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
-// Generar thumbnail (solo para videos)
+// Generar thumbnail para videos
 export async function generateThumbnail(videoPath: string, outputPath: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         ffmpeg(videoPath)
@@ -92,6 +93,22 @@ export async function generateThumbnail(videoPath: string, outputPath: string): 
             .on("end", () => resolve()) // ← Arrow function sin parámetros para ignorar stdout/stderr
             .on("error", (err) => reject(err)); // ← Mantiene el manejo de errores
     });
+}
+
+// Generar thumbnail para imágenes
+export async function generateImageThumbnail(imagePath: string, outputPath: string): Promise<void> {
+    try {
+        await sharp(imagePath)
+            .resize(640, 360, {
+                fit: 'inside',
+                withoutEnlargement: true
+            })
+            .jpeg({ quality: 80 })
+            .toFile(outputPath);
+    } catch (error) {
+        console.error('Error al generar thumbnail de imagen:', error);
+        throw error;
+    }
 }
 // Initialize temp directory
 (async () => {
