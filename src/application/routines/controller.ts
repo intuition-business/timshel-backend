@@ -9,6 +9,7 @@ import { SECRET } from "../../config";
 import pool from "../../config/db";
 import { any } from "joi";
 import { v4 as uuidv4 } from "uuid";
+import { generateRoutinesIaBackground } from "../routineDays/controller";
 let uuidv4Sync: () => string;
 
 interface Exercise {
@@ -24,6 +25,8 @@ interface Exercise {
 interface JwtPayload {
   userId: string;
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface EditExerciseRequest {
   fecha_rutina: string;
@@ -226,184 +229,61 @@ export const generateRoutinesIa = async (
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
 
-    // Consultamos los días seleccionados por el usuario
-    const [userRoutineRows]: any = await pool.execute(
-      "SELECT day, date FROM user_routine WHERE user_id = ? ORDER BY date",
+    // Obtener el período actual del usuario
+    const [periodRows]: any = await pool.execute(
+      `SELECT DISTINCT start_date, end_date FROM user_routine WHERE user_id = ? ORDER BY start_date DESC LIMIT 1`,
       [userId]
     );
 
-    let daysData;
-    if (userRoutineRows.length === 0) {
-      daysData = generateDefaultRoutineDays();
-    } else {
-      daysData = userRoutineRows;
+    if (!periodRows || periodRows.length === 0) {
+      res.status(400).json({
+        response: "",
+        error: true,
+        message: "No existen días de rutina creados. Por favor crea días primero."
+      });
+      return;
     }
 
-    // Consulta para obtener los datos del usuario desde la tabla 'formulario'
-    const [rows]: any = await pool.execute(
-      "SELECT * FROM formulario WHERE usuario_id = ?",
-      [userId]
-    );
-    const newId = await getUuidv4();
-    const personData = adapter(rows?.[0]);
-
-    // Generar los primeros 3 días sincronamente
-    const firstThreeDays = daysData.slice(0, 3);
-    let prompt = await readFiles(personData, firstThreeDays);
-
-    // Llamamos a la IA para generar la rutina
-    const { response, error } = await getOpenAI(prompt);
-
-    // Validamos si la respuesta de OpenAI es válida
-    if (response?.choices?.[0]?.message?.content) {
-      let parsed;
-      try {
-        parsed = JSON.parse(response.choices[0].message.content || "");
-      } catch (parseError: unknown) {
-        handleParseError(parseError, res);
-        return;
+    const { start_date, end_date } = periodRows[0];
+    
+    // Asegurar formato YYYY-MM-DD correcto
+    const formatDate = (d: any): string => {
+      if (typeof d === 'string') return d; // ya es string, retornar directo
+      if (d instanceof Date) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
       }
-
-      // Verificamos que parsed tenga la propiedad 'workouts' o 'training_plan' y que sea un array
-      let trainingPlan =
-        parsed.workouts ||
-        parsed.training_plan ||
-        parsed.workout_plan ||
-        (Array.isArray(parsed) ? parsed : [parsed]);
-      if (parsed && Array.isArray(trainingPlan)) {
-        // Asociamos las fechas con la rutina generada
-        trainingPlan.forEach((day: any, index: number) => {
-          const dateData = firstThreeDays[index];
-          day.fecha = dateData ? dateData.date : null;
-
-          if (Array.isArray(day.ejercicios)) {
-            day.ejercicios.forEach((ex: any) => {
-              if (!ex.exercise_id) {
-                ex.exercise_id = uuidv4();
-              }
-            });
-          }
-        });
-
-        // Guardar los primeros 3 días en la DB (parcial)
-        const trainingPlanJson = JSON.stringify(trainingPlan); // Convertir a string si usas TEXT; si usas JSON, usa el objeto directamente
-
-        // Insertar o actualizar el registro
-        await pool.execute(
-          "INSERT INTO user_training_plans (user_id, training_plan) VALUES (?, ?) ON DUPLICATE KEY UPDATE training_plan = ?",
-          [userId, trainingPlanJson, trainingPlanJson]
-        );
-
-        // Obtener el ID del registro (para INSERT o UPDATE)
-        const [result]: any = await pool.execute(
-          "SELECT id FROM user_training_plans WHERE user_id = ?",
-          [userId]
-        );
-        const routineId = result?.[0]?.id;
-
-        if (!routineId) {
-          throw new Error("No se pudo obtener el ID del registro");
-        }
-
-        res.json({
-          response: "Documento generado.",
-          error: false,
-          message: "Documento generado.",
-          routine_id: routineId,
-          user_id: userId
-        });
-
-        // Generar el resto en segundo plano
-        setImmediate(async () => {
-          try {
-            const remainingDays = daysData.slice(3);
-            const chunkSize = 3;
-
-            let accumulatedPlan: any[] = [...trainingPlan]; // ya tienes los primeros 3
-
-            for (let i = 0; i < remainingDays.length; i += chunkSize) {
-              const chunk = remainingDays.slice(i, i + chunkSize);
-
-              const chunkPrompt = await readFiles(personData, chunk);
-              const { response: chunkResponse } = await getOpenAI(chunkPrompt);
-
-              const raw = chunkResponse?.choices?.[0]?.message?.content || "";
-
-              let parsedChunk;
-              try {
-                parsedChunk = JSON.parse(raw);
-              } catch (err) {
-                console.error("Error parseando chunk:", err);
-                continue; // saltamos este bloque
-              }
-
-              let chunkPlan =
-                parsedChunk.workouts ||
-                parsedChunk.training_plan ||
-                parsedChunk.workout_plan ||
-                (Array.isArray(parsedChunk) ? parsedChunk : [parsedChunk]);
-
-              if (!Array.isArray(chunkPlan)) continue;
-
-              chunkPlan.forEach((day: any, index: number) => {
-                const dateData = chunk[index];
-                day.fecha = dateData ? dateData.date : null;
-
-                if (Array.isArray(day.ejercicios)) {
-                  day.ejercicios.forEach((ex: any) => {
-                    if (!ex.exercise_id) {
-                      ex.exercise_id = uuidv4();
-                    }
-                  });
-                }
-              });
-
-              accumulatedPlan = [...accumulatedPlan, ...chunkPlan];
-            }
-
-            const fullTrainingPlanJson = JSON.stringify(accumulatedPlan);
-
-            await pool.execute(
-              "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
-              [fullTrainingPlanJson, userId]
-            );
-
-            console.log("Rutina completa generada por bloques para user_id:", userId);
-
-          } catch (bgError) {
-            console.error("Error en generación por bloques:", bgError);
-          }
-        });
-        return;
-      } else {
-        console.error("La propiedad 'workouts' o 'training_plan' no es un array:", parsed);
-        res.json({
-          response: "",
-          error: true,
-          message: "La respuesta generada por la IA no es un array. Por favor intente nuevamente.",
-          details: { responseContent: response.choices[0].message.content },
-        });
-        return;
-      }
-    }
+      return String(d);
+    };
+    
+    const startDateStr = formatDate(start_date);
+    const endDateStr = formatDate(end_date);
 
     res.json({
-      response: "",
-      error: true,
-      message: "No se generó respuesta de OpenAI. Intenta más tarde.",
-      details: { openAiResponse: response },
+      response: "Generación iniciada.",
+      error: false,
+      message: "Documento generado.",
+      routine_id: null,
+      user_id: userId
     });
+
+    generateRoutinesIaBackground(userId, startDateStr, endDateStr).catch((err) => {
+      console.error("[BG] Error en generateRoutinesIaBackground para usuario", userId, ":", err);
+    });
+
   } catch (error) {
-    console.error("Error al generar la rutina con IA:", error);
-    res.json({
+    console.error("Error en generateRoutinesIa:", error);
+    res.status(500).json({
       response: "",
       error: true,
-      message: "Ocurrió un error al generar la rutina con IA.",
-      details: error,
+      message: "Ocurrió un error al generar la rutina.",
+      details: error instanceof Error ? error.message : String(error)
     });
-    next(error);
   }
 };
+
 // Función para manejar errores de parseo
 function handleParseError(parseError: unknown, res: Response) {
   if (parseError instanceof Error) {

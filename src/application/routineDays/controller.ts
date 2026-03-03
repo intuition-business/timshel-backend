@@ -11,6 +11,7 @@ import { createRoutineDto, getRoutineDto, updateRoutineStatusDto, deleteRoutineD
 import { getOpenAI } from "../../infrastructure/openIA";
 import { readFiles } from "../routines/useCase/readFiles";
 import { adapter } from "../routines/useCase/adapter";
+import { v4 as uuidv4 } from "uuid";
 
 interface Routine {
   day: string;
@@ -19,6 +20,25 @@ interface Routine {
   end_date: string;
   status: string;
 }
+
+const OPENAI_TIMEOUT_MS = 45000;
+const CHUNK_SIZE = 3;
+let isRenewRoutinesRunning = false;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
+  let timeoutId: NodeJS.Timeout | undefined;
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    });
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
 // Función para formatear las fechas a "DD/MM/YYYY"
 const formatDateWithSlash = (date: Date) => {
   const day = date.getDate().toString().padStart(2, '0');
@@ -374,62 +394,133 @@ export const generateRoutinesIaBackground = async (
       [userId]
     );
 
-    const personData = adapter(rows?.[0]);
-
-    // Generar el prompt completo para todo el mes de una vez
-    const fullPrompt = await readFiles(personData, daysData);
-
-    // Llamamos a la IA para generar la rutina completa
-    const { response, error } = await getOpenAI(fullPrompt);
-
-    // Validamos si la respuesta de OpenAI es válida
-    if (response?.choices?.[0]?.message?.content) {
-      let parsed;
-      try {
-        parsed = JSON.parse(response.choices[0].message.content || "");
-      } catch (parseError: unknown) {
-        console.error("Error al parsear la respuesta de OpenAI:", parseError);
-        return { error: true, message: "Error al parsear la respuesta de OpenAI." };
-      }
-
-      // Verificamos que parsed tenga la propiedad 'workouts' o 'training_plan' y que sea un array
-      let trainingPlan = parsed.workouts || parsed.training_plan || parsed.workout_plan; // Manejar variaciones
-      if (parsed && Array.isArray(trainingPlan)) {
-        // Asociamos las fechas con la rutina generada
-        trainingPlan.forEach((day: any, index: number) => {
-          const dateData = daysData[index];
-          day.fecha = dateData ? dateData.date : null;
-        });
-
-        // Guardar la rutina completa en la DB como NUEVO registro
-        const trainingPlanJson = JSON.stringify(trainingPlan); // Convertir a string si usas TEXT; si usas JSON, usa el objeto directamente
-
-        // INSERT nuevo (sin ON DUPLICATE)
-        await pool.execute(
-          "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
-          [userId, trainingPlanJson, new Date(), new Date()]
-        );
-
-        // Obtener el ID del nuevo registro
-        const [result]: any = await pool.execute(
-          "SELECT LAST_INSERT_ID() as id"
-        );
-        const routineId = result?.[0]?.id;
-
-        if (!routineId) {
-          throw new Error("No se pudo obtener el ID del registro");
-        }
-
-        console.log('Rutina completa generada y guardada para user_id:', userId, 'en periodo', startDate, 'a', endDate);
-
-        return { error: false, message: "Documento generado.", routine_id: routineId };
-      } else {
-        console.error("La propiedad 'workouts' o 'training_plan' no es un array:", parsed);
-        return { error: true, message: "La respuesta generada por la IA no es un array." };
-      }
+    if (!rows?.[0]) {
+      return { error: true, message: "No se encontró formulario para el usuario." };
     }
 
-    return { error: true, message: "No se generó respuesta de OpenAI." };
+    const personData = adapter(rows?.[0]);
+
+    const firstDays = daysData.slice(0, CHUNK_SIZE);
+    const firstPrompt = await readFiles(personData, firstDays);
+    const firstOpenAiResult = await withTimeout(
+      getOpenAI(firstPrompt),
+      OPENAI_TIMEOUT_MS,
+      `Timeout OpenAI en primer bloque para user ${userId}`
+    );
+
+    const firstResponse = firstOpenAiResult?.response;
+    if (!firstResponse?.choices?.[0]?.message?.content) {
+      return { error: true, message: "No se generó respuesta de OpenAI en el primer bloque." };
+    }
+
+    let parsedFirst;
+    try {
+      parsedFirst = JSON.parse(firstResponse.choices[0].message.content || "");
+    } catch (parseError: unknown) {
+      console.error("Error al parsear la respuesta inicial de OpenAI:", parseError);
+      return { error: true, message: "Error al parsear la respuesta inicial de OpenAI." };
+    }
+
+    let firstPlan =
+      parsedFirst.workouts ||
+      parsedFirst.training_plan ||
+      parsedFirst.workout_plan ||
+      (Array.isArray(parsedFirst) ? parsedFirst : [parsedFirst]);
+
+    if (!Array.isArray(firstPlan)) {
+      return { error: true, message: "La respuesta de OpenAI del primer bloque no es un array." };
+    }
+
+
+    firstPlan.forEach((day: any, index: number) => {
+      const dateData = firstDays[index];
+      day.fecha = dateData ? dateData.date : null;
+
+      if (Array.isArray(day.ejercicios)) {
+        day.ejercicios.forEach((ex: any) => {
+          if (!ex.exercise_id) {
+            ex.exercise_id = uuidv4();
+          }
+        });
+      }
+    });
+
+    let accumulatedPlan: any[] = [...firstPlan];
+
+    const [insertResult]: any = await pool.execute(
+      "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
+      [userId, JSON.stringify(accumulatedPlan), new Date(), new Date()]
+    );
+    const routineId = insertResult?.insertId;
+
+    if (!routineId) {
+      throw new Error("No se pudo obtener el ID del registro");
+    }
+
+    const remainingDays = daysData.slice(CHUNK_SIZE);
+
+    for (let i = 0; i < remainingDays.length; i += CHUNK_SIZE) {
+      const chunk = remainingDays.slice(i, i + CHUNK_SIZE);
+      const chunkPrompt = await readFiles(personData, chunk);
+
+      const chunkOpenAiResult = await withTimeout(
+        getOpenAI(chunkPrompt),
+        OPENAI_TIMEOUT_MS,
+        `Timeout OpenAI en chunk ${i / CHUNK_SIZE + 2} para user ${userId}`
+      );
+
+      const rawChunk = chunkOpenAiResult?.response?.choices?.[0]?.message?.content || "";
+      if (!rawChunk) {
+        console.warn(`Chunk sin contenido para user ${userId}, bloque ${i / CHUNK_SIZE + 2}`);
+        continue;
+      }
+
+      let parsedChunk;
+      try {
+        parsedChunk = JSON.parse(rawChunk);
+      } catch (err) {
+        console.error("Error parseando chunk:", err);
+        continue;
+      }
+
+      let chunkPlan =
+        parsedChunk.workouts ||
+        parsedChunk.training_plan ||
+        parsedChunk.workout_plan ||
+        (Array.isArray(parsedChunk) ? parsedChunk : [parsedChunk]);
+
+      if (!Array.isArray(chunkPlan)) {
+        continue;
+      }
+
+
+      chunkPlan.forEach((day: any, index: number) => {
+        const dateData = chunk[index];
+        day.fecha = dateData ? dateData.date : null;
+
+        if (Array.isArray(day.ejercicios)) {
+          day.ejercicios.forEach((ex: any) => {
+            if (!ex.exercise_id) {
+              ex.exercise_id = uuidv4();
+            }
+          });
+        }
+      });
+
+      accumulatedPlan = [...accumulatedPlan, ...chunkPlan];
+
+
+      await pool.execute(
+        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [JSON.stringify(accumulatedPlan), routineId]
+      );
+
+      await sleep(100);
+    }
+
+    console.log("Rutina completa generada y guardada para user_id:", userId, "en periodo", startDate, "a", endDate);
+
+    return { error: false, message: "Documento generado.", routine_id: routineId };
   } catch (error) {
     console.error("Error al generar la rutina con IA en background:", error);
     return { error: true, message: "Ocurrió un error al generar la rutina con IA." };
@@ -438,6 +529,12 @@ export const generateRoutinesIaBackground = async (
 
 // Función principal para renovar rutinas vencidas
 export const renewRoutines = async () => {
+  if (isRenewRoutinesRunning) {
+    console.log("renewRoutines ya está en ejecución. Se omite este ciclo.");
+    return;
+  }
+
+  isRenewRoutinesRunning = true;
   console.time('renewRoutines'); // Medición de tiempo total para optimización y depuración
   const currentDate = new Date(); // Para producción; para pruebas: new Date(2025, 8, 9); // Sept 09, 2025 (mes 8 es septiembre)
   const currentDateStr = getLocalDateString(currentDate);
@@ -463,12 +560,8 @@ export const renewRoutines = async () => {
       return;
     }
 
-    // Procesar en batches para evitar bloqueos largos (optimiza CPU en prod con muchos users)
-    const batchSize = 10; // Tamaño de batch ajustable; en dev usa pequeño, en prod prueba con 50+
-    for (let i = 0; i < periods.length; i += batchSize) {
-      const batch = periods.slice(i, i + batchSize);
-
-      for (const period of batch) {
+    for (const period of periods) {
+      try {
         const userId = period.user_id;
 
         // Paso 1: Actualizar 'pending' a 'failed' en los días anteriores (todo el periodo vencido)
@@ -549,14 +642,16 @@ export const renewRoutines = async () => {
         } else {
           console.log(`Rutina IA generada exitosamente para user ${userId} con routine_id ${genResult.routine_id}`);
         }
+      } catch (periodError) {
+        console.error(`Error procesando renovación para user ${period.user_id}:`, periodError);
       }
 
-      // Pequeña pausa entre batches para no saturar CPU/DB (optimiza en entornos de bajo recurso)
-      await new Promise(resolve => setTimeout(resolve, 100)); // 100ms; ajusta si es necesario
+      await sleep(150);
     }
   } catch (error) {
     console.error("Error en renewRoutines:", error);
   } finally {
+    isRenewRoutinesRunning = false;
     console.timeEnd('renewRoutines'); // Siempre mide el tiempo total, incluso si hay error
   }
 };
