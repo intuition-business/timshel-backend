@@ -108,12 +108,18 @@ export const initSocket = (httpServer: any) => {
         });
 
         // Enviar mensaje
-        socket.on("send-message", async (data: { receiverId: string; message: string; files?: { file_url: string; file_type: 'image' | 'video' }[] }) => {
+        socket.on("send-message", async (data: { receiverId: string; message?: string; files?: { file_url: string; file_type: 'image' | 'video' }[] }) => {
             const senderId = userId;
-            const { receiverId, message, files = [] } = data;
+            const { receiverId, message = "", files = [] } = data;
 
-            if (!receiverId || senderId === receiverId || !message?.trim()) {
-                socket.emit("error", "Datos inválidos para enviar mensaje");
+            // Validar: debe haber al menos un receiverId válido y (texto o archivos)
+            if (!receiverId || senderId === receiverId) {
+                socket.emit("error", "ID de receptor inválido");
+                return;
+            }
+
+            if (!message?.trim() && (!files || files.length === 0)) {
+                socket.emit("error", "El mensaje debe contener texto o archivos");
                 return;
             }
 
