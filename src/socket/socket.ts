@@ -18,6 +18,13 @@ interface ChatPreview {
     lastMessage: string | null;
     lastMessageTime: string | null;
     unreadCount: number;
+    attachmentType: string | null;
+    attachmentUrl: string | null;
+}
+
+interface MessageAttachment {
+    file_url?: string;
+    file_type?: string;
 }
 
 // Función principal para inicializar Socket.IO
@@ -199,6 +206,9 @@ async function getUserChatList(userId: string): Promise<ChatPreview[]> {
                 SUBSTRING_INDEX(
                     GROUP_CONCAT(m.message ORDER BY m.created_at DESC SEPARATOR '||'), '||', 1
                 ) AS last_message_text,
+                SUBSTRING_INDEX(
+                    GROUP_CONCAT(m.files ORDER BY m.created_at DESC SEPARATOR '||'), '||', 1
+                ) AS last_message_files,
                 COUNT(CASE 
                     WHEN m.user_id_receiver = ? 
                     AND m.seen = FALSE 
@@ -218,8 +228,15 @@ async function getUserChatList(userId: string): Promise<ChatPreview[]> {
 
         for (const row of rows) {
             const receiver = await getUserDetails(row.receiver_id);
+            const lastAttachment = getLastAttachment(row.last_message_files);
 
-            let lastMsg = row.last_message_text || null;
+            let lastMsg = (row.last_message_text || "").trim() || null;
+            if (!lastMsg && lastAttachment) {
+                lastMsg = getAttachmentPreviewLabel(lastAttachment.file_type);
+            } else if (lastMsg && lastAttachment) {
+                lastMsg = `${lastMsg} ${getAttachmentPreviewLabel(lastAttachment.file_type)}`;
+            }
+
             if (lastMsg && lastMsg.length > 80) {
                 lastMsg = lastMsg.substring(0, 77) + "...";
             }
@@ -231,6 +248,8 @@ async function getUserChatList(userId: string): Promise<ChatPreview[]> {
                 lastMessage: lastMsg,
                 lastMessageTime: row.last_time ? new Date(row.last_time).toISOString() : null,
                 unreadCount: Number(row.unread_count) || 0,
+                attachmentType: lastAttachment?.file_type || null,
+                attachmentUrl: lastAttachment?.file_url || null,
             });
         }
 
@@ -347,4 +366,38 @@ async function getMessageById(messageId: string): Promise<{ user_id_sender: stri
         user_id_sender: String(rows[0].user_id_sender),
         user_id_receiver: String(rows[0].user_id_receiver),
     };
+}
+
+function getLastAttachment(filesRaw: unknown): MessageAttachment | null {
+    if (!filesRaw || typeof filesRaw !== "string") return null;
+
+    try {
+        const parsed = JSON.parse(filesRaw);
+        if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+        const first = parsed[0] as MessageAttachment;
+        if (!first?.file_url) return null;
+
+        return {
+            file_url: first.file_url,
+            file_type: first.file_type || "file",
+        };
+    } catch {
+        return null;
+    }
+}
+
+function getAttachmentPreviewLabel(fileType?: string): string {
+    switch ((fileType || "").toLowerCase()) {
+        case "image":
+            return "📷 Imagen";
+        case "video":
+            return "🎥 Video";
+        case "audio":
+        case "voice":
+        case "voice_note":
+            return "🎤 Nota de voz";
+        default:
+            return "📎 Archivo adjunto";
+    }
 }
