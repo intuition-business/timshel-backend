@@ -11,6 +11,6 @@ router.post('/payment', createPaymentController);
 router.post('/subscription', createSubscriptionController);
 
 // Webhook
-router.post('/mercadopago/webhook', mercadopagoWebhook);
+router.post('/webhook', mercadopagoWebhook);
 
 export default router;
