@@ -20,6 +20,9 @@ import { chatUploadMediaRouter } from "../application/chat";
 import { chatRouter } from "../application/chat-history";
 
 
+import mercadopagoRouter from '../infrastructure/mercadopago/router';
+
+
 const { sendOtp, validateOtp, register, login, google, user, getRoutines, trainers, admins, profile, routineDays, specialCases, routineExercises, weight, warmUps, plans, exercises, chatUploadMedia, chatMessages } =
   path;
 
@@ -38,6 +41,7 @@ const router = (app: Application) => {
   app.use(validateOtp, validateOTPRouter);
   app.use(getRoutines, routinesRouter);
   app.use(profile, profileRouter);
+  app.use(path.mercadopago, mercadopagoRouter);
   app.use(routineDays, routineRouter);
   app.use(weight, weightRouter);
   app.use(specialCases, specialCaseRouter);
