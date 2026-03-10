@@ -22,4 +22,5 @@ export interface PathProps {
   exercises: string;
   chatUploadMedia: string;
   chatMessages: string;
+  mercadopago: string;
 }
