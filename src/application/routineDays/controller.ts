@@ -21,7 +21,7 @@ interface Routine {
   status: string;
 }
 
-const OPENAI_TIMEOUT_MS = 45000;
+const OPENAI_TIMEOUT_MS = 300000;
 const CHUNK_SIZE = 3;
 let isRenewRoutinesRunning = false;
 
