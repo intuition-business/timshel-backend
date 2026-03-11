@@ -94,6 +94,7 @@ jobs:
           AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }}
           OPENIA_KEY=${{ secrets.OPENIA_KEY }}
           BREVO_API_KEY=${{ secrets.BREVO_API_KEY }}
+          MP_ACCESS_TOKEN=${{ secrets.MP_ACCESS_TOKEN }}
           EOF
 
       - name: Copy .env to server
