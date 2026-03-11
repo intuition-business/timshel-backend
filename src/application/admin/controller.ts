@@ -53,8 +53,8 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const params: any[] = [];
 
     if (name) {
-      whereConditions.push(`(f.name LIKE ? OR u.nombre LIKE ?)`);
-      params.push(`%${name}%`, `%${name}%`);
+      whereConditions.push(`f.name LIKE ?`);
+      params.push(`%${name}%`);
     }
 
     if (with_trainer === 'true') {
@@ -76,10 +76,9 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM auth
-      LEFT JOIN usuarios u ON auth.usuario_id = u.id
-      LEFT JOIN formulario f ON u.id = f.usuario_id
-      LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
-      LEFT JOIN user_images ui ON u.id = ui.user_id
+      LEFT JOIN formulario f ON auth.id = f.usuario_id
+      LEFT JOIN asignaciones a ON auth.id = a.usuario_id
+      LEFT JOIN user_images ui ON auth.id = ui.user_id
       ${whereClause}
     `;
 
@@ -87,27 +86,25 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const totalUsers = (countRows as any)[0].total;
     const totalPages = Math.ceil(totalUsers / limitNum);
 
-    // === CONSULTA PRINCIPAL (EL NAME AHORA VIENE DEL FORMULARIO) ===
+    // === CONSULTA PRINCIPAL ===
     const query = `
       SELECT 
-        u.id,
-        COALESCE(f.name, u.nombre, 'Usuario sin nombre') AS name,
+        auth.id,
+        COALESCE(f.name, 'Usuario sin nombre') AS name,
         auth.email,
         auth.telefono AS phone,
-        u.fecha_registro,
         e.id AS trainer_id,
         e.name AS trainer_name,
         e.image AS trainer_image,
         ui.image_path AS user_image,
         a.plan_id
       FROM auth
-      LEFT JOIN usuarios u ON auth.usuario_id = u.id
-      LEFT JOIN formulario f ON u.id = f.usuario_id
-      LEFT JOIN asignaciones a ON auth.usuario_id = a.usuario_id
+      LEFT JOIN formulario f ON auth.id = f.usuario_id
+      LEFT JOIN asignaciones a ON auth.id = a.usuario_id
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
-      LEFT JOIN user_images ui ON u.id = ui.user_id
+      LEFT JOIN user_images ui ON auth.id = ui.user_id
       ${whereClause}
-      ORDER BY name ASC
+      ORDER BY auth.id DESC
       LIMIT ? OFFSET ?
     `;
 
