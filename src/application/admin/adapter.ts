@@ -4,6 +4,9 @@ export interface UserResponse {
   name: string;
   email: string;
   phone: string;
+  peso?: number;
+  estatura?: number;
+  edad?: number;
   fecha_registro: Date;
   trainer_id: number | null;
   trainer_name: string | null;
@@ -18,6 +21,9 @@ export const adapterUsers = (data: any[]): UserResponse[] => {
     name: item?.name ?? '',
     email: item?.email ?? '',
     phone: item?.phone ?? '',
+    peso: item?.peso ?? undefined,
+    estatura: item?.estatura ?? undefined,
+    edad: item?.edad ?? undefined,
     fecha_registro: item?.fecha_registro ?? new Date(),
     trainer_id: item?.trainer_id ?? null,
     trainer_name: item?.trainer_name ?? null,
