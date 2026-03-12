@@ -229,6 +229,7 @@ export const generateRoutinesIa = async (
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
 
+
     // Obtener el período actual del usuario
     const [periodRows]: any = await pool.execute(
       `SELECT DISTINCT start_date, end_date FROM user_routine WHERE user_id = ? ORDER BY start_date DESC LIMIT 1`,
@@ -260,6 +261,20 @@ export const generateRoutinesIa = async (
 
     const startDateStr = formatDate(start_date);
     const endDateStr = formatDate(end_date);
+
+    // Verificar si ya existe una rutina generada para este usuario y periodo
+    const [existingRoutine]: any = await pool.execute(
+      "SELECT id FROM user_training_plans WHERE user_id = ? AND created_at >= ? AND created_at <= ? LIMIT 1",
+      [userId, startDateStr, endDateStr]
+    );
+    if (existingRoutine && existingRoutine.length > 0) {
+      res.status(409).json({
+        response: "",
+        error: true,
+        message: "Ya existe una rutina generada para este periodo. No se puede generar una nueva hasta que se complete o elimine la anterior."
+      });
+      return;
+    }
 
 
     // --- Generar los primeros 3 días de rutina (primer chunk) ---
@@ -335,6 +350,7 @@ export const generateRoutinesIa = async (
       errorFirstChunk = true;
     }
 
+
     res.json({
       response: errorFirstChunk ? [] : firstPlan,
       error: errorFirstChunk,
@@ -345,7 +361,8 @@ export const generateRoutinesIa = async (
     });
 
     // --- Generar el resto de la rutina en background ---
-    require("../routineDays/controller").generateRoutinesIaBackground(userId, startDateStr, endDateStr).catch((err: any) => {
+    // Ahora pasamos routineId para que el background agregue los bloques al mismo registro
+    require("../routineDays/controller").generateRoutinesIaBackground(userId, startDateStr, endDateStr, routineId).catch((err: any) => {
       console.error("[BG] Error en generateRoutinesIaBackground para usuario", userId, ":", err);
     });
 
