@@ -261,16 +261,91 @@ export const generateRoutinesIa = async (
     const startDateStr = formatDate(start_date);
     const endDateStr = formatDate(end_date);
 
+
+    // --- Generar los primeros 3 días de rutina (primer chunk) ---
+    // Obtener los días seleccionados por el usuario para el periodo actual
+    const [userRoutineRows]: any = await pool.execute(
+      "SELECT day, date FROM user_routine WHERE user_id = ? AND start_date = ? AND end_date = ? ORDER BY date",
+      [userId, startDateStr, endDateStr]
+    );
+
+    let daysData;
+    if (userRoutineRows.length === 0) {
+      // Si no hay días, usar los predeterminados
+      const { generateDefaultRoutineDays } = require("../routineDays/controller");
+      daysData = generateDefaultRoutineDays();
+    } else {
+      daysData = userRoutineRows;
+    }
+
+    // Obtener datos del usuario
+    const [rows]: any = await pool.execute(
+      "SELECT * FROM formulario WHERE usuario_id = ?",
+      [userId]
+    );
+    let firstPlan = [];
+    let routineId = null;
+    let errorFirstChunk = false;
+    if (rows?.[0]) {
+      const personData = require("../routines/useCase/adapter").adapter(rows[0]);
+      const readFiles = require("../routines/useCase/readFiles").readFiles;
+      const getOpenAI = require("../../infrastructure/openIA").getOpenAI;
+      const { v4: uuidv4 } = require("uuid");
+      const CHUNK_SIZE = 3;
+      const firstDays = daysData.slice(0, CHUNK_SIZE);
+      const firstPrompt = await readFiles(personData, firstDays);
+      try {
+        const firstOpenAiResult = await getOpenAI(firstPrompt);
+        const firstResponse = firstOpenAiResult?.response;
+        if (firstResponse?.choices?.[0]?.message?.content) {
+          let parsedFirst = JSON.parse(firstResponse.choices[0].message.content || "");
+          firstPlan =
+            parsedFirst.workouts ||
+            parsedFirst.training_plan ||
+            parsedFirst.workout_plan ||
+            (Array.isArray(parsedFirst) ? parsedFirst : [parsedFirst]);
+          if (Array.isArray(firstPlan)) {
+            firstPlan.forEach((day: any, index: number) => {
+              const dateData = firstDays[index];
+              day.fecha = dateData ? dateData.date : null;
+              if (Array.isArray(day.ejercicios)) {
+                day.ejercicios.forEach((ex: any) => {
+                  if (!ex.exercise_id) {
+                    ex.exercise_id = uuidv4();
+                  }
+                });
+              }
+            });
+            // Guardar el primer chunk en la base de datos
+            const [insertResult]: any = await pool.execute(
+              "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
+              [userId, JSON.stringify(firstPlan), new Date(), new Date()]
+            );
+            routineId = insertResult?.insertId;
+          } else {
+            errorFirstChunk = true;
+          }
+        } else {
+          errorFirstChunk = true;
+        }
+      } catch (err) {
+        errorFirstChunk = true;
+      }
+    } else {
+      errorFirstChunk = true;
+    }
+
     res.json({
-      response: "Generación iniciada.",
-      error: false,
-      message: "Documento generado.",
-      routine_id: null,
+      response: errorFirstChunk ? [] : firstPlan,
+      error: errorFirstChunk,
+      message: errorFirstChunk ? "No se pudo generar el primer bloque de rutina." : "Primer bloque generado. El resto se está generando.",
+      routine_id: routineId,
       user_id: userId,
       isGeneratingRoutine: true
     });
 
-    generateRoutinesIaBackground(userId, startDateStr, endDateStr).catch((err) => {
+    // --- Generar el resto de la rutina en background ---
+    require("../routineDays/controller").generateRoutinesIaBackground(userId, startDateStr, endDateStr).catch((err: any) => {
       console.error("[BG] Error en generateRoutinesIaBackground para usuario", userId, ":", err);
     });
 
