@@ -265,6 +265,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
         e.rating, 
         e.experience_years, 
         e.certifications, 
+        e.image,
         e.created_at,
         COUNT(DISTINCT a.usuario_id) AS user_count,
         IFNULL(
@@ -308,6 +309,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       rating: number;
       experience_years: number;
       certifications: string;
+      image: string;
       created_at: Date;
       user_count: number;
       assigned_users: string; // JSON string from the query
