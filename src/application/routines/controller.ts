@@ -306,8 +306,8 @@ export const generateRoutinesIa = async (
       const readFiles = require("../routines/useCase/readFiles").readFiles;
       const getOpenAI = require("../../infrastructure/openIA").getOpenAI;
       const { v4: uuidv4 } = require("uuid");
-      const CHUNK_SIZE = 3;
-      const firstDays = daysData.slice(0, CHUNK_SIZE);
+      // Solo generamos el primer día
+      const firstDays = daysData.slice(0, 1);
       const firstPrompt = await readFiles(personData, firstDays);
       try {
         const firstOpenAiResult = await getOpenAI(firstPrompt);
@@ -331,7 +331,7 @@ export const generateRoutinesIa = async (
                 });
               }
             });
-            // Guardar el primer chunk en la base de datos
+            // Guardar el primer día en la base de datos
             const [insertResult]: any = await pool.execute(
               "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
               [userId, JSON.stringify(firstPlan), new Date(), new Date()]

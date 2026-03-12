@@ -265,6 +265,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
         e.rating, 
         e.experience_years, 
         e.certifications, 
+        e.image,
         e.created_at,
         COUNT(DISTINCT a.usuario_id) AS user_count,
         IFNULL(
@@ -308,6 +309,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       rating: number;
       experience_years: number;
       certifications: string;
+      image: string;
       created_at: Date;
       user_count: number;
       assigned_users: string; // JSON string from the query
@@ -362,7 +364,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
     }
 
     // 1. Obtener datos del entrenador
-    const query = "SELECT id, name, email, phone, description, image, goal, rating, experience_years, certifications, created_at FROM entrenadores WHERE id = ?";
+    const query = "SELECT id, name, email, phone, description, image, price, goal, rating, experience_years, certifications, created_at FROM entrenadores WHERE id = ?";
     const [rows] = await pool.execute(query, [id]);
 
     const trainerRow = rows as Array<{
@@ -372,6 +374,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       phone: string;
       description: string;
       image: string;
+      price: number;
       goal: string;
       rating: number;
       experience_years: number;

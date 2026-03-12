@@ -371,8 +371,9 @@ function generateDefaultRoutineDays() {
 
 export const generateRoutinesIaBackground = async (
   userId: number,
-  startDate: string,  // Nueva param: start_date del periodo
-  endDate: string     // Nueva param: end_date del periodo
+  startDate: string,
+  endDate: string,
+  routineId?: number
 ): Promise<{ error: boolean; message: string; routine_id?: number; isGeneratingRoutine?: boolean }> => {
   try {
     // Consultamos los días seleccionados por el usuario (filtramos por el nuevo periodo para no incluir viejos)
@@ -447,14 +448,22 @@ export const generateRoutinesIaBackground = async (
 
     let accumulatedPlan: any[] = [...firstPlan];
 
-    const [insertResult]: any = await pool.execute(
-      "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
-      [userId, JSON.stringify(accumulatedPlan), new Date(), new Date()]
-    );
-    const routineId = insertResult?.insertId;
-
-    if (!routineId) {
-      throw new Error("No se pudo obtener el ID del registro");
+    // Si routineId viene de la función principal, solo actualizamos
+    if (routineId) {
+      await pool.execute(
+        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [JSON.stringify(accumulatedPlan), routineId]
+      );
+    } else {
+      // Si no existe, creamos el registro (caso legacy)
+      const [insertResult]: any = await pool.execute(
+        "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
+        [userId, JSON.stringify(accumulatedPlan), new Date(), new Date()]
+      );
+      routineId = insertResult?.insertId;
+      if (!routineId) {
+        throw new Error("No se pudo obtener el ID del registro");
+      }
     }
 
     const remainingDays = daysData.slice(CHUNK_SIZE);
