@@ -364,7 +364,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
     }
 
     // 1. Obtener datos del entrenador
-    const query = "SELECT id, name, email, phone, description, image, goal, rating, experience_years, certifications, created_at FROM entrenadores WHERE id = ?";
+    const query = "SELECT id, name, email, phone, description, image, price, goal, rating, experience_years, certifications, created_at FROM entrenadores WHERE id = ?";
     const [rows] = await pool.execute(query, [id]);
 
     const trainerRow = rows as Array<{
@@ -374,6 +374,7 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       phone: string;
       description: string;
       image: string;
+      price: number;
       goal: string;
       rating: number;
       experience_years: number;

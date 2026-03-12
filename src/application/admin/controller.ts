@@ -97,7 +97,10 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
         e.name AS trainer_name,
         e.image AS trainer_image,
         ui.image_path AS user_image,
-        a.plan_id
+        a.plan_id,
+        f.peso,
+        f.estatura,
+        f.edad
       FROM auth
       LEFT JOIN formulario f ON auth.id = f.usuario_id
       LEFT JOIN asignaciones a ON auth.id = a.usuario_id
