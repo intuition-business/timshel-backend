@@ -373,7 +373,7 @@ export const generateRoutinesIaBackground = async (
   userId: number,
   startDate: string,  // Nueva param: start_date del periodo
   endDate: string     // Nueva param: end_date del periodo
-): Promise<{ error: boolean; message: string; routine_id?: number }> => {
+): Promise<{ error: boolean; message: string; routine_id?: number; isGeneratingRoutine?: boolean }> => {
   try {
     // Consultamos los días seleccionados por el usuario (filtramos por el nuevo periodo para no incluir viejos)
     const [userRoutineRows]: any = await pool.execute(
@@ -520,7 +520,7 @@ export const generateRoutinesIaBackground = async (
 
     console.log("Rutina completa generada y guardada para user_id:", userId, "en periodo", startDate, "a", endDate);
 
-    return { error: false, message: "Documento generado.", routine_id: routineId };
+    return { error: false, message: "Documento generado.", routine_id: routineId, isGeneratingRoutine: false };
   } catch (error) {
     console.error("Error al generar la rutina con IA en background:", error);
     return { error: true, message: "Ocurrió un error al generar la rutina con IA." };

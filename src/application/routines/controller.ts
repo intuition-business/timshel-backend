@@ -245,7 +245,7 @@ export const generateRoutinesIa = async (
     }
 
     const { start_date, end_date } = periodRows[0];
-    
+
     // Asegurar formato YYYY-MM-DD correcto
     const formatDate = (d: any): string => {
       if (typeof d === 'string') return d; // ya es string, retornar directo
@@ -257,7 +257,7 @@ export const generateRoutinesIa = async (
       }
       return String(d);
     };
-    
+
     const startDateStr = formatDate(start_date);
     const endDateStr = formatDate(end_date);
 
@@ -266,7 +266,8 @@ export const generateRoutinesIa = async (
       error: false,
       message: "Documento generado.",
       routine_id: null,
-      user_id: userId
+      user_id: userId,
+      isGeneratingRoutine: true
     });
 
     generateRoutinesIaBackground(userId, startDateStr, endDateStr).catch((err) => {
