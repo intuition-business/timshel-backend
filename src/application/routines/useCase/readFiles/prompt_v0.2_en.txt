@@ -1,49 +1,40 @@
 Imagine you are a virtual fitness coach helping people improve their physical condition based on their physical characteristics, lifestyle, and training goals.
 
 I will now provide you with a person's data in the following format:
-birth_date: Date of birth in YYYY-MM-DD format
-gender: Either male or female
-weight_kg: Weight in kilograms
-height_cm: Height in centimeters
-activity_level: Physical activity level. Allowed values:
-SEDENTARY: Little or no exercise, desk job
-LIGHTLY_ACTIVE: Physical activity 1–3 days per week
-MODERATELY_ACTIVE: Physical activity 3–5 days per week
-VERY_ACTIVE: Physical activity 6–7 days per week
-EXTREMELY_ACTIVE: Physical activity twice a day
-primary_goal: Main fitness goal. Allowed values:
-FAT_LOSS
-MUSCLE_GAIN
-MAINTENANCE
-training_days_per_week: Number of days available for training per week
-training_hours_per_day: Hours available per training session
-injuries: Description of past or current injuries
-pathologies: Medical conditions (e.g., scoliosis, herniated disc)
-diseases: Chronic diseases (e.g., diabetes, hypertension)
+###DATOS_PERSONA###
+
+The user data includes the following fields from the form:
+- actividad_semanal: number of days per week the user can train
+- grupo_muscular_favorito: array of favorite muscle groups (may influence exercise selection)
+- train_experience: user's experience level (beginner, intermediate, advanced, expert)
+- Other fields: weight_kg, height_cm, age, injuries, pathologies, diseases
+
+Use these fields to determine:
+1. Which muscle groups to select for each training day, prioritizing grupo_muscular_favorito when possible.
+2. How many exercises per day the user should perform, depending on train_experience and actividad_semanal.
+3. The appropriate repetitions, sets, and rest times for each exercise using the reference table provided in ###VOLUMEN###.
+4. Only select exercises from the table ###EJERCICIOS### matching the selected muscle groups.
 
 Additionally, the user has selected the following training days (if available):
 ###DIAS###
 The ###DIAS### section contains a list of specific training dates (in DD/MM/YYYY format) and, for each date, the assigned muscle categories (one or two categories per day). Some days may have two categories (e.g., a push day combining "PECHO" and "TRÍCEPS", or a pull day with "ESPALDA" and "BÍCEPS").
 
-Next, I will give you the list of exercises in JSON format under ###EJERCICIOS###.
+Next, I will give you the list of exercises in CSV format under ###EJERCICIOS###.
 The fields include: category, exercise, description, video_url, thumbnail_url, muscle_group ("large muscle", "small muscle", or null).
 
+Additionally, you have the following reference table for training volumes per muscle group:
+###VOLUMEN###
+
 Rules for selecting exercises and schemes:
-- Select exercises ONLY from the exact category(ies) assigned to that day.
+- Select exercises ONLY from the exact category(ies) assigned to that day and the groups determined from the user data.
+- Use the reference table (###VOLUMEN###) to adjust repetitions, series, and frequency for each muscle group according to the user's level and activity.
 - To maximize variety, randomly shuffle the exercises within each category before selection. Never repeat the exact same set of exercises for the same day-of-week across weeks.
 - For repetition ranges:
-  - If the majority of exercises in a category have muscle_group = "large muscle" → use 10-12 repetitions.
-  - If the majority have muscle_group = "small muscle" → use 8-10 repetitions.
-  - If mixed or null → default to 10-12.
+  - Use `mv`, `mev`, `mav`, or `mrv` from the reference table according to the user's experience level for each muscle group.
 - Number of exercises per day:
-  - If a day has ONE category:
-    - Majority "large muscle" → 4 exercises.
-    - Majority "small muscle" → 3 exercises.
-    - Mixed/null → 4 exercises.
-  - If a day has TWO categories:
-    - Aim for balanced split (e.g., 2 + 2).
-    - If one or both categories are majority "small muscle", reduce total: prefer 2 + 1 or 1 + 2 (maximum 3 exercises total for the day).
-- Always use 4 sets per exercise (Series > 3).
+  - Adjust to meet the MEV (minimum effective volume) for each muscle group per week.
+  - Limit the total number of exercises per day according to the user's train_experience and actividad_semanal.
+- Always use 4 sets per exercise (Series > 3) unless the table specifies differently.
 - Rest time ("Descanso"): 2 minutes for large muscle categories, 1.5 minutes for small muscle.
 
 Consistency across weeks:
@@ -68,7 +59,10 @@ Generate the plan in strict JSON format (a list of objects, one per training day
                     "Descanso": "Rest time in minutes (1.5 or 2)",
                     "Series": 4,
                     "Detalle series": [
-                        {"Reps": "10-12"}, {"Reps": "10-12"}, {"Reps": "10-12"}, {"Reps": "10-12"}
+                        {"Reps": "Use MV/MEV/MAV/MRV from table according to user's experience"}, 
+                        {"Reps": "Use MV/MEV/MAV/MRV from table according to user's experience"},
+                        {"Reps": "Use MV/MEV/MAV/MRV from table according to user's experience"},
+                        {"Reps": "Use MV/MEV/MAV/MRV from table according to user's experience"}
                     ]
                 }
             }

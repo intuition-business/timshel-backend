@@ -8,10 +8,12 @@ export const buildPront = ({
   ejerciciosCsv,
   personData,
   daysData,
+  volumenDataJson, // Nuevo parámetro
 }: any) => {
   let prompt = promptTemplate.replace("###EJERCICIOS###", ejerciciosCsv);
   prompt = prompt.replace("###DATOS_PERSONA###", JSON.stringify(personData));
   prompt = prompt.replace("###DIAS###", JSON.stringify(daysData));
+  prompt = prompt.replace("###VOLUMEN###", volumenDataJson); // Reemplazo del placeholder
   return prompt;
 };
 
@@ -22,12 +24,12 @@ export const readFiles = async (personData: any, daysData: any) => {
   // Leemos la plantilla
   const promptTemplate = await fs.readFile(pathFilePrompt, "utf-8");
 
-  // En lugar de leer el CSV, consultamos la base de datos
-  const [rows] = await pool.execute(
+  // Consultamos los ejercicios en la base de datos
+  const [exerciseRowsRaw] = await pool.execute(
     "SELECT category, exercise, description, video_url, thumbnail_url, muscle_group FROM exercises ORDER BY category ASC, exercise ASC"
   );
 
-  const exerciseRows = rows as Array<{
+  const exerciseRows = exerciseRowsRaw as Array<{
     category: string;
     exercise: string;
     description: string;
@@ -36,20 +38,42 @@ export const readFiles = async (personData: any, daysData: any) => {
     muscle_group: string;
   }>;
 
-  // Formateamos los datos como un string CSV similar al original
-  let ejerciciosCsv = "Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL\n";
+  // Formateamos los ejercicios como CSV
+  let ejerciciosCsv = "Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL;Muscle_Group\n";
   exerciseRows.forEach((row) => {
-    // Escapamos comillas y manejamos saltos de línea si es necesario en la descripción
     const desc = row.description.replace(/"/g, '""').replace(/\n/g, ' ');
-    // Manejo de null en video_url y thumbnail_url
     const videoUrl = row.video_url ?? '';
     const thumbnailUrl = row.thumbnail_url ?? '';
-    const muscleGroup = row.muscle_group;
+    const muscleGroup = row.muscle_group ?? '';
     ejerciciosCsv += `${row.category};${row.exercise};"${desc}";${videoUrl};${thumbnailUrl};${muscleGroup}\n`;
   });
 
-  // Generamos el prompt con los datos de la persona y los días
-  const prompt = buildPront({ promptTemplate, ejerciciosCsv, personData, daysData });
+  // Consultamos la tabla de referencia de entrenamiento
+  const [volumenRowsRaw] = await pool.execute(
+    "SELECT grupo_muscular, mv, mev, mav, mrv, frecuencia, repeticiones, rir FROM volumen_entrenamiento"
+  );
+
+  const volumenRows = volumenRowsRaw as Array<{
+    grupo_muscular: string;
+    mv: string;
+    mev: string;
+    mav: string;
+    mrv: string;
+    frecuencia: string;
+    repeticiones: string;
+    rir: string;
+  }>;
+
+  const volumenJson = JSON.stringify(volumenRows);
+
+  // Generamos el prompt final con todos los datos
+  const prompt = buildPront({
+    promptTemplate,
+    ejerciciosCsv,
+    personData,
+    daysData,
+    volumenDataJson: volumenJson,
+  });
 
   return prompt;
 };
