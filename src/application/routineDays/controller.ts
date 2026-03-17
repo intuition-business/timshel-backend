@@ -379,13 +379,13 @@ export const generateRoutinesIaBackground = async (
     const CHUNK_SIZE = 1;
     const OPENAI_TIMEOUT_MS = 300000;
 
-    // Obtener los días seleccionados por el usuario
+    // Obtener los días seleccionados por el usuario (solo day y date)
     const [userRoutineRows]: any = await pool.execute(
-      "SELECT day, date, categories FROM user_routine WHERE user_id = ? AND start_date = ? AND end_date = ? ORDER BY date",
+      "SELECT day, date FROM user_routine WHERE user_id = ? AND start_date = ? AND end_date = ? ORDER BY date",
       [userId, startDate, endDate]
     );
 
-    let daysData: any[];
+    let daysData: any[] = [];
     if (!userRoutineRows || userRoutineRows.length === 0) {
       daysData = generateDefaultRoutineDays();
     } else {
@@ -420,14 +420,14 @@ export const generateRoutinesIaBackground = async (
       }
     }
 
-    // Solo procesar los días que faltan (el primer día ya generado)
+    // Procesar solo los días restantes
     const remainingDays = daysData.slice(accumulatedPlan.length);
 
     for (let i = 0; i < remainingDays.length; i += CHUNK_SIZE) {
       const chunk = remainingDays.slice(i, i + CHUNK_SIZE);
 
-      // Filtrar ejercicios solo por categorías presentes en el chunk
-      const categories = [...new Set(chunk.flatMap((d: any) => Array.isArray(d.categories) ? d.categories : [d.day]).filter(Boolean))];
+      // Filtrar ejercicios usando solo el day como referencia de categoría
+      const categories = [...new Set(chunk.map((d: any) => d.day).filter(Boolean))];
       const placeholders = categories.map(() => "?").join(",");
       const [exerciseRows] = await pool.execute(
         `SELECT category, exercise, description, video_url, thumbnail_url, muscle_group
@@ -437,7 +437,7 @@ export const generateRoutinesIaBackground = async (
         categories
       );
 
-      // Convertir ejercicios a CSV para readFiles
+      // Convertir ejercicios a CSV
       let ejerciciosCsv = "Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL;muscle_group\n";
       (exerciseRows as any[]).forEach((row) => {
         const desc = row.description.replace(/"/g, '""').replace(/\n/g, ' ');
@@ -508,7 +508,7 @@ export const generateRoutinesIaBackground = async (
         routineId = insertResult?.insertId;
       }
 
-      await sleep(100); // pequeña pausa entre chunks
+      await sleep(100); // Pequeña pausa entre chunks
     }
 
     console.log("Rutina completa generada y guardada para user_id:", userId);
