@@ -376,20 +376,23 @@ export const generateRoutinesIaBackground = async (
   routineId?: number
 ): Promise<{ error: boolean; message: string; routine_id?: number; isGeneratingRoutine?: boolean }> => {
   try {
-    // Consultamos los días seleccionados por el usuario (filtramos por el nuevo periodo para no incluir viejos)
+    const CHUNK_SIZE = 1;
+    const OPENAI_TIMEOUT_MS = 300000;
+
+    // Obtener los días seleccionados por el usuario
     const [userRoutineRows]: any = await pool.execute(
-      "SELECT day, date FROM user_routine WHERE user_id = ? AND start_date = ? AND end_date = ? ORDER BY date",
+      "SELECT day, date, categories FROM user_routine WHERE user_id = ? AND start_date = ? AND end_date = ? ORDER BY date",
       [userId, startDate, endDate]
     );
 
-    let daysData;
-    if (userRoutineRows.length === 0) {
+    let daysData: any[];
+    if (!userRoutineRows || userRoutineRows.length === 0) {
       daysData = generateDefaultRoutineDays();
     } else {
       daysData = userRoutineRows;
     }
 
-    // Consulta para obtener los datos del usuario desde la tabla 'formulario'
+    // Obtener datos del usuario desde la tabla 'formulario'
     const [rows]: any = await pool.execute(
       "SELECT * FROM formulario WHERE usuario_id = ?",
       [userId]
@@ -399,88 +402,63 @@ export const generateRoutinesIaBackground = async (
       return { error: true, message: "No se encontró formulario para el usuario." };
     }
 
-    const personData = adapter(rows?.[0]);
+    const personData = adapter(rows[0]);
 
-    const firstDays = daysData.slice(0, CHUNK_SIZE);
-    const firstPrompt = await readFiles(personData, firstDays);
-    const firstOpenAiResult = await withTimeout(
-      getOpenAI(firstPrompt),
-      OPENAI_TIMEOUT_MS,
-      `Timeout OpenAI en primer bloque para user ${userId}`
-    );
-
-    const firstResponse = firstOpenAiResult?.response;
-    if (!firstResponse?.choices?.[0]?.message?.content) {
-      return { error: true, message: "No se generó respuesta de OpenAI en el primer bloque." };
-    }
-
-    let parsedFirst;
-    try {
-      parsedFirst = JSON.parse(firstResponse.choices[0].message.content || "");
-    } catch (parseError: unknown) {
-      console.error("Error al parsear la respuesta inicial de OpenAI:", parseError);
-      return { error: true, message: "Error al parsear la respuesta inicial de OpenAI." };
-    }
-
-    let firstPlan =
-      parsedFirst.workouts ||
-      parsedFirst.training_plan ||
-      parsedFirst.workout_plan ||
-      (Array.isArray(parsedFirst) ? parsedFirst : [parsedFirst]);
-
-    if (!Array.isArray(firstPlan)) {
-      return { error: true, message: "La respuesta de OpenAI del primer bloque no es un array." };
-    }
-
-
-    firstPlan.forEach((day: any, index: number) => {
-      const dateData = firstDays[index];
-      day.fecha = dateData ? dateData.date : null;
-
-      if (Array.isArray(day.ejercicios)) {
-        day.ejercicios.forEach((ex: any) => {
-          if (!ex.exercise_id) {
-            ex.exercise_id = uuidv4();
-          }
-        });
-      }
-    });
-
-    let accumulatedPlan: any[] = [...firstPlan];
-
-    // Si routineId viene de la función principal, solo actualizamos
+    // Recuperar plan existente si routineId está definido
+    let accumulatedPlan: any[] = [];
     if (routineId) {
-      await pool.execute(
-        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        [JSON.stringify(accumulatedPlan), routineId]
+      const [existingPlanRows]: any = await pool.execute(
+        "SELECT training_plan FROM user_training_plans WHERE id = ? LIMIT 1",
+        [routineId]
       );
-    } else {
-      // Si no existe, creamos el registro (caso legacy)
-      const [insertResult]: any = await pool.execute(
-        "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
-        [userId, JSON.stringify(accumulatedPlan), new Date(), new Date()]
-      );
-      routineId = insertResult?.insertId;
-      if (!routineId) {
-        throw new Error("No se pudo obtener el ID del registro");
+
+      if (existingPlanRows?.[0]?.training_plan) {
+        accumulatedPlan =
+          typeof existingPlanRows[0].training_plan === "string"
+            ? JSON.parse(existingPlanRows[0].training_plan)
+            : existingPlanRows[0].training_plan;
       }
     }
 
-    const remainingDays = daysData.slice(CHUNK_SIZE);
+    // Solo procesar los días que faltan (el primer día ya generado)
+    const remainingDays = daysData.slice(accumulatedPlan.length);
 
     for (let i = 0; i < remainingDays.length; i += CHUNK_SIZE) {
       const chunk = remainingDays.slice(i, i + CHUNK_SIZE);
+
+      // Filtrar ejercicios solo por categorías presentes en el chunk
+      const categories = [...new Set(chunk.flatMap((d: any) => Array.isArray(d.categories) ? d.categories : [d.day]).filter(Boolean))];
+      const placeholders = categories.map(() => "?").join(",");
+      const [exerciseRows] = await pool.execute(
+        `SELECT category, exercise, description, video_url, thumbnail_url, muscle_group
+         FROM exercises
+         WHERE category IN (${placeholders})
+         ORDER BY category ASC, exercise ASC`,
+        categories
+      );
+
+      // Convertir ejercicios a CSV para readFiles
+      let ejerciciosCsv = "Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL;muscle_group\n";
+      (exerciseRows as any[]).forEach((row) => {
+        const desc = row.description.replace(/"/g, '""').replace(/\n/g, ' ');
+        const videoUrl = row.video_url ?? '';
+        const thumbnailUrl = row.thumbnail_url ?? '';
+        const muscleGroup = row.muscle_group ?? '';
+        ejerciciosCsv += `${row.category};${row.exercise};"${desc}";${videoUrl};${thumbnailUrl};${muscleGroup}\n`;
+      });
+
+      // Construir prompt para OpenAI
       const chunkPrompt = await readFiles(personData, chunk);
 
       const chunkOpenAiResult = await withTimeout(
         getOpenAI(chunkPrompt),
         OPENAI_TIMEOUT_MS,
-        `Timeout OpenAI en chunk ${i / CHUNK_SIZE + 2} para user ${userId}`
+        `Timeout OpenAI en chunk ${i / CHUNK_SIZE + 1} para user ${userId}`
       );
 
       const rawChunk = chunkOpenAiResult?.response?.choices?.[0]?.message?.content || "";
       if (!rawChunk) {
-        console.warn(`Chunk sin contenido para user ${userId}, bloque ${i / CHUNK_SIZE + 2}`);
+        console.warn(`Chunk sin contenido para user ${userId}, bloque ${i / CHUNK_SIZE + 1}`);
         continue;
       }
 
@@ -498,12 +476,10 @@ export const generateRoutinesIaBackground = async (
         parsedChunk.workout_plan ||
         (Array.isArray(parsedChunk) ? parsedChunk : [parsedChunk]);
 
-      if (!Array.isArray(chunkPlan)) {
-        continue;
-      }
+      if (!Array.isArray(chunkPlan)) continue;
 
-
-      chunkPlan.forEach((day: any, index: number) => {
+      // Asignar fecha y generar exercise_id si falta
+      chunkPlan.forEach((day: any, index) => {
         const dateData = chunk[index];
         day.fecha = dateData ? dateData.date : null;
 
@@ -518,17 +494,24 @@ export const generateRoutinesIaBackground = async (
 
       accumulatedPlan = [...accumulatedPlan, ...chunkPlan];
 
+      // Guardar plan acumulado
+      if (routineId) {
+        await pool.execute(
+          "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          [JSON.stringify(accumulatedPlan), routineId]
+        );
+      } else {
+        const [insertResult]: any = await pool.execute(
+          "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
+          [userId, JSON.stringify(accumulatedPlan), new Date(), new Date()]
+        );
+        routineId = insertResult?.insertId;
+      }
 
-      await pool.execute(
-        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        [JSON.stringify(accumulatedPlan), routineId]
-      );
-
-      await sleep(100);
+      await sleep(100); // pequeña pausa entre chunks
     }
 
-    console.log("Rutina completa generada y guardada para user_id:", userId, "en periodo", startDate, "a", endDate);
-
+    console.log("Rutina completa generada y guardada para user_id:", userId);
     return { error: false, message: "Documento generado.", routine_id: routineId, isGeneratingRoutine: false };
   } catch (error) {
     console.error("Error al generar la rutina con IA en background:", error);
