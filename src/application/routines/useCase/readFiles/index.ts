@@ -66,6 +66,14 @@ export const readFiles = async (personData: any, daysData: any) => {
 
   const volumenJson = JSON.stringify(volumenRows);
 
+  // Aseguramos que personData tenga los campos requeridos
+  if (!('grupo_muscular_favorito' in personData) || !Array.isArray(personData.grupo_muscular_favorito)) {
+    personData.grupo_muscular_favorito = [];
+  }
+  if (!('train_experience' in personData) || typeof personData.train_experience !== 'string' || !personData.train_experience) {
+    personData.train_experience = "beginner";
+  }
+
   // Generamos el prompt final con todos los datos
   const prompt = buildPront({
     promptTemplate,

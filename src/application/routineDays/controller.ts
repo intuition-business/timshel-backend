@@ -494,6 +494,14 @@ export const generateRoutinesIaBackground = async (
       // Construir prompt para OpenAI
       const chunkPrompt = await readFiles(personData, chunk);
 
+      // LOG: Mostrar datos enviados a la IA
+      console.log('--- Prompt enviado a la IA (chunk', i / CHUNK_SIZE + 1, ') ---');
+      console.log(chunkPrompt);
+      console.log('--- Datos personData ---');
+      console.log(JSON.stringify(personData, null, 2));
+      console.log('--- Datos chunk (daysData) ---');
+      console.log(JSON.stringify(chunk, null, 2));
+
       const chunkOpenAiResult = await withTimeout(
         getOpenAI(chunkPrompt),
         OPENAI_TIMEOUT_MS,
