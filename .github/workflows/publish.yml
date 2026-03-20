@@ -68,7 +68,7 @@ jobs:
 
       - name: Decode SSH key
         run: |
-          echo "${{ secrets.SERVER_SSH_KEY }}" | base64 -d > my_ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > my_ssh
           chmod 600 my_ssh
 
       - name: Create .env for production
