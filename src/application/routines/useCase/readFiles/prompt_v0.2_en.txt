@@ -41,35 +41,23 @@ Consistency across weeks:
 - All training days falling on the same weekday (e.g., all Mondays) must use the EXACT same category combination.
 - Vary the specific exercises selected each week while respecting the above rules to ensure progression and variety.
 
-Generate the plan in strict JSON format (a list of objects, one per training day, ordered chronologically):
+Generate the plan in strict JSON format as an array of weeks, where each week is an array of days, and each day is an array of exercise IDs (as they appear in the ###EJERCICIOS### table, field: "exercise").
+
+The output format must be:
 
 [
-    {
-        "nombre": "Descriptive name of the workout (e.g., 'Pecho + Tríceps' or 'Espalda')",
-        "fecha": "DD/MM/YYYY",
-        "exercise_category": ["PECHO", "TRÍCEPS"],  // Array with the category names used that day
-        "ejercicios": [
-            {
-                "nombre_ejercicio": "Exact exercise name from data",
-                "description": "Exact full description from data (copy verbatim)",
-                "video_url": "Exact URL or empty string",
-                "thumbnail_url": "Exact URL or empty string",
-                "muscle_group": "Exact value from data (including null)",
-                "Esquema": {
-                    "Descanso": "Rest time in minutes (1.5 or 2)",
-                    "Series": 4,
-                    "Detalle series": [
-                        {"Reps": "Use MV/MEV/MAV/MRV from table according to user's experience"}, 
-                        {"Reps": "Use MV/MEV/MAV/MRV from table according to user's experience"},
-                        {"Reps": "Use MV/MEV/MAV/MRV from table according to user's experience"},
-                        {"Reps": "Use MV/MEV/MAV/MRV from table according to user's experience"}
-                    ]
-                }
-            }
-            // ... more exercises
-        ]
-    }
-    // ... more days
+    [ // Week 1
+        ["exercise_id1", "exercise_id2", ...], // Day 1
+        ["exercise_id3", "exercise_id4", ...], // Day 2
+        ...
+    ],
+    [ // Week 2
+        ["exercise_id5", "exercise_id6", ...], // Day 1
+        ...
+    ],
+    ...
 ]
 
-Only output the JSON array. Do not include any additional text, explanations, or markdown.
+Each week must have the same structure (same days/categories as selected by the user). Vary the specific exercises each week for variety, but always return only the exercise IDs (field: "exercise").
+
+Do NOT include any additional text, explanations, or markdown. Only output the JSON array as described.

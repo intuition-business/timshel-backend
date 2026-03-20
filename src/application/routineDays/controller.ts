@@ -1,3 +1,57 @@
+// Función para armar el JSON final de rutina a partir de IDs de ejercicios
+export async function buildRoutineWithExerciseDetails(routineFromIA: any[]) {
+  // 1. Junta todos los IDs únicos de ejercicios
+  const allIds = Array.from(
+    new Set(
+      routineFromIA.flatMap((semana: any) =>
+        semana.dias.flatMap((dia: any) => dia.ejercicios)
+      )
+    )
+  );
+
+  if (allIds.length === 0) return [];
+
+  // 2. Consulta la base de datos por esos IDs
+  const [exerciseRows]: any = await pool.execute(
+    `SELECT * FROM exercises WHERE id IN (${allIds.map(() => '?').join(',')})`,
+    allIds
+  );
+
+  // 3. Crea un mapa id -> ejercicio
+  const exerciseMap = new Map<number, any>();
+  exerciseRows.forEach((ex: any) => exerciseMap.set(ex.id, ex));
+
+  // 4. Arma la rutina final
+  const rutinaFinal = [];
+  for (const semana of routineFromIA) {
+    for (const dia of semana.dias) {
+      const ejercicios = dia.ejercicios.map((id: number) => {
+        const ex = exerciseMap.get(id);
+        return ex
+          ? {
+            exercise_id: ex.id,
+            nombre_ejercicio: ex.exercise,
+            description: ex.description,
+            video_url: ex.video_url,
+            thumbnail_url: ex.thumbnail_url,
+            muscle_group: ex.muscle_group,
+            category: ex.category
+          }
+          : null;
+      }).filter(Boolean);
+
+      rutinaFinal.push({
+        fecha: dia.fecha,
+        nombre: dia.nombre,
+        semana: semana.semana,
+        ejercicios,
+        exercise_category: ejercicios.map((e: any) => e?.category).filter(Boolean),
+        status: "pending"
+      });
+    }
+  }
+  return rutinaFinal;
+}
 import { Request, Response, NextFunction } from "express";
 import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
@@ -189,62 +243,50 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
 
-  const response = { message: "", error: false, data: [] as Routine[] };
-
   try {
-    const [rows] = await pool.execute(
-      "SELECT day, date, start_date, end_date, status FROM user_routine WHERE user_id = ? ORDER BY date ASC",
+    // Buscar el último plan de entrenamiento generado para el usuario
+    const [planRows]: any = await pool.execute(
+      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
       [userId]
     );
 
-    const routineRows = rows as Array<{
-      day: string;
-      date: string | Date | null;
-      start_date: string | Date | null;
-      end_date: string | Date | null;
-      status: string;
-    }>;
-
-    if (routineRows.length > 0) {
-      const formattedRows = routineRows.map((row) => {
-        // Convert to strings if Date objects
-        const dateStr = row.date instanceof Date ? getLocalDateString(row.date) : row.date;
-        const startDateStr = row.start_date instanceof Date ? getLocalDateString(row.start_date) : row.start_date;
-        const endDateStr = row.end_date instanceof Date ? getLocalDateString(row.end_date) : row.end_date;
-
-        // Parse and format, with validation
-        const formatOrInvalid = (dateStr: string | null): string => {
-          if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-            return 'Invalid Date';
-          }
-          const dateObj = new Date(dateStr); // Directly parse YYYY-MM-DD
-          if (isNaN(dateObj.getTime())) {
-            return 'Invalid Date';
-          }
-          return formatDateWithSlash(dateObj);
-        };
-
-        return {
-          ...row,
-          date: formatOrInvalid(dateStr),
-          start_date: formatOrInvalid(startDateStr),
-          end_date: formatOrInvalid(endDateStr),
-          status: row.status,
-        };
-      });
-
-      response.data = formattedRows;
-      response.message = "Rutinas obtenidas exitosamente";
-      return res.status(200).json(response);
-    } else {
-      response.error = true;
-      response.message = "No se encontraron rutinas para este usuario";
-      return res.status(404).json(response);
+    if (!planRows || planRows.length === 0) {
+      return res.status(404).json({ error: true, message: "No se encontró rutina generada para este usuario." });
     }
+
+    let trainingPlan = planRows[0].training_plan;
+    if (typeof trainingPlan === "string") {
+      try {
+        trainingPlan = JSON.parse(trainingPlan);
+      } catch (e) {
+        return res.status(500).json({ error: true, message: "Error al parsear el plan de entrenamiento." });
+      }
+    }
+
+    // Si el plan ya está poblado (tiene los detalles de los ejercicios), lo devolvemos tal cual
+    // Si solo tiene IDs, lo poblamos usando buildRoutineWithExerciseDetails
+    let rutinaFinal = trainingPlan;
+    if (
+      Array.isArray(trainingPlan) &&
+      trainingPlan.length > 0 &&
+      trainingPlan[0].dias &&
+      Array.isArray(trainingPlan[0].dias) &&
+      typeof trainingPlan[0].dias[0]?.ejercicios[0] !== "object"
+    ) {
+      // Solo tiene IDs, poblar detalles
+      const { buildRoutineWithExerciseDetails } = require("./controller");
+      rutinaFinal = await buildRoutineWithExerciseDetails(trainingPlan);
+    }
+
+    return res.status(200).json({
+      error: false,
+      message: "Rutina obtenida exitosamente",
+      data: rutinaFinal,
+    });
   } catch (error) {
-    console.error("Error al obtener las rutinas del usuario:", error);
+    console.error("Error al obtener la rutina del usuario:", error);
     next(error);
-    return res.status(500).json({ message: "Error al obtener las rutinas." });
+    return res.status(500).json({ message: "Error al obtener la rutina." });
   }
 };
 
@@ -478,21 +520,29 @@ export const generateRoutinesIaBackground = async (
 
       if (!Array.isArray(chunkPlan)) continue;
 
-      // Asignar fecha y generar exercise_id si falta
+
+      // Asignar fecha
       chunkPlan.forEach((day: any, index) => {
         const dateData = chunk[index];
         day.fecha = dateData ? dateData.date : null;
-
-        if (Array.isArray(day.ejercicios)) {
-          day.ejercicios.forEach((ex: any) => {
-            if (!ex.exercise_id) {
-              ex.exercise_id = uuidv4();
-            }
-          });
-        }
       });
 
-      accumulatedPlan = [...accumulatedPlan, ...chunkPlan];
+      // Armar el JSON final con los detalles de los ejercicios para este chunk
+      const { buildRoutineWithExerciseDetails } = require("./controller");
+      const rutinaChunk = await buildRoutineWithExerciseDetails(
+        [
+          {
+            semana: chunk[0]?.semana || 1, // puedes ajustar la lógica de semana si la IA la devuelve
+            dias: chunkPlan.map((d: any) => ({
+              fecha: d.fecha,
+              nombre: d.nombre,
+              ejercicios: d.ejercicios
+            }))
+          }
+        ]
+      );
+
+      accumulatedPlan = [...accumulatedPlan, ...rutinaChunk];
 
       // Guardar plan acumulado
       if (routineId) {
