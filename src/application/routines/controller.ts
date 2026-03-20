@@ -298,6 +298,7 @@ export const generateRoutinesIa = async (
       "SELECT * FROM formulario WHERE usuario_id = ?",
       [userId]
     );
+
     let firstPlan = [];
     let routineId = null;
     let errorFirstChunk = false;
@@ -305,7 +306,6 @@ export const generateRoutinesIa = async (
       const personData = require("../routines/useCase/adapter").adapter(rows[0]);
       const readFiles = require("../routines/useCase/readFiles").readFiles;
       const getOpenAI = require("../../infrastructure/openIA").getOpenAI;
-      const { v4: uuidv4 } = require("uuid");
       // Solo generamos el primer día
       const firstDays = daysData.slice(0, 1);
       const firstPrompt = await readFiles(personData, firstDays);
@@ -320,23 +320,23 @@ export const generateRoutinesIa = async (
             parsedFirst.workout_plan ||
             (Array.isArray(parsedFirst) ? parsedFirst : [parsedFirst]);
           if (Array.isArray(firstPlan)) {
-            firstPlan.forEach((day: any, index: number) => {
-              const dateData = firstDays[index];
-              day.fecha = dateData ? dateData.date : null;
-              if (Array.isArray(day.ejercicios)) {
-                day.ejercicios.forEach((ex: any) => {
-                  if (!ex.exercise_id) {
-                    ex.exercise_id = uuidv4();
-                  }
-                });
-              }
-            });
+            // Aquí armamos el JSON final con los detalles de los ejercicios
+            const { buildRoutineWithExerciseDetails } = require("../routineDays/controller");
+            const rutinaFinal = await buildRoutineWithExerciseDetails(firstPlan);
             // Guardar el primer día en la base de datos
             const [insertResult]: any = await pool.execute(
               "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
-              [userId, JSON.stringify(firstPlan), new Date(), new Date()]
+              [userId, JSON.stringify(rutinaFinal), new Date(), new Date()]
             );
             routineId = insertResult?.insertId;
+            res.json({
+              response: rutinaFinal,
+              error: false,
+              message: "Primer bloque generado. El resto se está generando.",
+              routine_id: routineId,
+              user_id: userId,
+              isGeneratingRoutine: true
+            });
           } else {
             errorFirstChunk = true;
           }
@@ -350,15 +350,16 @@ export const generateRoutinesIa = async (
       errorFirstChunk = true;
     }
 
-
-    res.json({
-      response: errorFirstChunk ? [] : firstPlan,
-      error: errorFirstChunk,
-      message: errorFirstChunk ? "No se pudo generar el primer bloque de rutina." : "Primer bloque generado. El resto se está generando.",
-      routine_id: routineId,
-      user_id: userId,
-      isGeneratingRoutine: true
-    });
+    if (errorFirstChunk) {
+      res.json({
+        response: [],
+        error: true,
+        message: "No se pudo generar el primer bloque de rutina.",
+        routine_id: null,
+        user_id: userId,
+        isGeneratingRoutine: false
+      });
+    }
 
     // --- Generar el resto de la rutina en background ---
     // Ahora pasamos routineId para que el background agregue los bloques al mismo registro
