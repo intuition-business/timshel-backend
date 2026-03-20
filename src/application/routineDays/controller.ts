@@ -1,13 +1,15 @@
 // Función para armar el JSON final de rutina a partir de IDs de ejercicios
 export async function buildRoutineWithExerciseDetails(routineFromIA: any[]) {
   // 1. Junta todos los IDs únicos de ejercicios
-  const allIds = Array.from(
+  let allIds = Array.from(
     new Set(
       routineFromIA.flatMap((semana: any) =>
         semana.dias.flatMap((dia: any) => dia.ejercicios)
       )
     )
   );
+  // Filtrar IDs inválidos (undefined, null, string vacía, NaN)
+  allIds = allIds.filter(id => id !== undefined && id !== null && id !== '' && !(typeof id === 'number' && isNaN(id)));
 
   if (allIds.length === 0) return [];
 
