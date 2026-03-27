@@ -17,7 +17,7 @@ const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 
-const OPENAI_KEY = process.env.OPENIA_KEY || "";
+const OPENAI_KEY = process.env.OPENAI_KEY || "";
 
 export {
   DB_PASSWORD,

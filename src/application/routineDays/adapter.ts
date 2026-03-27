@@ -3,6 +3,7 @@ export const adapterRoutineDays = (data: any) => {
     return {
       day: item?.day,
       date: item?.date,
+      semana: item?.semana
     };
   });
   return result;

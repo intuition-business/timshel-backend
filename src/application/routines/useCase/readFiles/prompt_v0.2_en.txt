@@ -5,59 +5,101 @@ I will now provide you with a person's data in the following format:
 
 The user data includes the following fields from the form:
 - actividad_semanal: number of days per week the user can train
-- grupo_muscular_favorito: array of favorite muscle groups (may influence exercise selection)
+- grupo_muscular_favorito: array of favorite muscle groups (prioritize these)
 - train_experience: user's experience level (beginner, intermediate, advanced, expert)
 - Other fields: weight_kg, height_cm, age, injuries, pathologies, diseases
 
 Use these fields to determine:
-1. Which muscle groups to select for each training day, prioritizing grupo_muscular_favorito when possible.
+1. Which muscle groups to assign to each training day. Each day MUST have a DIFFERENT muscle group combination. Distribute the user's favorite groups across the days using push/pull/legs or similar split logic.
 2. How many exercises per day the user should perform, depending on train_experience and actividad_semanal.
 3. The appropriate repetitions, sets, and rest times for each exercise using the reference table provided in ###VOLUMEN###.
-4. Only select exercises from the table ###EJERCICIOS### matching the selected muscle groups.
+4. Only select exercises from the table ###EJERCICIOS### matching the selected muscle groups for that day.
 
-Additionally, the user has selected the following training days (if available):
+The user has selected the following training days:
 ###DIAS###
-The ###DIAS### section contains a list of specific training dates (in DD/MM/YYYY format) and, for each date, the assigned muscle categories (one or two categories per day). Some days may have two categories (e.g., a push day combining "PECHO" and "TRÍCEPS", or a pull day with "ESPALDA" and "BÍCEPS").
+This is a JSON array where each entry has a "date" (YYYY-MM-DD) and a "day" (weekday name in English).
+You MUST generate one training day object for EACH entry in ###DIAS###. Do NOT skip any date. Do NOT repeat the same muscle group combination for different days — each day must train different muscles.
 
 Next, I will give you the list of exercises in CSV format under ###EJERCICIOS###.
-The fields include: category, exercise, description, video_url, thumbnail_url, muscle_group ("large muscle", "small muscle", or null).
+The fields include: id (numeric — use EXACTLY this value as the exercise "id"), category, exercise, description, video_url, thumbnail_url, muscle_group ("large muscle", "small muscle", or null).
+IMPORTANT: The "id" field in your response must be the exact numeric ID from this table. Never invent or guess IDs.
 
 Additionally, you have the following reference table for training volumes per muscle group:
 ###VOLUMEN###
 
+Note: the volume table uses these muscle group names which map to the exercise categories as follows:
+- Pectoral → PECHO
+- Espalda → ESPALDA
+- Deltoides → HOMBRO
+- Bíceps → BICEPS
+- Tríceps → TRICEPS
+- Cuádriceps → CUADRICEPS
+- Isquios → ISQUITIBIALES
+- Glúteos → GLUTEO
+- Gemelos y Sóleo → PANTORRILLA
+- Core → ABDOMEN
+
 Rules for selecting exercises and schemes:
-- Select exercises ONLY from the exact category(ies) assigned to that day and the groups determined from the user data.
-- Use the reference table (###VOLUMEN###) to adjust repetitions, series, and frequency for each muscle group according to the user's level and activity.
-- To maximize variety, randomly shuffle the exercises within each category before selection. Never repeat the exact same set of exercises for the same day-of-week across weeks.
-- For repetition ranges:
-  - Use `mv`, `mev`, `mav`, or `mrv` from the reference table according to the user's experience level for each muscle group.
-- Number of exercises per day:
-  - Adjust to meet the MEV (minimum effective volume) for each muscle group per week.
-  - Limit the total number of exercises per day according to the user's train_experience and actividad_semanal.
-- Always use 4 sets per exercise (Series > 3) unless the table specifies differently.
+- Each day must have a DIFFERENT category combination from the other days. Spread the user's grupo_muscular_favorito across the available training days.
+- Select exercises ONLY from the category(ies) assigned to that specific day.
+- Use the reference table (###VOLUMEN###) to adjust repetitions, series, and frequency.
+- Always use 4 sets per exercise (Series = 4).
 - Rest time ("Descanso"): 2 minutes for large muscle categories, 1.5 minutes for small muscle.
+- Number of exercises: 3 to 5 per day depending on experience level.
 
-Consistency across weeks:
-- All training days falling on the same weekday (e.g., all Mondays) must use the EXACT same category combination.
-- Vary the specific exercises selected each week while respecting the above rules to ensure progression and variety.
+Output format:
+Return a flat JSON array where each element is one training day. The array must contain EXACTLY one object per date in ###DIAS###, in the same order.
 
-Generate the plan in strict JSON format as an array of weeks, where each week is an array of days, and each day is an array of exercise IDs (as they appear in the ###EJERCICIOS### table, field: "exercise").
+Each day object must have:
+  - "fecha": date as YYYY-MM-DD (exactly as provided in ###DIAS###)
+  - "semana": 1 (always 1, since this is the template week)
+  - "categorias": array of muscle category names for that day (must match categories in ###EJERCICIOS###)
+  - "nombre": string joining the categories with " + " (e.g., "PECHO + TRÍCEPS")
+  - "ejercicios": array of exercises, each with:
+      - "id": the exact numeric ID from the ###EJERCICIOS### table
+      - "esquema": object with:
+          - "Series": 4
+          - "Repeticiones": number
+          - "Descanso": rest time in minutes
+          - "Detalle series": array with one object per set, each with "Reps" (number) and "carga" (0 if unknown)
+  - "status": "pending"
 
-The output format must be:
+Example — if ###DIAS### has 3 dates, return exactly 3 objects:
 
 [
-    [ // Week 1
-        ["exercise_id1", "exercise_id2", ...], // Day 1
-        ["exercise_id3", "exercise_id4", ...], // Day 2
-        ...
+  {
+    "fecha": "2026-03-11",
+    "semana": 1,
+    "categorias": ["PECHO", "TRÍCEPS"],
+    "nombre": "PECHO + TRÍCEPS",
+    "ejercicios": [
+      { "id": 1, "esquema": { "Series": 4, "Repeticiones": 10, "Descanso": 2, "Detalle series": [{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0}] } },
+      { "id": 43, "esquema": { "Series": 4, "Repeticiones": 12, "Descanso": 1.5, "Detalle series": [{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0}] } }
     ],
-    [ // Week 2
-        ["exercise_id5", "exercise_id6", ...], // Day 1
-        ...
+    "status": "pending"
+  },
+  {
+    "fecha": "2026-03-16",
+    "semana": 1,
+    "categorias": ["ESPALDA", "BÍCEPS"],
+    "nombre": "ESPALDA + BÍCEPS",
+    "ejercicios": [
+      { "id": 9, "esquema": { "Series": 4, "Repeticiones": 10, "Descanso": 2, "Detalle series": [{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0}] } },
+      { "id": 35, "esquema": { "Series": 4, "Repeticiones": 12, "Descanso": 1.5, "Detalle series": [{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0}] } }
     ],
-    ...
+    "status": "pending"
+  },
+  {
+    "fecha": "2026-03-17",
+    "semana": 1,
+    "categorias": ["HOMBRO"],
+    "nombre": "HOMBRO",
+    "ejercicios": [
+      { "id": 48, "esquema": { "Series": 4, "Repeticiones": 12, "Descanso": 2, "Detalle series": [{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0}] } },
+      { "id": 52, "esquema": { "Series": 4, "Repeticiones": 15, "Descanso": 1.5, "Detalle series": [{"Reps":15,"carga":0},{"Reps":15,"carga":0},{"Reps":15,"carga":0},{"Reps":15,"carga":0}] } }
+    ],
+    "status": "pending"
+  }
 ]
 
-Each week must have the same structure (same days/categories as selected by the user). Vary the specific exercises each week for variety, but always return only the exercise IDs (field: "exercise").
-
-Do NOT include any additional text, explanations, or markdown. Only output the JSON array as described.
+Do NOT include any additional text, explanations, or markdown. Only output the JSON array. The array length must equal the number of dates in ###DIAS###.

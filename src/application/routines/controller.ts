@@ -188,13 +188,43 @@ export const getGeneratedRoutinesIa = async (
       }
     });
 
-    // Integrar estados (sin cambios)
+    // Poblar detalles de ejercicios desde la tabla exercises usando db_id
+    const allDbIds: number[] = [];
+    trainingPlan.forEach((day: any) => {
+      (day.ejercicios || []).forEach((ej: any) => {
+        if (ej.db_id) allDbIds.push(Number(ej.db_id));
+      });
+    });
+    const uniqueDbIds = [...new Set(allDbIds)].filter(id => !isNaN(id));
+    const exerciseMap = new Map<number, any>();
+    if (uniqueDbIds.length > 0) {
+      const [exRows]: any = await pool.execute(
+        `SELECT * FROM exercises WHERE id IN (${uniqueDbIds.map(() => '?').join(',')})`,
+        uniqueDbIds
+      );
+      exRows.forEach((ex: any) => exerciseMap.set(ex.id, ex));
+    }
+
+    // Integrar estados y poblar ejercicios
     trainingPlan = trainingPlan.map((day: any) => {
       const normalizedDayDate = day.fecha ? new Date(day.fecha).toISOString().split("T")[0] : null;
       const status = normalizedDayDate ? statusMap[normalizedDayDate] || "pending" : "pending";
       return {
         ...day,
-        status
+        status,
+        ejercicios: (day.ejercicios || []).map((ej: any) => {
+          const ex = exerciseMap.get(Number(ej.db_id));
+          return {
+            exercise_id: ej.exercise_id,
+            db_id: Number(ej.db_id),
+            nombre_ejercicio: ex?.exercise || "",
+            description: ex?.description || "",
+            video_url: ex?.video_url || "",
+            thumbnail_url: ex?.thumbnail_url || "",
+            muscle_group: ex?.muscle_group || null,
+            Esquema: ej.Esquema,
+          };
+        }),
       };
     });
 
@@ -277,21 +307,25 @@ export const generateRoutinesIa = async (
     }
 
 
-    // --- Generar los primeros 3 días de rutina (primer chunk) ---
-    // Obtener los días seleccionados por el usuario para el periodo actual
+    // --- Obtener todos los días del período ---
     const [userRoutineRows]: any = await pool.execute(
       "SELECT day, date FROM user_routine WHERE user_id = ? AND start_date = ? AND end_date = ? ORDER BY date",
       [userId, startDateStr, endDateStr]
     );
 
-    let daysData;
+    let daysData: any[];
     if (userRoutineRows.length === 0) {
-      // Si no hay días, usar los predeterminados
       const { generateDefaultRoutineDays } = require("../routineDays/controller");
       daysData = generateDefaultRoutineDays();
     } else {
       daysData = userRoutineRows;
     }
+
+    // Normalizar fechas a string YYYY-MM-DD
+    daysData = daysData.map((d: any) => ({
+      ...d,
+      dateStr: d.date instanceof Date ? d.date.toISOString().split('T')[0] : String(d.date).split('T')[0],
+    }));
 
     // Obtener datos del usuario
     const [rows]: any = await pool.execute(
@@ -299,73 +333,74 @@ export const generateRoutinesIa = async (
       [userId]
     );
 
-    let firstPlan = [];
-    let routineId = null;
-    let errorFirstChunk = false;
-    if (rows?.[0]) {
-      const personData = require("../routines/useCase/adapter").adapter(rows[0]);
-      const readFiles = require("../routines/useCase/readFiles").readFiles;
-      const getOpenAI = require("../../infrastructure/openIA").getOpenAI;
-      // Solo generamos el primer día
-      const firstDays = daysData.slice(0, 1);
-      const firstPrompt = await readFiles(personData, firstDays);
-      try {
-        const firstOpenAiResult = await getOpenAI(firstPrompt);
-        const firstResponse = firstOpenAiResult?.response;
-        if (firstResponse?.choices?.[0]?.message?.content) {
-          let parsedFirst = JSON.parse(firstResponse.choices[0].message.content || "");
-          firstPlan =
-            parsedFirst.workouts ||
-            parsedFirst.training_plan ||
-            parsedFirst.workout_plan ||
-            (Array.isArray(parsedFirst) ? parsedFirst : [parsedFirst]);
-          if (Array.isArray(firstPlan)) {
-            // Aquí armamos el JSON final con los detalles de los ejercicios
-            const { buildRoutineWithExerciseDetails } = require("../routineDays/controller");
-            const rutinaFinal = await buildRoutineWithExerciseDetails(firstPlan);
-            // Guardar el primer día en la base de datos
-            const [insertResult]: any = await pool.execute(
-              "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
-              [userId, JSON.stringify(rutinaFinal), new Date(), new Date()]
-            );
-            routineId = insertResult?.insertId;
-            res.json({
-              response: rutinaFinal,
-              error: false,
-              message: "Primer bloque generado. El resto se está generando.",
-              routine_id: routineId,
-              user_id: userId,
-              isGeneratingRoutine: true
-            });
-          } else {
-            errorFirstChunk = true;
-          }
-        } else {
-          errorFirstChunk = true;
-        }
-      } catch (err) {
-        errorFirstChunk = true;
+    if (!rows?.[0]) {
+      res.status(400).json({ response: [], error: true, message: "No se encontró formulario del usuario.", routine_id: null, user_id: userId });
+      return;
+    }
+
+    const personData = require("../routines/useCase/adapter").adapter(rows[0]);
+    const readFiles = require("../routines/useCase/readFiles").readFiles;
+    const getOpenAI = require("../../infrastructure/openIA").getOpenAI;
+    const { buildRoutineWithExerciseDetails, populateExerciseDetails } = require("../routineDays/controller");
+
+    // --- Generar solo el PRIMER DÍA vía IA ---
+    const firstDay = daysData[0];
+    const firstPrompt = await readFiles(personData, [{ date: firstDay.dateStr, day: firstDay.day }]);
+
+    let parsedFirstDay: any;
+    try {
+      const aiResult = await getOpenAI(firstPrompt);
+      const rawContent = aiResult?.response?.choices?.[0]?.message?.content || "";
+      console.log("[IA] rawContent primer día:", rawContent.slice(0, 300));
+      const parsed = JSON.parse(rawContent);
+
+      // Normalizar: puede venir como array, { weeks: [...] }, objeto solo, etc.
+      let days: any[];
+      if (Array.isArray(parsed)) {
+        days = parsed.flat(2);
+      } else if (parsed?.weeks) {
+        days = parsed.weeks.flat();
+      } else {
+        days = [parsed];
       }
-    } else {
-      errorFirstChunk = true;
+      parsedFirstDay = days[0];
+    } catch (err) {
+      console.error("[IA] Error generando primer día:", err);
+      res.json({ response: [], error: true, message: "No se pudo generar la rutina con IA.", routine_id: null, user_id: userId });
+      return;
     }
 
-    if (errorFirstChunk) {
-      res.json({
-        response: [],
-        error: true,
-        message: "No se pudo generar el primer bloque de rutina.",
-        routine_id: null,
-        user_id: userId,
-        isGeneratingRoutine: false
-      });
-    }
+    // Asignar fecha y semana=1 al primer día
+    parsedFirstDay.fecha = firstDay.dateStr;
+    parsedFirstDay.semana = 1;
 
-    // --- Generar el resto de la rutina en background ---
-    // Ahora pasamos routineId para que el background agregue los bloques al mismo registro
-    require("../routineDays/controller").generateRoutinesIaBackground(userId, startDateStr, endDateStr, routineId).catch((err: any) => {
-      console.error("[BG] Error en generateRoutinesIaBackground para usuario", userId, ":", err);
+    // Construir primer día (mínimo para BD)
+    const [firstDayBuilt]: any[] = await buildRoutineWithExerciseDetails([parsedFirstDay]);
+
+    // Guardar plan inicial con solo el primer día
+    const [insertResult]: any = await pool.execute(
+      "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
+      [userId, JSON.stringify([firstDayBuilt]), new Date(), new Date()]
+    );
+    const routineId = insertResult?.insertId;
+
+    // Poblar primer día para responder al usuario
+    const firstDayPopulated = await populateExerciseDetails([firstDayBuilt]);
+
+    // Responder inmediatamente con el primer día
+    res.json({
+      response: firstDayPopulated,
+      error: false,
+      message: "Primer día generado. El resto se está procesando.",
+      routine_id: routineId,
+      user_id: userId,
+      isGeneratingRoutine: true,
     });
+
+    // --- Lanzar background: genera semana template y distribuye a todas las semanas ---
+    require("../routineDays/controller")
+      .generateRoutinesIaBackground(userId, startDateStr, endDateStr, routineId)
+      .catch((err: any) => console.error("[BG] Error en background:", err));
 
   } catch (error) {
     console.error("Error en generateRoutinesIa:", error);
@@ -939,120 +974,80 @@ export const editExercise = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // 1. TOKEN (sin cambios)
     const token = req.headers["x-access-token"] as string;
-    if (!token) {
-      res.status(401).json({ error: true, message: "Token requerido" });
-      return;
-    }
+    if (!token) { res.status(401).json({ error: true, message: "Token requerido" }); return; }
 
-    let currentUserId: string;
     let targetUserId: string;
     try {
-      const decoded = verify(token, SECRET) as JwtPayload;
-      currentUserId = decoded.userId;
+      verify(token, SECRET) as JwtPayload;
       targetUserId = req.query.user_id as string;
-      if (!targetUserId) {
-        res.status(400).json({ error: true, message: "user_id requerido en query" });
-        return;
-      }
+      if (!targetUserId) { res.status(400).json({ error: true, message: "user_id requerido en query" }); return; }
     } catch {
-      res.status(401).json({ error: true, message: "Token inválido" });
+      res.status(401).json({ error: true, message: "Token inválido" }); return;
+    }
+
+    // Body: plan_id + day_rutina_id + db_id (ejercicio a modificar)
+    //       + new_db_id (opcional, nuevo ejercicio) + Esquema (opcional)
+    const { plan_id, day_rutina_id, db_id, new_db_id, Esquema } = req.body;
+
+    if (!plan_id || !day_rutina_id || !db_id) {
+      res.status(400).json({ error: true, message: "Faltan: plan_id, day_rutina_id, db_id" });
       return;
     }
 
-    // 2. BODY - Ahora usa exercise_id + fecha_rutina para precisión
-    const { rutina_id, fecha_rutina, exercise_id, updates } = req.body;
-    if (!rutina_id || !fecha_rutina || !exercise_id || !updates || Object.keys(updates).length === 0) {
-      res.status(400).json({ error: true, message: "Faltan: rutina_id, fecha_rutina, exercise_id, updates" });
-      return;
-    }
-
-    // Formatear fecha_rutina a YYYY-MM-DD
-    let formattedFecha: string;
-    try {
-      formattedFecha = convertDate(fecha_rutina);  // Asume tu función convertDate
-    } catch {
-      res.status(400).json({ error: true, message: "Formato de fecha_rutina inválido (usa DD/MM/YYYY)" });
-      return;
-    }
-
-    // 3. OBTENER PLAN + VALIDAR rutina_id (sin cambios)
+    // Obtener plan
     const [planRows]: any = await pool.execute(
-      `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND id = ?`,
-      [targetUserId, rutina_id]
+      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND id = ?",
+      [targetUserId, plan_id]
     );
-
-    if (planRows.length === 0) {
-      res.status(404).json({ error: true, message: "Rutina no encontrada" });
-      return;
-    }
+    if (planRows.length === 0) { res.status(404).json({ error: true, message: "Plan no encontrado" }); return; }
 
     let trainingPlan: any[];
     try {
       trainingPlan = typeof planRows[0].training_plan === "string"
         ? JSON.parse(planRows[0].training_plan)
         : planRows[0].training_plan;
-    } catch {
-      res.status(500).json({ error: true, message: "JSON inválido" });
-      return;
+    } catch { res.status(500).json({ error: true, message: "JSON inválido" }); return; }
+
+    // Validar new_db_id si viene
+    if (new_db_id !== undefined) {
+      const [exRows]: any = await pool.execute("SELECT id FROM exercises WHERE id = ? LIMIT 1", [new_db_id]);
+      if (exRows.length === 0) { res.status(404).json({ error: true, message: "Ejercicio nuevo no encontrado" }); return; }
     }
 
-    // 4. BUSCAR POR FECHA + EXERCISE_ID Y ACTUALIZAR
-    let found = false;
-    let updatedExercise: any = null;
-
+    // Actualizar TODOS los días con ese day_rutina_id
+    let updatedCount = 0;
     for (const day of trainingPlan) {
-      const dayFecha = new Date(day.fecha).toISOString().split("T")[0];
-      if (dayFecha === formattedFecha) {
-        const exerciseIndex = day.ejercicios.findIndex((e: any) => e.exercise_id === exercise_id);
-
-        if (exerciseIndex !== -1) {
-          const exercise = day.ejercicios[exerciseIndex];
-
-          // APLICAR CAMBIOS - Ajustado para exercise_name
-          if (updates.exercise_name !== undefined) exercise.nombre_ejercicio = updates.exercise_name;  // ← CORREGIDO: usa "exercise_name" en updates
-          if (updates.Series !== undefined) exercise.Esquema.Series = updates.Series;
-          if (updates.Descanso !== undefined) exercise.Esquema.Descanso = updates.Descanso;
-          if (updates["Detalle series"]) exercise.Esquema["Detalle series"] = updates["Detalle series"];
-          if (updates.description !== undefined) exercise.description = updates.description;
-          if (updates.video_url !== undefined) exercise.video_url = updates.video_url;
-          if (updates.thumbnail_url !== undefined) exercise.thumbnail_url = updates.thumbnail_url;
-
-          updatedExercise = {
-            fecha_rutina: formattedFecha,
-            routine_name: day.nombre,
-            exercise_id: exercise.exercise_id,
-            exercise_name: exercise.nombre_ejercicio,  // Devuelve el nuevo nombre si cambió
-          };
-          found = true;
-          break;
+      if (day.rutina_id !== day_rutina_id) continue;
+      for (const ej of day.ejercicios) {
+        if (Number(ej.db_id) !== Number(db_id)) continue;
+        if (new_db_id !== undefined) ej.db_id = Number(new_db_id);
+        if (Esquema) {
+          if (Esquema.Series !== undefined) ej.Esquema.Series = Esquema.Series;
+          if (Esquema.Descanso !== undefined) ej.Esquema.Descanso = Esquema.Descanso;
+          if (Esquema["Detalle series"]) ej.Esquema["Detalle series"] = Esquema["Detalle series"];
         }
+        updatedCount++;
       }
     }
 
-    if (!found) {
-      res.status(404).json({ error: true, message: "Ejercicio no encontrado en la fecha/rutina" });
+    if (updatedCount === 0) {
+      res.status(404).json({ error: true, message: "Ejercicio no encontrado en ningún día con ese day_rutina_id" });
       return;
     }
 
-    // 5. GUARDAR (sin cambios)
     await pool.execute(
-      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
-      [JSON.stringify(trainingPlan), rutina_id]
+      "UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?",
+      [JSON.stringify(trainingPlan), plan_id]
     );
 
     res.json({
       error: false,
-      message: "Ejercicio actualizado exitosamente",
-      response: {
-        user_id: targetUserId,
-        rutina_id,
-        ...updatedExercise,
-      },
+      message: `Ejercicio actualizado en ${updatedCount} días (todos los que comparten day_rutina_id)`,
+      response: { user_id: targetUserId, plan_id, day_rutina_id, db_id, new_db_id },
     });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error editExercise:", error);
     next(error);
   }
 };

@@ -1,54 +1,60 @@
 // Función para armar el JSON final de rutina a partir de IDs de ejercicios
 export async function buildRoutineWithExerciseDetails(routineFromIA: any[]) {
-  // 1. Junta todos los IDs únicos de ejercicios
-  let allIds = Array.from(
-    new Set(
-      routineFromIA.flatMap((semana: any) =>
-        semana.dias.flatMap((dia: any) => dia.ejercicios)
-      )
-    )
-  );
-  // Filtrar IDs inválidos (undefined, null, string vacía, NaN)
-  allIds = allIds.filter(id => id !== undefined && id !== null && id !== '' && !(typeof id === 'number' && isNaN(id)));
+  // Normalización: siempre trabajar con array de semanas (array de arrays de días)
+  let normalized: any[][];
 
-  if (allIds.length === 0) return [];
+  if (Array.isArray(routineFromIA)) {
+    if (routineFromIA.length > 0 && Array.isArray(routineFromIA[0])) {
+      // Ya es array de semanas
+      normalized = routineFromIA;
+    } else if (routineFromIA.length > 0 && typeof routineFromIA[0] === 'object' && routineFromIA[0] !== null && !Array.isArray(routineFromIA[0])) {
+      // Es array de días
+      normalized = [routineFromIA];
+    } else {
+      normalized = [];
+    }
+  } else if (typeof routineFromIA === 'object' && routineFromIA !== null) {
+    // Es un solo objeto día
+    normalized = [[routineFromIA]];
+  } else {
+    normalized = [];
+  }
 
-  // 2. Consulta la base de datos por esos IDs
-  const [exerciseRows]: any = await pool.execute(
-    `SELECT * FROM exercises WHERE id IN (${allIds.map(() => '?').join(',')})`,
-    allIds
-  );
-
-  // 3. Crea un mapa id -> ejercicio
-  const exerciseMap = new Map<number, any>();
-  exerciseRows.forEach((ex: any) => exerciseMap.set(ex.id, ex));
-
-  // 4. Arma la rutina final
-  const rutinaFinal = [];
-  for (const semana of routineFromIA) {
-    for (const dia of semana.dias) {
-      const ejercicios = dia.ejercicios.map((id: number) => {
-        const ex = exerciseMap.get(id);
-        return ex
-          ? {
-            exercise_id: ex.id,
-            nombre_ejercicio: ex.exercise,
-            description: ex.description,
-            video_url: ex.video_url,
-            thumbnail_url: ex.thumbnail_url,
-            muscle_group: ex.muscle_group,
-            category: ex.category
-          }
-          : null;
-      }).filter(Boolean);
-
+  // 3. Arma la rutina minimal para guardar en BD (solo db_id + exercise_id + Esquema)
+  const rutinaFinal: any[] = [];
+  for (let i = 0; i < normalized.length; i++) {
+    const semanaArr = normalized[i];
+    for (const dia of semanaArr) {
+      const ejercicios = (dia.ejercicios || []).map((ej: any) => {
+        // Normalizar esquema: quitar 'carga' de Detalle series, dejar solo Reps
+        let esquema = ej.esquema || ej.Esquema || {};
+        if (esquema && Array.isArray(esquema['Detalle series'])) {
+          esquema = {
+            ...esquema,
+            ['Detalle series']: esquema['Detalle series'].map((serie: any) => ({ Reps: serie.Reps })),
+          };
+        }
+        return {
+          exercise_id: ej.exercise_id || uuidv4(), // UUID único por instancia (para editar/identificar)
+          db_id: typeof ej.id === 'number' ? ej.id : Number(ej.id), // ID numérico de la tabla exercises
+          Esquema: esquema,
+        };
+      });
+      // Derivar nombre del día a partir de categorias si no existe
+      let nombre = dia.nombre;
+      if (!nombre && (dia.categorias || dia.exercise_category)) {
+        const cats = dia.categorias || dia.exercise_category;
+        if (Array.isArray(cats)) {
+          nombre = cats.join(' + ');
+        }
+      }
       rutinaFinal.push({
         fecha: dia.fecha,
-        nombre: dia.nombre,
-        semana: semana.semana,
+        semana: dia.semana || i + 1,
+        nombre,
         ejercicios,
-        exercise_category: ejercicios.map((e: any) => e?.category).filter(Boolean),
-        status: "pending"
+        exercise_category: dia.exercise_category || dia.categorias || [],
+        status: dia.status || 'pending',
       });
     }
   }
@@ -413,6 +419,74 @@ function generateDefaultRoutineDays() {
 }
 
 
+// Popula detalles de ejercicios desde la tabla exercises (para responder al cliente)
+export async function populateExerciseDetails(plan: any[]): Promise<any[]> {
+  const allDbIds: number[] = [];
+  plan.forEach((day: any) => {
+    (day.ejercicios || []).forEach((ej: any) => {
+      if (ej.db_id) allDbIds.push(Number(ej.db_id));
+    });
+  });
+  const uniqueIds = [...new Set(allDbIds)].filter(id => !isNaN(id));
+  const exerciseMap = new Map<number, any>();
+  if (uniqueIds.length > 0) {
+    const [exRows]: any = await pool.execute(
+      `SELECT * FROM exercises WHERE id IN (${uniqueIds.map(() => '?').join(',')})`,
+      uniqueIds
+    );
+    exRows.forEach((ex: any) => exerciseMap.set(ex.id, ex));
+  }
+  return plan.map((day: any) => ({
+    ...day,
+    ejercicios: (day.ejercicios || []).map((ej: any) => {
+      const ex = exerciseMap.get(Number(ej.db_id));
+      return {
+        exercise_id: ej.exercise_id,
+        nombre_ejercicio: ex?.exercise || "",
+        description: ex?.description || "",
+        video_url: ex?.video_url || "",
+        thumbnail_url: ex?.thumbnail_url || "",
+        muscle_group: ex?.muscle_group || null,
+        Esquema: ej.Esquema,
+      };
+    }),
+  }));
+}
+
+// Distribuye grupos musculares del usuario en splits diarios (push/pull/shoulders/legs/other)
+function buildDaySplit(favs: string[], numDays: number): string[][] {
+  // Push: PECHO + TRÍCEPS (sin HOMBRO, va aparte)
+  const push: string[] = [];
+  if (favs.includes('PECHO')) push.push('PECHO');
+  if (favs.includes('PECHO') || favs.includes('TRICEPS')) push.push('TRICEPS');
+
+  // Pull: ESPALDA + BÍCEPS
+  const pull: string[] = [];
+  if (favs.includes('ESPALDA')) pull.push('ESPALDA');
+  if (favs.includes('ESPALDA') || favs.includes('BICEPS')) pull.push('BICEPS');
+
+  // Shoulders: HOMBRO solo
+  const shoulders: string[] = favs.includes('HOMBRO') ? ['HOMBRO'] : [];
+
+  // Legs
+  const legs = favs.filter(g => ['CUADRICEPS', 'ISQUITIBIALES', 'GLUTEO', 'PANTORRILLA'].includes(g));
+
+  // Core
+  const core = favs.filter(g => g === 'ABDOMEN');
+
+  // Construir lista de splits en orden push → pull → shoulders → legs → core
+  const available: string[][] = [];
+  if (push.length > 0) available.push(push);
+  if (pull.length > 0) available.push(pull);
+  if (shoulders.length > 0) available.push(shoulders);
+  if (legs.length > 0) available.push(legs);
+  if (core.length > 0) available.push(core);
+  if (available.length === 0) available.push(['PECHO', 'TRICEPS'], ['ESPALDA', 'BICEPS'], ['HOMBRO']);
+
+  // Asignar un split diferente a cada día (ciclar si hay más días que splits)
+  return Array.from({ length: numDays }, (_, i) => available[i % available.length]);
+}
+
 export const generateRoutinesIaBackground = async (
   userId: number,
   startDate: string,
@@ -420,184 +494,134 @@ export const generateRoutinesIaBackground = async (
   routineId?: number
 ): Promise<{ error: boolean; message: string; routine_id?: number; isGeneratingRoutine?: boolean }> => {
   try {
-    const CHUNK_SIZE = 1;
-    const OPENAI_TIMEOUT_MS = 300000;
-
-    // Obtener los días seleccionados por el usuario (solo day y date)
+    // Obtener todos los días del período
     const [userRoutineRows]: any = await pool.execute(
       "SELECT day, date FROM user_routine WHERE user_id = ? AND start_date = ? AND end_date = ? ORDER BY date",
       [userId, startDate, endDate]
     );
 
-    let daysData: any[] = [];
-    if (!userRoutineRows || userRoutineRows.length === 0) {
-      daysData = generateDefaultRoutineDays();
-    } else {
-      daysData = userRoutineRows;
+    let daysData: any[] = userRoutineRows.length > 0 ? userRoutineRows : generateDefaultRoutineDays();
+
+    // Normalizar fechas a string YYYY-MM-DD
+    daysData = daysData.map((d: any) => ({
+      ...d,
+      dateStr: d.date instanceof Date ? d.date.toISOString().split('T')[0] : String(d.date).split('T')[0],
+    }));
+
+    // Agrupar en semanas de 7 días desde start_date
+    const startMs = new Date(startDate + 'T12:00:00Z').getTime();
+    const weekMap = new Map<number, any[]>();
+    for (const day of daysData) {
+      const dayMs = new Date(day.dateStr + 'T12:00:00Z').getTime();
+      const weekNum = Math.floor((dayMs - startMs) / (7 * 24 * 60 * 60 * 1000)) + 1;
+      if (!weekMap.has(weekNum)) weekMap.set(weekNum, []);
+      weekMap.get(weekNum)!.push(day);
     }
+    const weeks = [...weekMap.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([semana, days]) => ({ semana, days }));
 
-    // Obtener datos del usuario desde la tabla 'formulario'
-    const [rows]: any = await pool.execute(
-      "SELECT * FROM formulario WHERE usuario_id = ?",
-      [userId]
-    );
-
-    if (!rows?.[0]) {
-      return { error: true, message: "No se encontró formulario para el usuario." };
-    }
-
+    // Obtener datos del usuario
+    const [rows]: any = await pool.execute("SELECT * FROM formulario WHERE usuario_id = ?", [userId]);
+    if (!rows?.[0]) return { error: true, message: "No se encontró formulario para el usuario." };
     const personData = adapter(rows[0]);
 
-    // Recuperar plan existente si routineId está definido
-    let accumulatedPlan: any[] = [];
-    if (routineId) {
-      const [existingPlanRows]: any = await pool.execute(
-        "SELECT training_plan FROM user_training_plans WHERE id = ? LIMIT 1",
-        [routineId]
-      );
+    // Usar la semana con más días como template para la IA
+    const templateWeek = weeks.reduce((max, w) => w.days.length >= max.days.length ? w : max, weeks[0]);
 
-      if (existingPlanRows?.[0]?.training_plan) {
-        accumulatedPlan =
-          typeof existingPlanRows[0].training_plan === "string"
-            ? JSON.parse(existingPlanRows[0].training_plan)
-            : existingPlanRows[0].training_plan;
-      }
-    }
+    // Pre-asignar categorías distintas a cada día del template (push/pull/other)
+    const favs: string[] = Array.isArray(personData.grupo_muscular_favorito) ? personData.grupo_muscular_favorito : [];
+    const splitGroups = buildDaySplit(favs, templateWeek.days.length);
 
-    // Procesar solo los días restantes
-    const remainingDays = daysData.slice(accumulatedPlan.length);
+    // UUID fijo por día-de-semana: todos los lunes comparten el mismo rutina_id, etc.
+    const dayTemplateIds = new Map<string, string>();
+    templateWeek.days.forEach((wd: any) => dayTemplateIds.set(wd.day, uuidv4()));
 
-    for (let i = 0; i < remainingDays.length; i += CHUNK_SIZE) {
-      const chunk = remainingDays.slice(i, i + CHUNK_SIZE);
-
-      // Filtrar ejercicios usando solo el day como referencia de categoría
-      const categories = [...new Set(chunk.map((d: any) => d.day).filter(Boolean))];
-      const placeholders = categories.map(() => "?").join(",");
-      const [exerciseRows] = await pool.execute(
-        `SELECT category, exercise, description, video_url, thumbnail_url, muscle_group
-         FROM exercises
-         WHERE category IN (${placeholders})
-         ORDER BY category ASC, exercise ASC`,
-        categories
-      );
-
-      // Convertir ejercicios a CSV
-      let ejerciciosCsv = "Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL;muscle_group\n";
-      (exerciseRows as any[]).forEach((row) => {
-        const desc = row.description.replace(/"/g, '""').replace(/\n/g, ' ');
-        const videoUrl = row.video_url ?? '';
-        const thumbnailUrl = row.thumbnail_url ?? '';
-        const muscleGroup = row.muscle_group ?? '';
-        ejerciciosCsv += `${row.category};${row.exercise};"${desc}";${videoUrl};${thumbnailUrl};${muscleGroup}\n`;
-      });
-
-      // Construir prompt para OpenAI
-      const chunkPrompt = await readFiles(personData, chunk);
-
-      // LOG: Mostrar datos enviados a la IA
-      console.log('--- Prompt enviado a la IA (chunk', i / CHUNK_SIZE + 1, ') ---');
-      console.log(chunkPrompt);
-      console.log('--- Datos personData ---');
-      console.log(JSON.stringify(personData, null, 2));
-      console.log('--- Datos chunk (daysData) ---');
-      console.log(JSON.stringify(chunk, null, 2));
-
-      const chunkOpenAiResult = await withTimeout(
-        getOpenAI(chunkPrompt),
-        OPENAI_TIMEOUT_MS,
-        `Timeout OpenAI en chunk ${i / CHUNK_SIZE + 1} para user ${userId}`
-      );
-
-      const rawChunk = chunkOpenAiResult?.response?.choices?.[0]?.message?.content || "";
-      if (!rawChunk) {
-        console.warn(`Chunk sin contenido para user ${userId}, bloque ${i / CHUNK_SIZE + 1}`);
-        continue;
-      }
-
-      let parsedChunk;
+    // Generar ejercicios: UNA llamada por día con la categoría pre-asignada
+    const dayOfWeekMap = new Map<string, any>();
+    for (let i = 0; i < templateWeek.days.length; i++) {
+      const wd = templateWeek.days[i];
+      const cats = splitGroups[i] || splitGroups[0];
+      const dayInput = [{ date: wd.dateStr, day: wd.day, categorias: cats }];
+      const dayPrompt = await readFiles({ ...personData, grupo_muscular_favorito: cats }, dayInput);
       try {
-        parsedChunk = JSON.parse(rawChunk);
+        const aiResult = await withTimeout(
+          getOpenAI(dayPrompt),
+          OPENAI_TIMEOUT_MS,
+          `Timeout OpenAI background user ${userId} day ${wd.day}`
+        );
+        const rawContent = aiResult?.response?.choices?.[0]?.message?.content || "";
+        if (!rawContent) { console.error(`[BG] Sin contenido para ${wd.day}`); continue; }
+        const parsed = JSON.parse(rawContent);
+        let parsedDay: any = Array.isArray(parsed) ? parsed.flat(2)[0] : parsed?.weeks ? parsed.weeks.flat()[0] : parsed;
+        if (!parsedDay) continue;
+        parsedDay.fecha = wd.dateStr;
+        parsedDay.semana = 1;
+        if (!parsedDay.categorias || parsedDay.categorias.length === 0) parsedDay.categorias = cats;
+        if (!parsedDay.nombre) parsedDay.nombre = cats.join(' + ');
+        const [builtDay] = await buildRoutineWithExerciseDetails([parsedDay]);
+        if (builtDay) {
+          // Guardar con el rutina_id fijo para este día de semana
+          dayOfWeekMap.set(wd.day, { ...builtDay, rutina_id: dayTemplateIds.get(wd.day) });
+          console.log(`[BG] ${wd.day} → ${builtDay.nombre} (${builtDay.ejercicios?.length} ejercicios)`);
+        }
       } catch (err) {
-        console.error("Error parseando chunk:", err);
-        continue;
+        console.error(`[BG] Error generando ${wd.day}:`, err);
       }
+    }
+    console.log("[BG] dayOfWeekMap keys:", [...dayOfWeekMap.keys()]);
 
-      let chunkPlan =
-        parsedChunk.workouts ||
-        parsedChunk.training_plan ||
-        parsedChunk.workout_plan ||
-        (Array.isArray(parsedChunk) ? parsedChunk : [parsedChunk]);
-
-      if (!Array.isArray(chunkPlan)) continue;
-
-
-      // Asignar fecha
-      chunkPlan.forEach((day: any, index) => {
-        const dateData = chunk[index];
-        day.fecha = dateData ? dateData.date : null;
-      });
-
-      // Armar el JSON final con los detalles de los ejercicios para este chunk
-      const { buildRoutineWithExerciseDetails } = require("./controller");
-      const rutinaChunk = await buildRoutineWithExerciseDetails(
-        [
-          {
-            semana: chunk[0]?.semana || 1, // puedes ajustar la lógica de semana si la IA la devuelve
-            dias: chunkPlan.map((d: any) => ({
-              fecha: d.fecha,
-              nombre: d.nombre,
-              ejercicios: d.ejercicios
-            }))
-          }
-        ]
-      );
-
-      accumulatedPlan = [...accumulatedPlan, ...rutinaChunk];
-
-      // Guardar plan acumulado
-      if (routineId) {
-        await pool.execute(
-          "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-          [JSON.stringify(accumulatedPlan), routineId]
-        );
-      } else {
-        const [insertResult]: any = await pool.execute(
-          "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
-          [userId, JSON.stringify(accumulatedPlan), new Date(), new Date()]
-        );
-        routineId = insertResult?.insertId;
+    // Construir plan completo: distribuir template a todas las semanas
+    const fullPlan: any[] = [];
+    const MAX_WEEKS = 4;
+    for (const { semana, days } of weeks) {
+      const semanaFinal = Math.min(semana, MAX_WEEKS); // días sobrantes van a semana 4
+      for (const wd of days) {
+        const templateDay = dayOfWeekMap.get(wd.day);
+        if (!templateDay) continue;
+        fullPlan.push({
+          ...templateDay,
+          fecha: wd.dateStr,
+          semana: semanaFinal,
+          ejercicios: templateDay.ejercicios.map((ej: any) => ({
+            ...ej,
+            exercise_id: uuidv4(),
+          })),
+        });
       }
-
-      await sleep(100); // Pequeña pausa entre chunks
     }
 
-    console.log("Rutina completa generada y guardada para user_id:", userId);
-    return { error: false, message: "Documento generado.", routine_id: routineId, isGeneratingRoutine: false };
+    // Guardar plan completo en BD
+    if (routineId) {
+      await pool.execute(
+        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [JSON.stringify(fullPlan), routineId]
+      );
+    } else {
+      const [insertResult]: any = await pool.execute(
+        "INSERT INTO user_training_plans (user_id, training_plan, created_at, updated_at) VALUES (?, ?, ?, ?)",
+        [userId, JSON.stringify(fullPlan), new Date(), new Date()]
+      );
+      routineId = insertResult?.insertId;
+    }
+
+    console.log(`[BG] Rutina completa (${fullPlan.length} días) guardada para user_id: ${userId}`);
+    return { error: false, message: "Rutina generada.", routine_id: routineId, isGeneratingRoutine: false };
   } catch (error) {
-    console.error("Error al generar la rutina con IA en background:", error);
-    return { error: true, message: "Ocurrió un error al generar la rutina con IA." };
+    console.error("[BG] Error generando rutina:", error);
+    return { error: true, message: "Error al generar rutina en background." };
   }
 };
-
-// Función principal para renovar rutinas vencidas
+// Exportar la función principal para renovación de rutinas
 export const renewRoutines = async () => {
-  if (isRenewRoutinesRunning) {
-    console.log("renewRoutines ya está en ejecución. Se omite este ciclo.");
-    return;
-  }
-
-  isRenewRoutinesRunning = true;
-  console.time('renewRoutines'); // Medición de tiempo total para optimización y depuración
-  const currentDate = new Date(); // Para producción; para pruebas: new Date(2025, 8, 9); // Sept 09, 2025 (mes 8 es septiembre)
-  const currentDateStr = getLocalDateString(currentDate);
-
   try {
     // Obtener periodos únicos que vencen exactamente hoy (DISTINCT para evitar duplicados)
+    const todayStr = getLocalDateString(new Date());
     const [periodRows] = await pool.execute(
       `SELECT DISTINCT user_id, start_date, end_date 
        FROM user_routine 
        WHERE end_date = ?`,
-      [currentDateStr]
+      [todayStr]
     );
 
     const periods = periodRows as Array<{
@@ -609,7 +633,7 @@ export const renewRoutines = async () => {
     if (periods.length === 0) {
       console.log("No hay rutinas que vencen hoy.");
       console.timeEnd('renewRoutines'); // Fin de medición si no hay nada que procesar
-      return;
+      return { error: false, message: "No hay rutinas que renovar hoy." };
     }
 
     for (const period of periods) {
@@ -664,7 +688,7 @@ export const renewRoutines = async () => {
           selectedDays,
           newStartDate,
           newEndDate,
-          currentDateStr
+          period.end_date
         );
 
         if (newRoutineData.length === 0) {

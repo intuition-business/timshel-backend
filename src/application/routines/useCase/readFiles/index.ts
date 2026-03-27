@@ -24,12 +24,36 @@ export const readFiles = async (personData: any, daysData: any) => {
   // Leemos la plantilla
   const promptTemplate = await fs.readFile(pathFilePrompt, "utf-8");
 
-  // Consultamos los ejercicios en la base de datos
-  const [exerciseRowsRaw] = await pool.execute(
-    "SELECT category, exercise, description, video_url, thumbnail_url, muscle_group FROM exercises ORDER BY category ASC, exercise ASC"
-  );
+  // Filtrar ejercicios solo a las categorías que el usuario entrena
+  const userCategories: string[] = Array.isArray(personData.grupo_muscular_favorito) && personData.grupo_muscular_favorito.length > 0
+    ? personData.grupo_muscular_favorito
+    : [];
+
+  // Categorías complementarias según split (push/pull): si tiene PECHO incluir TRÍCEPS, si tiene ESPALDA incluir BÍCEPS
+  const complementMap: Record<string, string[]> = {
+    'PECHO': ['TRICEPS'],
+    'TRICEPS': ['PECHO'],
+    'ESPALDA': ['BICEPS'],
+    'BICEPS': ['ESPALDA'],
+  };
+  const allCategories = new Set<string>(userCategories);
+  userCategories.forEach(cat => {
+    (complementMap[cat] || []).forEach(c => allCategories.add(c));
+  });
+
+  let exerciseQuery = "SELECT id, category, exercise, description, video_url, thumbnail_url, muscle_group FROM exercises";
+  let exerciseParams: any[] = [];
+  if (allCategories.size > 0) {
+    const placeholders = [...allCategories].map(() => '?').join(',');
+    exerciseQuery += ` WHERE category IN (${placeholders})`;
+    exerciseParams = [...allCategories];
+  }
+  exerciseQuery += " ORDER BY category ASC, exercise ASC";
+
+  const [exerciseRowsRaw] = await pool.execute(exerciseQuery, exerciseParams);
 
   const exerciseRows = exerciseRowsRaw as Array<{
+    id: number;
     category: string;
     exercise: string;
     description: string;
@@ -38,14 +62,14 @@ export const readFiles = async (personData: any, daysData: any) => {
     muscle_group: string;
   }>;
 
-  // Formateamos los ejercicios como CSV
-  let ejerciciosCsv = "Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL;Muscle_Group\n";
+  // Formateamos los ejercicios como CSV (id incluido para que la IA lo use)
+  let ejerciciosCsv = "ID;Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL;Muscle_Group\n";
   exerciseRows.forEach((row) => {
     const desc = row.description.replace(/"/g, '""').replace(/\n/g, ' ');
     const videoUrl = row.video_url ?? '';
     const thumbnailUrl = row.thumbnail_url ?? '';
     const muscleGroup = row.muscle_group ?? '';
-    ejerciciosCsv += `${row.category};${row.exercise};"${desc}";${videoUrl};${thumbnailUrl};${muscleGroup}\n`;
+    ejerciciosCsv += `${row.id};${row.category};${row.exercise};"${desc}";${videoUrl};${thumbnailUrl};${muscleGroup}\n`;
   });
 
   // Consultamos la tabla de referencia de entrenamiento
