@@ -614,6 +614,12 @@ export const generateRoutinesIaBackground = async (
 };
 // Exportar la función principal para renovación de rutinas
 export const renewRoutines = async () => {
+  if (isRenewRoutinesRunning) {
+    console.log("renewRoutines ya está corriendo, se omite esta ejecución.");
+    return;
+  }
+  isRenewRoutinesRunning = true;
+  console.time('renewRoutines');
   try {
     // Obtener periodos únicos que vencen exactamente hoy (DISTINCT para evitar duplicados)
     const todayStr = getLocalDateString(new Date());
@@ -640,14 +646,14 @@ export const renewRoutines = async () => {
       try {
         const userId = period.user_id;
 
-        // Paso 1: Actualizar 'pending' a 'failed' en los días anteriores (todo el periodo vencido)
+        // Paso 1: Actualizar 'pending' a 'failed' en TODOS los días anteriores a hoy (cualquier periodo)
         await pool.execute(
-          `UPDATE user_routine 
-           SET status = 'failed' 
-           WHERE user_id = ? AND start_date = ? AND end_date = ? AND status = 'pending'`,
-          [userId, period.start_date, period.end_date]
+          `UPDATE user_routine
+           SET status = 'failed'
+           WHERE user_id = ? AND date < ? AND status = 'pending'`,
+          [userId, todayStr]
         );
-        console.log(`Actualizados a 'failed' los días pendientes para user ${userId} en periodo ${period.start_date} - ${period.end_date}`);
+        console.log(`Actualizados a 'failed' todos los días pendientes anteriores a hoy para user ${userId}`);
 
         // Paso 2: Extraer el patrón de días únicos (e.g., ['Friday', 'Monday'])
         const [dayRows] = await pool.execute(
