@@ -106,7 +106,7 @@ export const generateLightRoutine = async (
 
     // Paso 4: Obtener la rutina original de 'user_training_plans'
     const [trainingPlanRows]: any = await pool.execute(
-      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ?",
+      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ? ORDER BY id DESC LIMIT 1",
       [userId]
     );
     console.log('Paso 4: Datos de user_training_plans:', JSON.stringify(trainingPlanRows, null, 2));
@@ -307,8 +307,8 @@ export const generateLightRoutine = async (
     // Paso 9: Actualizar en BD solo si hubo ajustes
     if (updated) {
       await pool.execute(
-        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
-        [JSON.stringify(newTrainingPlan), userId]
+        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [JSON.stringify(newTrainingPlan), trainingPlanRows[0].id]
       );
       console.log('Paso 9: user_training_plans actualizado con nueva rutina');
     } else {
