@@ -37,7 +37,8 @@ export const uploadChatMediaController = async (
         }
 
         const filePath = req.file.path;
-        const isVideo = req.file.mimetype.startsWith("video/");
+        const isAudio = req.file.mimetype.startsWith("audio/");
+        const isVideo = !isAudio && req.file.mimetype.startsWith("video/");
         const isImage = req.file.mimetype.startsWith("image/");
         let mediaUrl: string;
         let thumbnailUrl: string | null = null;
