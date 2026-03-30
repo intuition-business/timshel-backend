@@ -23,6 +23,7 @@ const title = Joi.string()
         'any.required': 'El título es requerido'
     });
 
+
 const price_cop = Joi.number()
     .min(0)
     .precision(2)
@@ -31,6 +32,16 @@ const price_cop = Joi.number()
         'number.base': 'El precio en COP debe ser un número',
         'number.min': 'El precio no puede ser negativo',
         'any.required': 'El precio es requerido'
+    });
+
+const generations_allowed = Joi.number()
+    .integer()
+    .min(0)
+    .required()
+    .messages({
+        'number.base': 'El campo generations_allowed debe ser un número entero',
+        'number.min': 'El campo generations_allowed no puede ser negativo',
+        'any.required': 'El campo generations_allowed es requerido'
     });
 
 const description_items = Joi.array()
@@ -69,6 +80,7 @@ const new_title = Joi.string()
         'string.max': 'El nuevo título no puede exceder 100 caracteres'
     });
 
+
 const new_price_cop = Joi.number()
     .min(0)
     .precision(2)
@@ -76,6 +88,15 @@ const new_price_cop = Joi.number()
     .messages({
         'number.base': 'El nuevo precio en COP debe ser un número',
         'number.min': 'El nuevo precio no puede ser negativo'
+    });
+
+const new_generations_allowed = Joi.number()
+    .integer()
+    .min(0)
+    .optional()
+    .messages({
+        'number.base': 'El nuevo generations_allowed debe ser un número entero',
+        'number.min': 'El nuevo generations_allowed no puede ser negativo'
     });
 
 const new_description_items = Joi.array()
@@ -107,7 +128,8 @@ export const createPlanDto = Joi.object({
     price_cop,
     description_items,
     description,
-    activo
+    activo,
+    generations_allowed
 }).unknown(false);
 
 export const getPlanDto = Joi.object({
@@ -119,9 +141,10 @@ export const updatePlanDto = Joi.object({
     new_price_cop,
     new_description_items,
     new_description,
-    new_activo
+    new_activo,
+    new_generations_allowed
 })
-    .or('new_title', 'new_price_cop', 'new_description_items', 'new_description', 'new_activo')
+    .or('new_title', 'new_price_cop', 'new_description_items', 'new_description', 'new_activo', 'new_generations_allowed')
     .messages({
         'object.missing': 'Debe proporcionar al menos un campo para actualizar'
     })

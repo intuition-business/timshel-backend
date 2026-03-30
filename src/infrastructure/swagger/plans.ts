@@ -22,6 +22,7 @@ const router = Router();
  *         - title
  *         - price_cop
  *         - description_items
+ *         - generations_allowed
  *       properties:
  *         title:
  *           type: string
@@ -37,6 +38,10 @@ const router = Router();
  *             type: string
  *           description: "Lista de elementos que describen el plan"
  *           example: ["Acceso a contenido básico", "Soporte 24/7"]
+ *         generations_allowed:
+ *           type: integer
+ *           description: "Cantidad de generaciones permitidas para el plan"
+ *           example: 5
  *
  *     create-plan-response:
  *       type: object
@@ -55,12 +60,16 @@ const router = Router();
  *               type: array
  *               items:
  *                 type: string
+ *             generations_allowed:
+ *               type: integer
+ *               description: "Cantidad de generaciones permitidas para el plan"
  *       example:
  *         plan:
  *           id: 1
  *           title: "Plan Básico"
  *           price_cop: 100000
  *           description_items: ["Acceso a contenido básico", "Soporte 24/7"]
+ *           generations_allowed: 5
  *
  *     get-plans-response:
  *       type: object
@@ -90,6 +99,9 @@ const router = Router();
  *                 type: array
  *                 items:
  *                   type: string
+ *               generations_allowed:
+ *                 type: integer
+ *                 description: "Cantidad de generaciones permitidas para el plan"
  *       example:
  *         message: "Planes obtenidos exitosamente"
  *         error: false
@@ -98,7 +110,8 @@ const router = Router();
  *             id: 1,
  *             title: "Plan Básico",
  *             price_cop: 100000,
- *             description_items: ["Acceso a contenido básico", "Soporte 24/7"]
+ *             description_items: ["Acceso a contenido básico", "Soporte 24/7"],
+ *             generations_allowed: 5
  *           }
  *         ]
  *
@@ -119,6 +132,10 @@ const router = Router();
  *             type: string
  *           description: "Nueva lista de elementos del plan (opcional)"
  *           example: ["Acceso a contenido premium", "Soporte personalizado"]
+ *         new_generations_allowed:
+ *           type: integer
+ *           description: "Nueva cantidad de generaciones permitidas (opcional)"
+ *           example: 10
  *
  *     update-plan-response:
  *       type: object

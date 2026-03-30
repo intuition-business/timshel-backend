@@ -9,7 +9,10 @@ interface Plan {
     id: number;
     title: string;
     price_cop: number;
-    description_items: string[]; // Asumiendo que se parsea a array en el adapter
+    description_items: string[];
+    description: string;
+    activo: boolean;
+    generations_allowed: number;
 }
 
 // Crear un nuevo plan
@@ -19,7 +22,7 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
         return res.status(400).json({ error: true, message: error.details[0].message });
     }
 
-    const { title, price_cop, description_items, description, activo = true } = req.body;
+    const { title, price_cop, description_items, description, activo = true, generations_allowed } = req.body;
 
     const response = { message: "", error: false };
 
@@ -43,8 +46,8 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
 
         // Insertar el nuevo plan (description_items como JSON stringified)
         const [result]: any = await pool.execute(
-            "INSERT INTO planes (title, price_cop, description_items, description, activo) VALUES (?, ?, ?, ?, ?)",
-            [title, price_cop, JSON.stringify(description_items), description, activo]
+            "INSERT INTO planes (title, price_cop, description_items, description, activo, generations_allowed) VALUES (?, ?, ?, ?, ?, ?)",
+            [title, price_cop, JSON.stringify(description_items), description, activo, generations_allowed]
         );
 
         if (result) {
@@ -54,7 +57,8 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
                 price_cop,
                 description_items,
                 description,
-                activo
+                activo,
+                generations_allowed
             });
         } else {
             response.error = true;
@@ -78,8 +82,9 @@ export const getPlans = async (req: Request, res: Response, next: NextFunction) 
     const response = { message: "", error: false, data: [] as Plan[] };
 
     try {
+
         const [rows] = await pool.execute(
-            "SELECT id, title, price_cop, description_items, description, activo FROM planes ORDER BY title ASC"
+            "SELECT id, title, price_cop, description_items, description, activo, generations_allowed FROM planes ORDER BY title ASC"
         );
 
         const planRows = rows as Array<{
@@ -89,6 +94,7 @@ export const getPlans = async (req: Request, res: Response, next: NextFunction) 
             description_items: string;
             description: string;
             activo: boolean;
+            generations_allowed: number;
         }>;
 
         if (planRows.length > 0) {
@@ -125,7 +131,7 @@ export const getPlanById = async (req: Request, res: Response, next: NextFunctio
 
     try {
         const [rows] = await pool.execute(
-            "SELECT id, title, price_cop, description_items, description, activo FROM planes WHERE id = ?",
+            "SELECT id, title, price_cop, description_items, description, activo, generations_allowed FROM planes WHERE id = ?",
             [id]
         );
 
@@ -136,6 +142,7 @@ export const getPlanById = async (req: Request, res: Response, next: NextFunctio
             description_items: string;
             description: string;
             activo: boolean;
+            generations_allowed: number;
         }>;
 
         if (planRows.length > 0) {
@@ -175,7 +182,7 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
         });
     }
 
-    const { new_title, new_price_cop, new_description_items, new_description, new_activo } = req.body;
+    const { new_title, new_price_cop, new_description_items, new_description, new_activo, new_generations_allowed } = req.body;
 
     const response = { message: "", error: false };
 
@@ -216,10 +223,16 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
             params.push(new_activo);
         }
 
+
+        if (new_generations_allowed !== undefined) {
+            updates.push("generations_allowed = ?");
+            params.push(new_generations_allowed);
+        }
+
         if (updates.length === 0) {
             return res.status(400).json({
                 error: true,
-                message: "Debe enviar al menos un campo para actualizar (new_title, new_price_cop, new_description o new_activo)"
+                message: "Debe enviar al menos un campo para actualizar (new_title, new_price_cop, new_description, new_activo, new_generations_allowed)"
             });
         }
 
