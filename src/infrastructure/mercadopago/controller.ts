@@ -23,18 +23,19 @@ export const createPaymentController = async (req: Request, res: Response) => {
         try {
             const payment = response;
             const metadata = payment.metadata || {};
-            const planId = metadata.plan_id || metadata.planId;
-            const period = metadata.period;
+            const planId = metadata.plan_id || metadata.planId || null;
+            const entrenadorId = metadata.entrenador_id || metadata.entrenadorId || null;
+            // period_start/period_end se resuelven en el webhook con user_routine o el metadata como fallback
             const query = `INSERT INTO payments (
-                mercadopago_id, user_id, plan_id, period, amount, status, description, approved_at,
+                mercadopago_id, user_id, plan_id, entrenador_id, amount, status, description, approved_at,
                 payment_method_id, payment_type_id, currency_id, installments, payer_email, created_at,
                 last_updated_at, net_amount, fee_amount, card_last_four, cardholder_name, registered_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             const values = [
                 payment.id,
                 userId || null,
-                planId || null,
-                metadata.period || null,
+                planId,
+                entrenadorId,
                 payment.transaction_amount,
                 payment.status,
                 payment.description,

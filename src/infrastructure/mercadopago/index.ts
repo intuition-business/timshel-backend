@@ -24,6 +24,18 @@ export const createPayment = async (paymentData: any) => {
     }
 };
 
+// Obtener pago por ID
+export const getPayment = async (paymentId: string) => {
+    try {
+        const payment = new Payment(client);
+        const response = await payment.get({ id: paymentId });
+        return response;
+    } catch (error) {
+        console.error('MercadoPago getPayment - error:', error);
+        throw error;
+    }
+};
+
 // Crear suscripción (PreApproval)
 export const createSubscription = async (subscriptionData: any) => {
     try {

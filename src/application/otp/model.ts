@@ -33,10 +33,10 @@ const createAuth = async (data: {
   name: string;
 }): Promise<any> => {
   try {
-    const { usuario_id, entrenador_id, email, rol = 'user', telefono, id_apple, tipo_login, name } = data;  // Incluir 'name' en destructuring
+    const { usuario_id, entrenador_id, email, rol = 'user', telefono, id_apple, tipo_login, name } = data;
     const [result] = await pool.execute(
-      `INSERT INTO ${OTP_AUTH_TABLE} (usuario_id, entrenador_id, email, rol, telefono, id_apple, tipo_login, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,  // Agregar 'name' en columns y VALUES
-      [usuario_id, entrenador_id, email, rol, telefono, id_apple, tipo_login, name]
+      `INSERT INTO ${OTP_AUTH_TABLE} (usuario_id, entrenador_id, email, rol, telefono, id_apple, tipo_login, name, plan_id, generations_remaining) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [usuario_id, entrenador_id, email, rol, telefono, id_apple, tipo_login, name, 0, 1]
     );
     return result;
   } catch (error) {
