@@ -38,6 +38,50 @@ const storage = multerS3({
 
 export const upload = multer({ storage });
 
+export const getUserProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response<any>> => {
+  try {
+    const token = req.headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    const [rows]: any = await pool.execute(
+      `SELECT
+        a.id,
+        a.name,
+        a.email,
+        a.telefono AS phone,
+        a.plan_id,
+        a.generations_remaining,
+        a.entrenador_id,
+        p.title AS plan_title,
+        p.generations_allowed,
+        e.name AS trainer_name,
+        e.image AS trainer_image,
+        ui.image_path AS user_image
+      FROM auth a
+      LEFT JOIN planes p ON a.plan_id = p.id
+      LEFT JOIN entrenadores e ON a.entrenador_id = e.id
+      LEFT JOIN user_images ui ON a.id = ui.user_id
+      WHERE a.id = ?`,
+      [userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: "Usuario no encontrado", error: true });
+    }
+
+    return res.status(200).json({ error: false, data: rows[0] });
+  } catch (error) {
+    console.error("Error al obtener perfil:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
 // Controlador para guardar la imagen vinculada a un usuario
 export const uploadUserImage = async (
   req: Request,

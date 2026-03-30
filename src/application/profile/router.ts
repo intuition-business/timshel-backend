@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { uploadUserImage, upload, getUserImage, deleteUserImage } from "./controller";
+import { uploadUserImage, upload, getUserImage, deleteUserImage, getUserProfile } from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";
 
 const router = Router();
@@ -21,6 +21,8 @@ router.post(
 router.get("/user/image",
   verifyToken,
   asyncHandler(getUserImage));
+
+router.get("/me", verifyToken, asyncHandler(getUserProfile));
 
 router.delete(
   "/user/image/delete",
