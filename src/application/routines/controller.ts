@@ -350,8 +350,16 @@ export const generateRoutinesIa = async (
     let parsedFirstDay: any;
     try {
       const aiResult = await getOpenAI(firstPrompt);
+      if (aiResult.error) {
+        console.error("[IA] Error de OpenAI primer día:", aiResult.error);
+        throw aiResult.error;
+      }
       const rawContent = aiResult?.response?.choices?.[0]?.message?.content || "";
       console.log("[IA] rawContent primer día:", rawContent.slice(0, 300));
+      if (!rawContent) {
+        console.error("[IA] OpenAI devolvió contenido vacío. finish_reason:", aiResult?.response?.choices?.[0]?.finish_reason);
+        throw new Error("OpenAI devolvió contenido vacío");
+      }
       const parsed = JSON.parse(rawContent);
 
       // Normalizar: puede venir como array, { weeks: [...] }, objeto solo, etc.

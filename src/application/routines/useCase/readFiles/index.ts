@@ -25,9 +25,10 @@ export const readFiles = async (personData: any, daysData: any) => {
   const promptTemplate = await fs.readFile(pathFilePrompt, "utf-8");
 
   // Filtrar ejercicios solo a las categorías que el usuario entrena
+  const DEFAULT_CATEGORIES = ['PECHO', 'ESPALDA'];
   const userCategories: string[] = Array.isArray(personData.grupo_muscular_favorito) && personData.grupo_muscular_favorito.length > 0
     ? personData.grupo_muscular_favorito
-    : [];
+    : DEFAULT_CATEGORIES;
 
   // Categorías complementarias según split (push/pull): si tiene PECHO incluir TRÍCEPS, si tiene ESPALDA incluir BÍCEPS
   const complementMap: Record<string, string[]> = {
@@ -90,13 +91,17 @@ export const readFiles = async (personData: any, daysData: any) => {
 
   const volumenJson = JSON.stringify(volumenRows);
 
-  // Aseguramos que personData tenga los campos requeridos
-  if (!('grupo_muscular_favorito' in personData) || !Array.isArray(personData.grupo_muscular_favorito)) {
-    personData.grupo_muscular_favorito = [];
+  // Sanitizar campos críticos antes de enviar a OpenAI
+  if (!Array.isArray(personData.grupo_muscular_favorito) || personData.grupo_muscular_favorito.length === 0) {
+    personData.grupo_muscular_favorito = DEFAULT_CATEGORIES;
   }
-  if (!('train_experience' in personData) || typeof personData.train_experience !== 'string' || !personData.train_experience) {
-    personData.train_experience = "beginner";
-  }
+  if (!personData.train_experience) personData.train_experience = "beginner";
+  if (!personData.training_days_per_week) personData.training_days_per_week = 3;
+  if (!personData.gender) personData.gender = "male";
+  if (!personData.weight_kg) personData.weight_kg = 70;
+  if (!personData.height_cm) personData.height_cm = 170;
+  if (!personData.activity_level) personData.activity_level = "moderate";
+  if (!personData.primary_goal) personData.primary_goal = "gainMuscle";
 
   // Generamos el prompt final con todos los datos
   const prompt = buildPront({
