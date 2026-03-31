@@ -699,10 +699,6 @@ export const getRoutineByExerciseName = async (
 
     // Validación de entrada
     const { exercise_name, fecha_rutina, routine_name } = req.query;
-    if (!exercise_name || typeof exercise_name !== "string") {
-      res.status(400).json({ error: true, message: "Nombre del ejercicio es requerido y debe ser una cadena" });
-      return;
-    }
 
     // Formato de fecha
     let formattedFecha: string | null = null;
@@ -715,13 +711,17 @@ export const getRoutineByExerciseName = async (
       }
     }
 
-    // Construcción de consulta
+    // Construcción de consulta — exercise_name es opcional
     let query = `
       SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed
       FROM complete_rutina
-      WHERE user_id = ? AND LOWER(exercise_name) LIKE LOWER(?)
+      WHERE user_id = ?
     `;
-    const params: (string | number)[] = [userId, `%${exercise_name}%`];
+    const params: (string | number)[] = [userId];
+    if (exercise_name && typeof exercise_name === "string") {
+      query += " AND LOWER(exercise_name) LIKE LOWER(?)";
+      params.push(`%${exercise_name}%`);
+    }
     if (routine_name && typeof routine_name === "string") {
       query += " AND LOWER(routine_name) LIKE LOWER(?)";
       params.push(`%${routine_name}%`);
