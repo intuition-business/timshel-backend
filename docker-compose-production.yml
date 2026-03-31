@@ -7,7 +7,7 @@ services:
       - "3000:3000"
     restart: always
     env_file:
-      - /home/ec2-user/.env
+      - /home/ubuntu/.env
     environment:
       - NODE_ENV=production
       - PORT=3000
