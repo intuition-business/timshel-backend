@@ -286,10 +286,22 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
       rutinaFinal = await buildRoutineWithExerciseDetails(trainingPlan);
     }
 
+    const DAYS_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const rutinaConDia = Array.isArray(rutinaFinal)
+      ? rutinaFinal.map((dia: any) => {
+          if (dia.fecha) {
+            const [year, month, day] = dia.fecha.split("-").map(Number);
+            const dayIndex = new Date(year, month - 1, day).getDay();
+            return { ...dia, day: DAYS_EN[dayIndex] };
+          }
+          return dia;
+        })
+      : rutinaFinal;
+
     return res.status(200).json({
       error: false,
       message: "Rutina obtenida exitosamente",
-      data: rutinaFinal,
+      data: rutinaConDia,
     });
   } catch (error) {
     console.error("Error al obtener la rutina del usuario:", error);
