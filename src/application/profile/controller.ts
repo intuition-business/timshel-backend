@@ -57,10 +57,25 @@ export const getUserProfile = async (
         a.plan_id,
         a.generations_remaining,
         a.entrenador_id,
-        p.title AS plan_title,
-        p.generations_allowed,
-        e.name AS trainer_name,
-        e.image AS trainer_image,
+        p.id AS p_id,
+        p.title AS p_title,
+        p.price_cop AS p_price_cop,
+        p.description_items AS p_description_items,
+        p.description AS p_description,
+        p.activo AS p_activo,
+        p.generations_allowed AS p_generations_allowed,
+        e.id AS e_id,
+        e.name AS e_name,
+        e.email AS e_email,
+        e.phone AS e_phone,
+        e.address AS e_address,
+        e.description AS e_description,
+        e.goal AS e_goal,
+        e.price AS e_price,
+        e.image AS e_image,
+        e.rating AS e_rating,
+        e.experience_years AS e_experience_years,
+        e.certifications AS e_certifications,
         ui.image_path AS user_image
       FROM auth a
       LEFT JOIN planes p ON a.plan_id = p.id
@@ -74,7 +89,56 @@ export const getUserProfile = async (
       return res.status(404).json({ message: "Usuario no encontrado", error: true });
     }
 
-    return res.status(200).json({ error: false, data: rows[0] });
+    const row = rows[0];
+
+    const plan = row.p_id != null ? {
+      id: row.p_id,
+      title: row.p_title,
+      price_cop: row.p_price_cop,
+      description_items: (() => {
+        try {
+          return typeof row.p_description_items === 'string'
+            ? JSON.parse(row.p_description_items)
+            : (row.p_description_items || []);
+        } catch { return []; }
+      })(),
+      description: row.p_description,
+      activo: row.p_activo === 1 ? true : false,
+      generations_allowed: row.p_generations_allowed,
+    } : null;
+
+    const trainer = row.e_id != null ? {
+      id: row.e_id,
+      name: row.e_name,
+      email: row.e_email,
+      phone: row.e_phone,
+      address: row.e_address,
+      description: row.e_description,
+      goal: row.e_goal,
+      price: row.e_price,
+      image: row.e_image,
+      rating: row.e_rating,
+      experience_years: row.e_experience_years,
+      certifications: row.e_certifications,
+      assigned_users: [],
+      user_count: 0,
+    } : null;
+
+    return res.status(200).json({
+      error: false,
+      data: {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        phone: row.phone,
+        plan_id: row.plan_id,
+        generations_remaining: row.generations_remaining,
+        entrenador_id: row.entrenador_id,
+        user_image: row.user_image,
+        plan,
+        trainer,
+      },
+    });
   } catch (error) {
     console.error("Error al obtener perfil:", error);
     next(error);
