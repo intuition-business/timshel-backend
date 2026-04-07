@@ -270,21 +270,27 @@ async function getUserDetails(userId: string): Promise<UserDetails> {
         [userId]
     );
 
-    const image = await getUserImage(userId);
-
-    if (rows.length === 0) {
-        return { name: "Usuario desconocido", email: null, phone: null, image };
+    if (rows.length > 0) {
+        const user = rows[0];
+        const image = await getUserImage(userId);
+        const displayName = user.name?.trim() || user.email?.trim() || user.phone?.trim() || "Usuario desconocido";
+        return { name: displayName, email: user.email || null, phone: user.phone || null, image };
     }
 
-    const user = rows[0];
-    const displayName = user.name?.trim() || user.email?.trim() || user.phone?.trim() || "Usuario desconocido";
+    // Si no es usuario normal, buscar en entrenadores
+    const [trainerRows]: any = await pool.execute(
+        `SELECT name, email, phone, image FROM entrenadores WHERE id = ? LIMIT 1`,
+        [userId]
+    );
 
-    return {
-        name: displayName,
-        email: user.email || null,
-        phone: user.phone || null,
-        image
-    };
+    if (trainerRows.length > 0) {
+        const trainer = trainerRows[0];
+        const displayName = trainer.name?.trim() || trainer.email?.trim() || "Entrenador";
+        return { name: displayName, email: trainer.email || null, phone: trainer.phone || null, image: trainer.image || null };
+    }
+
+    const image = await getUserImage(userId);
+    return { name: "Usuario desconocido", email: null, phone: null, image };
 }
 
 async function getUserImage(userId: string): Promise<string | null> {
