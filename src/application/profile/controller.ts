@@ -57,6 +57,7 @@ export const getUserProfile = async (
         a.plan_id,
         a.generations_remaining,
         a.entrenador_id,
+        a.plan_valid_until,
         p.id AS p_id,
         p.title AS p_title,
         p.price_cop AS p_price_cop,
@@ -76,12 +77,17 @@ export const getUserProfile = async (
         e.rating AS e_rating,
         e.experience_years AS e_experience_years,
         e.certifications AS e_certifications,
-        ui.image_path AS user_image
+        ui.image_path AS user_image,
+        asig.id AS asignacion_id,
+        asig.status AS asignacion_status
       FROM auth a
       LEFT JOIN planes p ON a.plan_id = p.id
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
       LEFT JOIN user_images ui ON a.id = ui.user_id
-      WHERE a.id = ?`,
+      LEFT JOIN asignaciones asig ON a.id = asig.usuario_id AND asig.status IN ('active', 'cancelled')
+      WHERE a.id = ?
+      ORDER BY asig.fecha_asignacion DESC
+      LIMIT 1`,
       [userId]
     );
 
@@ -134,6 +140,9 @@ export const getUserProfile = async (
         plan_id: row.plan_id,
         generations_remaining: row.generations_remaining,
         entrenador_id: row.entrenador_id,
+        plan_valid_until: row.plan_valid_until,
+        asignacion_id: row.asignacion_id,
+        asignacion_status: row.asignacion_status,
         user_image: row.user_image,
         plan,
         trainer,
@@ -141,6 +150,48 @@ export const getUserProfile = async (
     });
   } catch (error) {
     console.error("Error al obtener perfil:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const cancelPlanController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response<any>> => {
+  try {
+    const token = req.headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    const { asignacion_id } = req.body;
+
+    if (!asignacion_id) {
+      return res.status(400).json({ error: true, message: "asignacion_id requerido" });
+    }
+
+    // Verificar que la asignación pertenece al usuario
+    const [rows]: any = await pool.execute(
+      `SELECT id FROM asignaciones WHERE id = ? AND usuario_id = ? AND status = 'active'`,
+      [asignacion_id, userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: true, message: "Asignación no encontrada o ya cancelada" });
+    }
+
+    await pool.execute(
+      `UPDATE asignaciones SET status = 'cancelled' WHERE id = ?`,
+      [asignacion_id]
+    );
+
+    return res.status(200).json({
+      error: false,
+      message: "Plan cancelado. Seguirá activo hasta la fecha de vencimiento.",
+    });
+  } catch (error) {
+    console.error("Error al cancelar plan:", error);
     next(error);
     return res.status(500).json({ message: "Error interno del servidor" });
   }
