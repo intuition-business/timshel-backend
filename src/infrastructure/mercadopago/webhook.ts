@@ -28,17 +28,16 @@ export const mercadopagoWebhook = async (req: Request, res: Response) => {
 
         if (rows.length === 0) {
             const query = `INSERT INTO payments (
-                mercadopago_id, user_id, plan_id, entrenador_id, period, amount, status, description, approved_at,
+                mercadopago_id, user_id, plan_id, entrenador_id, amount, status, description, approved_at,
                 payment_method_id, payment_type_id, currency_id, installments, payer_email, created_at,
                 last_updated_at, net_amount, fee_amount, card_last_four, cardholder_name, registered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
             await pool.execute(query, [
                 payment.id,
                 userId,
                 planId,
                 entrenadorId,
-                metadata.period || null,
                 payment.transaction_amount,
                 payment.status,
                 payment.description,
@@ -78,10 +77,19 @@ export const mercadopagoWebhook = async (req: Request, res: Response) => {
                 if (planRows.length > 0) {
                     const { generations_allowed } = planRows[0];
 
-                    // 2. Actualizar plan, generaciones y entrenador en auth
+                    // Calcular plan_valid_until = hoy + 30 días
+                    const planValidUntil = new Date();
+                    planValidUntil.setDate(planValidUntil.getDate() + 30);
+
+                    // 2. Actualizar plan, sumar generaciones y setear plan_valid_until
                     await pool.execute(
-                        `UPDATE auth SET plan_id = ?, generations_remaining = ?, entrenador_id = COALESCE(?, entrenador_id) WHERE id = ?`,
-                        [planId, generations_allowed, resolvedEntrenadorId, resolvedUserId]
+                        `UPDATE auth
+                         SET plan_id = ?,
+                             generations_remaining = generations_remaining + ?,
+                             entrenador_id = COALESCE(?, entrenador_id),
+                             plan_valid_until = ?
+                         WHERE id = ?`,
+                        [planId, generations_allowed, resolvedEntrenadorId, planValidUntil, resolvedUserId]
                     );
                 }
 
