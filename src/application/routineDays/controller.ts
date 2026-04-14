@@ -842,6 +842,131 @@ export const generateRoutinesIaBackground = async (
     return { error: true, message: "Error al generar rutina en background." };
   }
 };
+// Regenera solo los días futuros (>= hoy) de un periodo, conservando el histórico intacto
+export const regenerateRoutinesIaBackground = async (
+  userId: number,
+  startDate: string,
+  endDate: string,
+  routineId: number,
+  historicalDays: any[]
+): Promise<{ error: boolean; message: string }> => {
+  try {
+    const todayStr = getLocalDateString(new Date());
+
+    // Solo días futuros del periodo
+    const [futureDaysRows]: any = await pool.execute(
+      "SELECT day, date FROM user_routine WHERE user_id = ? AND start_date = ? AND end_date = ? AND date >= ? ORDER BY date",
+      [userId, startDate, endDate, todayStr]
+    );
+
+    if (!futureDaysRows.length) {
+      // Sin días futuros: solo guardar el histórico
+      await pool.execute(
+        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [JSON.stringify(historicalDays), routineId]
+      );
+      return { error: false, message: "Sin días futuros, histórico conservado." };
+    }
+
+    // Normalizar fechas
+    const daysData: any[] = futureDaysRows.map((d: any) => ({
+      ...d,
+      dateStr: d.date instanceof Date ? d.date.toISOString().split('T')[0] : String(d.date).split('T')[0],
+    }));
+
+    // Agrupar en semanas desde start_date original (misma lógica que el background normal)
+    const startMs = new Date(startDate + 'T12:00:00Z').getTime();
+    const weekMap = new Map<number, any[]>();
+    for (const day of daysData) {
+      const dayMs = new Date(day.dateStr + 'T12:00:00Z').getTime();
+      const weekNum = Math.min(Math.floor((dayMs - startMs) / (7 * 24 * 60 * 60 * 1000)) + 1, 4);
+      if (!weekMap.has(weekNum)) weekMap.set(weekNum, []);
+      weekMap.get(weekNum)!.push(day);
+    }
+    const weeks = [...weekMap.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([semana, days]) => ({ semana, days }));
+
+    // Perfil del usuario
+    const [rows]: any = await pool.execute("SELECT * FROM formulario WHERE usuario_id = ?", [userId]);
+    if (!rows?.[0]) return { error: true, message: "No se encontró formulario para el usuario." };
+    const personData = adapter(rows[0]);
+
+    // Semana template = la semana con más días entre las futuras
+    const templateWeek = weeks.reduce((max, w) => w.days.length >= max.days.length ? w : max, weeks[0]);
+
+    const favs: string[] = Array.isArray(personData.grupo_muscular_favorito) ? personData.grupo_muscular_favorito : [];
+    const splitGroups = buildDaySplit(favs, templateWeek.days.length);
+
+    // Nuevos rutina_id por día-de-semana (todos los lunes futuros comparten uno, etc.)
+    const dayTemplateIds = new Map<string, string>();
+    templateWeek.days.forEach((wd: any) => dayTemplateIds.set(wd.day, uuidv4()));
+
+    // 1 llamada IA por día único del template
+    const dayOfWeekMap = new Map<string, any>();
+    for (let i = 0; i < templateWeek.days.length; i++) {
+      const wd = templateWeek.days[i];
+      const cats = splitGroups[i] || splitGroups[0];
+      const dayPrompt = await readFiles({ ...personData, grupo_muscular_favorito: cats }, [{ date: wd.dateStr, day: wd.day, categorias: cats }]);
+      try {
+        const aiResult = await withTimeout(
+          getOpenAI(dayPrompt),
+          OPENAI_TIMEOUT_MS,
+          `Timeout OpenAI regen user ${userId} day ${wd.day}`
+        );
+        const rawContent = aiResult?.response?.choices?.[0]?.message?.content || "";
+        if (!rawContent) { console.error(`[REGEN] Sin contenido para ${wd.day}`); continue; }
+        const parsed = JSON.parse(rawContent);
+        let parsedDay: any = Array.isArray(parsed) ? parsed.flat(2)[0] : parsed?.weeks ? parsed.weeks.flat()[0] : parsed;
+        if (!parsedDay) continue;
+        parsedDay.fecha = wd.dateStr;
+        parsedDay.semana = templateWeek.semana;
+        if (!parsedDay.categorias || parsedDay.categorias.length === 0) parsedDay.categorias = cats;
+        if (!parsedDay.nombre) parsedDay.nombre = cats.join(' + ');
+        const [builtDay] = await buildRoutineWithExerciseDetails([parsedDay]);
+        if (builtDay) {
+          dayOfWeekMap.set(wd.day, { ...builtDay, rutina_id: dayTemplateIds.get(wd.day) });
+          console.log(`[REGEN] ${wd.day} → ${builtDay.nombre} (${builtDay.ejercicios?.length} ejercicios)`);
+        }
+      } catch (err) {
+        console.error(`[REGEN] Error generando ${wd.day}:`, err);
+      }
+    }
+
+    // Distribuir template a todas las semanas futuras
+    const futurePlan: any[] = [];
+    for (const { semana, days } of weeks) {
+      for (const wd of days) {
+        const templateDay = dayOfWeekMap.get(wd.day);
+        if (!templateDay) continue;
+        futurePlan.push({
+          ...templateDay,
+          fecha: wd.dateStr,
+          semana,
+          ejercicios: templateDay.ejercicios.map((ej: any) => ({
+            ...ej,
+            exercise_id: uuidv4(),
+          })),
+        });
+      }
+    }
+
+    // Histórico + nuevos días futuros
+    const fullPlan = [...historicalDays, ...futurePlan];
+
+    await pool.execute(
+      "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [JSON.stringify(fullPlan), routineId]
+    );
+
+    console.log(`[REGEN] Plan listo: ${historicalDays.length} días histórico + ${futurePlan.length} días nuevos para user_id: ${userId}`);
+    return { error: false, message: "Rutina regenerada." };
+  } catch (error) {
+    console.error("[REGEN] Error:", error);
+    return { error: true, message: "Error al regenerar rutina en background." };
+  }
+};
+
 // Exportar la función principal para renovación de rutinas
 export const renewRoutines = async () => {
   if (isRenewRoutinesRunning) {
