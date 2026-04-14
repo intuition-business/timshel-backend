@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getRoutines,
   generateRoutinesIa,
+  regenerateRoutinesIa,
   getGeneratedRoutinesIa,
   getRoutinesSaved,
   routinesSaved,
@@ -18,6 +19,7 @@ const router = Router();
 
 router.get("/", verifyToken, getRoutines);
 router.post("/ia", verifyToken, generateRoutinesIa);
+router.post("/regenerate", verifyToken, regenerateRoutinesIa);
 router.get("/ia", verifyToken, getGeneratedRoutinesIa);
 router.get("/routinesSaved", verifyToken, getRoutinesSaved);
 router.get("/routinesByDate", verifyToken, getRoutineByDate);

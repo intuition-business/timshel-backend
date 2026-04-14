@@ -9,7 +9,7 @@ import { SECRET } from "../../config";
 import pool from "../../config/db";
 import { any } from "joi";
 import { v4 as uuidv4 } from "uuid";
-import { generateRoutinesIaBackground, getLocalDateString } from "../routineDays/controller";
+import { generateRoutinesIaBackground, regenerateRoutinesIaBackground, getLocalDateString } from "../routineDays/controller";
 let uuidv4Sync: () => string;
 
 interface Exercise {
@@ -1488,5 +1488,215 @@ export const searchInGeneratedRoutine = async (
   } catch (error) {
     console.error("Error en searchInGeneratedRoutine:", error);
     next(error);
+  }
+};
+
+// POST /routines/regenerate — regenera la rutina del periodo activo conservando el histórico
+export const regenerateRoutinesIa = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { headers } = req;
+    const token = headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    // 1. Verificar plan y generaciones (igual que /routines/ia)
+    const [authRows]: any = await pool.execute(
+      "SELECT plan_id, plan_valid_until, generations_remaining FROM auth WHERE id = ?",
+      [userId]
+    );
+    if (!authRows.length) {
+      res.status(404).json({ error: true, message: "Usuario no encontrado." });
+      return;
+    }
+    const auth = authRows[0];
+    const todayStr = getLocalDateString(new Date());
+
+    if (auth.plan_valid_until && auth.plan_valid_until < todayStr && auth.plan_id !== 0) {
+      res.status(403).json({
+        error: true,
+        message: "Tu plan ha vencido. Renueva tu suscripción para seguir generando rutinas.",
+        code: "PLAN_EXPIRED"
+      });
+      return;
+    }
+
+    if (auth.generations_remaining <= 0) {
+      res.status(403).json({
+        error: true,
+        message: "No tienes generaciones disponibles. Actualiza tu plan para obtener más.",
+        code: "NO_GENERATIONS",
+        generations_remaining: 0
+      });
+      return;
+    }
+
+    // 2. Obtener periodo activo
+    const [periodRows]: any = await pool.execute(
+      "SELECT DISTINCT start_date, end_date FROM user_routine WHERE user_id = ? ORDER BY start_date DESC LIMIT 1",
+      [userId]
+    );
+    if (!periodRows?.length) {
+      res.status(400).json({
+        error: true,
+        message: "No tienes días de entrenamiento configurados.",
+        code: "NO_ROUTINE_DAYS"
+      });
+      return;
+    }
+
+    const formatDate = (d: any): string => {
+      if (typeof d === 'string') return d;
+      if (d instanceof Date) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      return String(d);
+    };
+
+    const startDateStr = formatDate(periodRows[0].start_date);
+    const endDateStr = formatDate(periodRows[0].end_date);
+
+    if (endDateStr < todayStr) {
+      res.status(400).json({
+        error: true,
+        message: "Tu periodo de entrenamiento ha terminado.",
+        code: "PERIOD_EXPIRED"
+      });
+      return;
+    }
+
+    // 3. Verificar perfil del usuario
+    const [profileRows]: any = await pool.execute("SELECT * FROM formulario WHERE usuario_id = ?", [userId]);
+    if (!profileRows?.[0]) {
+      res.status(400).json({
+        error: true,
+        message: "No has completado tu perfil de entrenamiento.",
+        code: "NO_PROFILE"
+      });
+      return;
+    }
+
+    // 4. Obtener plan existente (DEBE existir para poder regenerar)
+    const [existingPlanRows]: any = await pool.execute(
+      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND updated_at >= ? LIMIT 1",
+      [userId, startDateStr]
+    );
+    if (!existingPlanRows?.length) {
+      res.status(404).json({
+        error: true,
+        message: "No hay rutina activa en este periodo. Genera una rutina primero.",
+        code: "NO_ROUTINE"
+      });
+      return;
+    }
+
+    const routineId = existingPlanRows[0].id;
+    const existingPlan: any[] = JSON.parse(existingPlanRows[0].training_plan);
+
+    // 5. Separar histórico (fecha < hoy) de futuro (fecha >= hoy)
+    const historicalDays = existingPlan.filter((d: any) => d.fecha < todayStr);
+
+    // 6. Días futuros en user_routine
+    const [futureDaysRows]: any = await pool.execute(
+      "SELECT day, date FROM user_routine WHERE user_id = ? AND start_date = ? AND end_date = ? AND date >= ? ORDER BY date",
+      [userId, startDateStr, endDateStr, todayStr]
+    );
+    if (!futureDaysRows?.length) {
+      res.status(400).json({
+        error: true,
+        message: "No quedan días pendientes en este periodo.",
+        code: "NO_FUTURE_DAYS"
+      });
+      return;
+    }
+
+    // 7. Generar el primer día futuro vía IA para responder rápido
+    const personData = require("../routines/useCase/adapter").adapter(profileRows[0]);
+    const readFiles = require("../routines/useCase/readFiles").readFiles;
+    const getOpenAI = require("../../infrastructure/openIA").getOpenAI;
+    const { buildRoutineWithExerciseDetails, populateExerciseDetails } = require("../routineDays/controller");
+
+    const firstDay = {
+      ...futureDaysRows[0],
+      dateStr: futureDaysRows[0].date instanceof Date
+        ? futureDaysRows[0].date.toISOString().split('T')[0]
+        : String(futureDaysRows[0].date).split('T')[0],
+    };
+
+    const firstPrompt = await readFiles(personData, [{ date: firstDay.dateStr, day: firstDay.day }]);
+
+    let parsedFirstDay: any;
+    try {
+      const aiResult = await getOpenAI(firstPrompt);
+      if (aiResult.error) throw aiResult.error;
+      const rawContent = aiResult?.response?.choices?.[0]?.message?.content || "";
+      if (!rawContent) throw new Error("OpenAI devolvió contenido vacío");
+      const parsed = JSON.parse(rawContent);
+      let days: any[];
+      if (Array.isArray(parsed)) { days = parsed.flat(2); }
+      else if (parsed?.weeks) { days = parsed.weeks.flat(); }
+      else { days = [parsed]; }
+      parsedFirstDay = days[0];
+    } catch (err) {
+      console.error("[REGEN] Error generando primer día:", err);
+      res.status(503).json({
+        error: true,
+        message: "Hubo un problema al conectar con el servicio de IA. Intenta de nuevo.",
+        code: "AI_ERROR"
+      });
+      return;
+    }
+
+    // Calcular semana del primer día futuro desde start_date
+    const startMs = new Date(startDateStr + 'T12:00:00Z').getTime();
+    const firstDayMs = new Date(firstDay.dateStr + 'T12:00:00Z').getTime();
+    const firstDayWeek = Math.min(Math.floor((firstDayMs - startMs) / (7 * 24 * 60 * 60 * 1000)) + 1, 4);
+
+    parsedFirstDay.fecha = firstDay.dateStr;
+    parsedFirstDay.semana = firstDayWeek;
+
+    const [firstDayBuilt]: any[] = await buildRoutineWithExerciseDetails([parsedFirstDay]);
+
+    // 8. Guardar histórico + primer día nuevo y descontar generación
+    await pool.execute(
+      "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [JSON.stringify([...historicalDays, firstDayBuilt]), routineId]
+    );
+
+    await pool.execute(
+      "UPDATE auth SET generations_remaining = generations_remaining - 1 WHERE id = ?",
+      [userId]
+    );
+
+    const firstDayPopulated = await populateExerciseDetails([firstDayBuilt]);
+
+    res.json({
+      response: firstDayPopulated,
+      error: false,
+      message: "Regenerando rutina. El resto de los días se está procesando.",
+      routine_id: routineId,
+      user_id: userId,
+      isGeneratingRoutine: true,
+    });
+
+    // 9. Background: genera todos los días futuros y hace merge con histórico
+    require("../routineDays/controller")
+      .regenerateRoutinesIaBackground(userId, startDateStr, endDateStr, routineId, historicalDays)
+      .catch((err: any) => console.error("[REGEN-BG] Error en background:", err));
+
+  } catch (error) {
+    console.error("Error en regenerateRoutinesIa:", error);
+    res.status(500).json({
+      response: "",
+      error: true,
+      message: "Ocurrió un error al regenerar la rutina.",
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 };
