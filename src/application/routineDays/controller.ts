@@ -531,7 +531,7 @@ export const updateRoutineDays = async (req: Request, res: Response, next: NextF
     for (let i = 0; i < newDays.length; i++) {
       const newDay = newDays[i];
       const template = templates[i % templates.length]; // ciclar si hay más días que templates
-      const isExtra = i >= templates.length; // día que no tenía template propio
+      const isExtra = (i % selected_days.length) >= templates.length; // día que no tenía template propio
 
       // Calcular semana correcta según la fecha real dentro del periodo
       const dayMs = new Date(newDay.date + 'T12:00:00Z').getTime();
