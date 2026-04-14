@@ -4,6 +4,7 @@ import {
   getRoutineByUserId,
   updateRoutineDayStatus,
   deleteRoutineDay,
+  updateRoutineDays,
 } from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";
 
@@ -42,6 +43,13 @@ router.delete(
   "/delete",
   verifyToken,
   asyncHandler(deleteRoutineDay)
+);
+
+// Ruta PUT para cambiar días de entrenamiento (consume 1 generación, conserva historial)
+router.put(
+  "/update-days",
+  verifyToken,
+  asyncHandler(updateRoutineDays)
 );
 
 export default router;

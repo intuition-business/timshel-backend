@@ -111,7 +111,7 @@ const formatDateWithSlash = (date: Date) => {
 };
 
 // Función para obtener la fecha en formato "YYYY-MM-DD" usando componentes locales
-const getLocalDateString = (date: Date) => {
+export const getLocalDateString = (date: Date) => {
   const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const day = date.getDate().toString().padStart(2, '0');
@@ -416,6 +416,224 @@ export const deleteRoutineDay = async (req: Request, res: Response, next: NextFu
 
 
 
+// Cambiar días de entrenamiento — reasigna fechas al plan existente, conserva historial y semanas
+export const updateRoutineDays = async (req: Request, res: Response, next: NextFunction) => {
+  const { selected_days } = req.body;
+
+  if (!selected_days || !Array.isArray(selected_days) || selected_days.length === 0) {
+    return res.status(400).json({ error: true, message: "Debes enviar al menos un día seleccionado." });
+  }
+
+  const { headers } = req;
+  const token = headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (<any>(<unknown>decode)).userId;
+
+  try {
+    // 1. Verificar plan activo y generaciones
+    const [authRows]: any = await pool.execute(
+      "SELECT plan_id, plan_valid_until, generations_remaining FROM auth WHERE id = ?",
+      [userId]
+    );
+    if (!authRows.length) {
+      return res.status(404).json({ error: true, message: "Usuario no encontrado.", code: "USER_NOT_FOUND" });
+    }
+    const auth = authRows[0];
+    const todayForAuth = getLocalDateString(new Date());
+
+    if (auth.plan_valid_until && auth.plan_valid_until < todayForAuth && auth.plan_id !== 0) {
+      return res.status(403).json({
+        error: true,
+        message: "Tu plan ha vencido. Renueva tu suscripción para poder cambiar tus días.",
+        code: "PLAN_EXPIRED"
+      });
+    }
+    if (auth.generations_remaining <= 0) {
+      return res.status(403).json({
+        error: true,
+        message: "No tienes generaciones disponibles. Actualiza tu plan para obtener más.",
+        code: "NO_GENERATIONS",
+        generations_remaining: 0
+      });
+    }
+
+    // 2. Obtener periodo activo
+    const todayStr = getLocalDateString(new Date());
+    const [periodRows]: any = await pool.execute(
+      `SELECT DISTINCT start_date, end_date FROM user_routine
+       WHERE user_id = ? AND start_date <= ? AND end_date >= ?
+       ORDER BY start_date DESC LIMIT 1`,
+      [userId, todayStr, todayStr]
+    );
+    if (!periodRows.length) {
+      return res.status(404).json({ error: true, message: "No se encontró un periodo activo de rutina." });
+    }
+
+    const startDateStr: string = periodRows[0].start_date instanceof Date
+      ? getLocalDateString(periodRows[0].start_date)
+      : String(periodRows[0].start_date).split('T')[0];
+    const endDateStr: string = periodRows[0].end_date instanceof Date
+      ? getLocalDateString(periodRows[0].end_date)
+      : String(periodRows[0].end_date).split('T')[0];
+
+    // 3. Obtener plan existente de BD
+    const [planRows]: any = await pool.execute(
+      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+      [userId]
+    );
+    if (!planRows.length) {
+      return res.status(404).json({ error: true, message: "No se encontró un plan de entrenamiento activo." });
+    }
+    const planId = planRows[0].id;
+    const existingPlan: any[] = typeof planRows[0].training_plan === 'string'
+      ? JSON.parse(planRows[0].training_plan)
+      : planRows[0].training_plan;
+
+    // 4. Separar histórico (fecha < hoy) del futuro (fecha >= hoy)
+    const historico = existingPlan.filter((d: any) => d.fecha < todayStr);
+    const futuro    = existingPlan.filter((d: any) => d.fecha >= todayStr);
+
+    // 5. Extraer templates únicos del plan completo por posición (orden de aparición)
+    //    Un template = un día único del plan ya generado (con sus ejercicios y rutina_id)
+    const seenRutinaIds = new Set<string>();
+    const templates: any[] = [];
+    for (const d of existingPlan) {
+      if (d.rutina_id && !seenRutinaIds.has(d.rutina_id)) {
+        seenRutinaIds.add(d.rutina_id);
+        templates.push(d);
+      }
+    }
+
+    // 6. Borrar días pending >= hoy en user_routine e insertar los nuevos
+    await pool.execute(
+      `DELETE FROM user_routine WHERE user_id = ? AND status = 'pending' AND date >= ? AND start_date = ?`,
+      [userId, todayStr, startDateStr]
+    );
+
+    const endDate = new Date(endDateStr + 'T12:00:00Z');
+    const todayDate = new Date(todayStr + 'T12:00:00Z');
+    const newDays = generateGlobalRoutine(selected_days, todayDate, endDate, todayStr);
+
+    if (newDays.length > 0) {
+      await pool.query(
+        `INSERT INTO user_routine (user_id, day, date, start_date, end_date) VALUES ?`,
+        [newDays.map(item => [userId, item.day, item.date, startDateStr, endDateStr])]
+      );
+    }
+
+    // 7. Construir nuevos días del plan reutilizando templates por posición
+    //    Si hay más días nuevos que templates → llamar IA para los extras
+    const startMs = new Date(startDateStr + 'T12:00:00Z').getTime();
+
+    const needsAI: any[] = [];
+    const newPlanDays: any[] = [];
+
+    for (let i = 0; i < newDays.length; i++) {
+      const newDay = newDays[i];
+      const template = templates[i % templates.length]; // ciclar si hay más días que templates
+      const isExtra = i >= templates.length; // día que no tenía template propio
+
+      // Calcular semana correcta según la fecha real dentro del periodo
+      const dayMs = new Date(newDay.date + 'T12:00:00Z').getTime();
+      const semana = Math.min(Math.floor((dayMs - startMs) / (7 * 24 * 60 * 60 * 1000)) + 1, 4);
+
+      if (!isExtra) {
+        // Reusar template: mismos ejercicios, nueva fecha, semana recalculada, nuevos exercise_id
+        newPlanDays.push({
+          ...template,
+          fecha: newDay.date,
+          semana,
+          ejercicios: template.ejercicios.map((ej: any) => ({
+            ...ej,
+            exercise_id: uuidv4(),
+          })),
+        });
+      } else {
+        // Día extra sin template → necesita IA
+        needsAI.push({ date: newDay.date, day: newDay.day, semana });
+      }
+    }
+
+    // 8. Si hay días que necesitan IA, generarlos en background y actualizar plan después
+    if (needsAI.length > 0) {
+      // Guardar plan sin los días extra por ahora (se actualizará cuando termine IA)
+      const planSinExtras = [...historico, ...newPlanDays];
+      await pool.execute(
+        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [JSON.stringify(planSinExtras), planId]
+      );
+
+      // Lanzar generación IA para los días extra en background
+      (async () => {
+        try {
+          const [rows]: any = await pool.execute("SELECT * FROM formulario WHERE usuario_id = ?", [userId]);
+          if (!rows?.[0]) return;
+          const personData = adapter(rows[0]);
+          const favs: string[] = Array.isArray(personData.grupo_muscular_favorito) ? personData.grupo_muscular_favorito : [];
+          const splitGroups = buildDaySplit(favs, needsAI.length);
+
+          for (let i = 0; i < needsAI.length; i++) {
+            const extra = needsAI[i];
+            const cats = splitGroups[i] || splitGroups[0];
+            const dayInput = [{ date: extra.date, day: extra.day, categorias: cats }];
+            const dayPrompt = await readFiles({ ...personData, grupo_muscular_favorito: cats }, dayInput);
+            const aiResult = await getOpenAI(dayPrompt);
+            const rawContent = aiResult?.response?.choices?.[0]?.message?.content || "";
+            if (!rawContent) continue;
+            const parsed = JSON.parse(rawContent);
+            let parsedDay: any = Array.isArray(parsed) ? parsed.flat(2)[0] : parsed?.weeks ? parsed.weeks.flat()[0] : parsed;
+            if (!parsedDay) continue;
+            parsedDay.fecha = extra.date;
+            parsedDay.semana = extra.semana;
+            const [builtDay] = await buildRoutineWithExerciseDetails([parsedDay]);
+            if (builtDay) {
+              newPlanDays.push({ ...builtDay, rutina_id: uuidv4() });
+            }
+          }
+
+          // Actualizar plan completo con los días extra ya generados
+          const planFinal = [...historico, ...newPlanDays].sort((a, b) => a.fecha.localeCompare(b.fecha));
+          await pool.execute(
+            "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            [JSON.stringify(planFinal), planId]
+          );
+          console.log(`[updateRoutineDays] Días extra IA generados para user ${userId}`);
+        } catch (err) {
+          console.error(`[updateRoutineDays] Error generando días extra con IA para user ${userId}:`, err);
+        }
+      })();
+
+    } else {
+      // Sin días extra — guardar plan directamente
+      const planFinal = [...historico, ...newPlanDays].sort((a, b) => a.fecha.localeCompare(b.fecha));
+      await pool.execute(
+        "UPDATE user_training_plans SET training_plan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [JSON.stringify(planFinal), planId]
+      );
+    }
+
+    // 9. Descontar 1 generación
+    await pool.execute(
+      `UPDATE auth SET generations_remaining = generations_remaining - 1 WHERE id = ?`,
+      [userId]
+    );
+
+    return res.status(200).json({
+      error: false,
+      message: needsAI.length > 0
+        ? "Días actualizados. Los días nuevos se están generando con IA."
+        : "Días actualizados correctamente.",
+      isGeneratingRoutine: needsAI.length > 0,
+      periodo: { start_date: startDateStr, end_date: endDateStr },
+    });
+
+  } catch (error) {
+    console.error("Error en updateRoutineDays:", error);
+    next(error);
+    return res.status(500).json({ error: true, message: "Error al actualizar los días de la rutina." });
+  }
+};
+
 // Función para generar los días de rutina predeterminados
 function generateDefaultRoutineDays() {
   const currentDate = new Date();
@@ -648,9 +866,40 @@ export const renewRoutines = async () => {
       end_date: string;
     }>;
 
+    // Bajar plan a usuarios con plan_valid_until vencido (corre siempre, independiente de rutinas)
+    try {
+      const [expiredPlans] = await pool.execute(
+        `SELECT a.id AS user_id
+         FROM auth a
+         WHERE a.plan_valid_until IS NOT NULL
+           AND a.plan_valid_until < ?
+           AND a.plan_id != 0`,
+        [todayStr]
+      );
+      const expiredUsers = expiredPlans as Array<{ user_id: number }>;
+
+      for (const { user_id } of expiredUsers) {
+        await pool.execute(
+          `UPDATE auth SET plan_id = 0, generations_remaining = 1, entrenador_id = NULL, plan_valid_until = NULL WHERE id = ?`,
+          [user_id]
+        );
+        await pool.execute(
+          `UPDATE asignaciones SET status = 'expired' WHERE usuario_id = ? AND status = 'cancelled'`,
+          [user_id]
+        );
+        console.log(`Plan vencido bajado a básico para user ${user_id}`);
+      }
+
+      if (expiredUsers.length === 0) {
+        console.log("No hay planes vencidos hoy.");
+      }
+    } catch (expiredError) {
+      console.error("Error bajando planes vencidos:", expiredError);
+    }
+
     if (periods.length === 0) {
       console.log("No hay rutinas que vencen hoy.");
-      console.timeEnd('renewRoutines'); // Fin de medición si no hay nada que procesar
+      console.timeEnd('renewRoutines');
       return { error: false, message: "No hay rutinas que renovar hoy." };
     }
 
