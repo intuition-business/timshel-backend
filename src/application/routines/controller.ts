@@ -1597,7 +1597,8 @@ export const regenerateRoutinesIa = async (
     }
 
     const routineId = existingPlanRows[0].id;
-    const existingPlan: any[] = JSON.parse(existingPlanRows[0].training_plan);
+    const rawPlan = existingPlanRows[0].training_plan;
+    const existingPlan: any[] = typeof rawPlan === 'string' ? JSON.parse(rawPlan) : rawPlan;
 
     // 5. Separar histórico (fecha < hoy) de futuro (fecha >= hoy)
     const historicalDays = existingPlan.filter((d: any) => d.fecha < todayStr);
