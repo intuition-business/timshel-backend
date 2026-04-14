@@ -338,8 +338,8 @@ export const generateRoutinesIa = async (
 
     // Ya existe rutina para este periodo
     const [existingRoutine]: any = await pool.execute(
-      "SELECT id FROM user_training_plans WHERE user_id = ? AND created_at >= ? AND created_at <= ? LIMIT 1",
-      [userId, startDateStr, endDateStr]
+      "SELECT id FROM user_training_plans WHERE user_id = ? AND updated_at >= ? LIMIT 1",
+      [userId, startDateStr]
     );
     if (existingRoutine && existingRoutine.length > 0) {
       res.status(409).json({
