@@ -9,7 +9,7 @@ import { SECRET } from "../../config";
 import pool from "../../config/db";
 import { any } from "joi";
 import { v4 as uuidv4 } from "uuid";
-import { generateRoutinesIaBackground } from "../routineDays/controller";
+import { generateRoutinesIaBackground, getLocalDateString } from "../routineDays/controller";
 let uuidv4Sync: () => string;
 
 interface Exercise {
@@ -260,6 +260,41 @@ export const generateRoutinesIa = async (
     const userId = (<any>(<unknown>decode)).userId;
 
 
+    // Verificar plan activo y generaciones
+    const [authRows]: any = await pool.execute(
+      "SELECT plan_id, plan_valid_until, generations_remaining FROM auth WHERE id = ?",
+      [userId]
+    );
+
+    if (!authRows.length) {
+      res.status(404).json({ error: true, message: "Usuario no encontrado." });
+      return;
+    }
+
+    const auth = authRows[0];
+    const todayForAuth = getLocalDateString(new Date());
+
+    // Plan vencido
+    if (auth.plan_valid_until && auth.plan_valid_until < todayForAuth && auth.plan_id !== 0) {
+      res.status(403).json({
+        error: true,
+        message: "Tu plan ha vencido. Renueva tu suscripción para seguir generando rutinas.",
+        code: "PLAN_EXPIRED"
+      });
+      return;
+    }
+
+    // Sin generaciones disponibles
+    if (auth.generations_remaining <= 0) {
+      res.status(403).json({
+        error: true,
+        message: "No tienes generaciones disponibles. Actualiza tu plan para obtener más.",
+        code: "NO_GENERATIONS",
+        generations_remaining: 0
+      });
+      return;
+    }
+
     // Obtener el período actual del usuario
     const [periodRows]: any = await pool.execute(
       `SELECT DISTINCT start_date, end_date FROM user_routine WHERE user_id = ? ORDER BY start_date DESC LIMIT 1`,
@@ -268,18 +303,17 @@ export const generateRoutinesIa = async (
 
     if (!periodRows || periodRows.length === 0) {
       res.status(400).json({
-        response: "",
         error: true,
-        message: "No existen días de rutina creados. Por favor crea días primero."
+        message: "No tienes días de entrenamiento configurados. Selecciona tus días antes de generar la rutina.",
+        code: "NO_ROUTINE_DAYS"
       });
       return;
     }
 
     const { start_date, end_date } = periodRows[0];
 
-    // Asegurar formato YYYY-MM-DD correcto
     const formatDate = (d: any): string => {
-      if (typeof d === 'string') return d; // ya es string, retornar directo
+      if (typeof d === 'string') return d;
       if (d instanceof Date) {
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -292,16 +326,26 @@ export const generateRoutinesIa = async (
     const startDateStr = formatDate(start_date);
     const endDateStr = formatDate(end_date);
 
-    // Verificar si ya existe una rutina generada para este usuario y periodo
+    // Periodo vencido (end_date < hoy)
+    if (endDateStr < todayForAuth) {
+      res.status(400).json({
+        error: true,
+        message: "Tu periodo de entrenamiento ha terminado. El sistema renovará tus días automáticamente.",
+        code: "PERIOD_EXPIRED"
+      });
+      return;
+    }
+
+    // Ya existe rutina para este periodo
     const [existingRoutine]: any = await pool.execute(
       "SELECT id FROM user_training_plans WHERE user_id = ? AND created_at >= ? AND created_at <= ? LIMIT 1",
       [userId, startDateStr, endDateStr]
     );
     if (existingRoutine && existingRoutine.length > 0) {
       res.status(409).json({
-        response: "",
         error: true,
-        message: "Ya existe una rutina generada para este periodo. No se puede generar una nueva hasta que se complete o elimine la anterior."
+        message: "Ya tienes una rutina activa para este periodo. Usa la opción de cambiar días si deseas modificarla.",
+        code: "ROUTINE_ALREADY_EXISTS"
       });
       return;
     }
@@ -334,7 +378,12 @@ export const generateRoutinesIa = async (
     );
 
     if (!rows?.[0]) {
-      res.status(400).json({ response: [], error: true, message: "No se encontró formulario del usuario.", routine_id: null, user_id: userId });
+      res.status(400).json({
+        error: true,
+        message: "No has completado tu perfil de entrenamiento. Completa el formulario antes de generar una rutina.",
+        code: "NO_PROFILE",
+        routine_id: null
+      });
       return;
     }
 
@@ -374,7 +423,12 @@ export const generateRoutinesIa = async (
       parsedFirstDay = days[0];
     } catch (err) {
       console.error("[IA] Error generando primer día:", err);
-      res.json({ response: [], error: true, message: "No se pudo generar la rutina con IA.", routine_id: null, user_id: userId });
+      res.status(503).json({
+        error: true,
+        message: "Hubo un problema al conectar con el servicio de IA. Intenta de nuevo en unos momentos.",
+        code: "AI_ERROR",
+        routine_id: null
+      });
       return;
     }
 
@@ -391,6 +445,12 @@ export const generateRoutinesIa = async (
       [userId, JSON.stringify([firstDayBuilt]), new Date(), new Date()]
     );
     const routineId = insertResult?.insertId;
+
+    // Descontar 1 generación — la generación inició exitosamente
+    await pool.execute(
+      "UPDATE auth SET generations_remaining = generations_remaining - 1 WHERE id = ?",
+      [userId]
+    );
 
     // Poblar primer día para responder al usuario
     const firstDayPopulated = await populateExerciseDetails([firstDayBuilt]);
