@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createRoutine,
   getRoutineByUserId,
+  getSelectedDays,
   updateRoutineDayStatus,
   deleteRoutineDay,
   updateRoutineDays,
@@ -29,6 +30,13 @@ router.get(
   "/",
   verifyToken,
   asyncHandler(getRoutineByUserId)
+);
+
+// Ruta GET para obtener solo los días de la semana configurados
+router.get(
+  "/selected-days",
+  verifyToken,
+  asyncHandler(getSelectedDays)
 );
 
 // Ruta PUT para actualizar el estado de un día (completado o pendiente)

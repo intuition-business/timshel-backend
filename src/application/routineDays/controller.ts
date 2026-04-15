@@ -416,6 +416,35 @@ export const deleteRoutineDay = async (req: Request, res: Response, next: NextFu
 
 
 
+// Devuelve los días de la semana configurados por el usuario en su periodo activo
+export const getSelectedDays = async (req: Request, res: Response, next: NextFunction) => {
+  const { headers } = req;
+  const token = headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (<any>(<unknown>decode)).userId;
+
+  try {
+    const [rows]: any = await pool.execute(
+      `SELECT DISTINCT day FROM user_routine
+       WHERE user_id = ?
+         AND start_date = (SELECT MAX(start_date) FROM user_routine WHERE user_id = ?)
+       ORDER BY MIN(date)`,
+      [userId, userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: true, message: "No se encontraron días configurados.", code: "NO_ROUTINE_DAYS" });
+    }
+
+    const days = rows.map((r: any) => r.day);
+
+    return res.status(200).json({ error: false, selected_days: days });
+  } catch (error) {
+    console.error("Error en getSelectedDays:", error);
+    next(error);
+  }
+};
+
 // Cambiar días de entrenamiento — reasigna fechas al plan existente, conserva historial y semanas
 export const updateRoutineDays = async (req: Request, res: Response, next: NextFunction) => {
   const { selected_days } = req.body;
