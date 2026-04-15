@@ -1435,7 +1435,8 @@ export const searchInGeneratedRoutine = async (
     // 6. Base de la respuesta común
     const baseResponse = {
       error: false,
-      rutina_id,
+      plan_id: rutina_id,
+      day_rutina_id: populatedDay.rutina_id,
       user_id: targetUserId,
       fecha_rutina: formattedFecha,
       routine_name: populatedDay.nombre,
