@@ -1477,8 +1477,9 @@ export const searchInGeneratedRoutine = async (
 
     // 8. Caso: solo fecha_rutina → devolver todos los ejercicios del día
     const ejerciciosFormateados = populatedDay.ejercicios.map((e: any) => ({
-      nombre_ejercicio: e.nombre_ejercicio,
       exercise_id: e.exercise_id,
+      db_id: e.db_id,
+      nombre_ejercicio: e.nombre_ejercicio,
       description: e.description || "",
       video_url: e.video_url || "",
       thumbnail_url: e.thumbnail_url || "",
