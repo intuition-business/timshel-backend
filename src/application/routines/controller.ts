@@ -1428,19 +1428,24 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 5. Base de la respuesta común
+    // 5. Poblar detalles de ejercicios desde tabla exercises
+    const { populateExerciseDetails } = require("../routineDays/controller");
+    const [populatedDay] = await populateExerciseDetails([day]);
+
+    // 6. Base de la respuesta común
     const baseResponse = {
       error: false,
       rutina_id,
       user_id: targetUserId,
       fecha_rutina: formattedFecha,
-      routine_name: day.nombre,
+      routine_name: populatedDay.nombre,
+      exercise_category: populatedDay.exercise_category || [],
       queried_by_admin: targetUserId !== currentUserId,
     };
 
-    // 6. Caso: se proporciona exercise_id → devolver solo ese ejercicio
+    // 7. Caso: se proporciona exercise_id → devolver solo ese ejercicio
     if (exercise_id) {
-      const exercise = day.ejercicios.find((e: any) => e.exercise_id === exercise_id);
+      const exercise = populatedDay.ejercicios.find((e: any) => e.exercise_id === exercise_id);
 
       if (!exercise) {
         res.status(404).json({
@@ -1460,6 +1465,7 @@ export const searchInGeneratedRoutine = async (
             description: exercise.description || "",
             video_url: exercise.video_url || "",
             thumbnail_url: exercise.thumbnail_url || "",
+            muscle_group: exercise.muscle_group || null,
             Esquema: exercise.Esquema,
           },
         },
@@ -1467,13 +1473,14 @@ export const searchInGeneratedRoutine = async (
       return;
     }
 
-    // 7. Caso: solo fecha_rutina → devolver todos los ejercicios del día
-    const ejerciciosFormateados = day.ejercicios.map((e: any) => ({
+    // 8. Caso: solo fecha_rutina → devolver todos los ejercicios del día
+    const ejerciciosFormateados = populatedDay.ejercicios.map((e: any) => ({
       nombre_ejercicio: e.nombre_ejercicio,
       exercise_id: e.exercise_id,
       description: e.description || "",
       video_url: e.video_url || "",
       thumbnail_url: e.thumbnail_url || "",
+      muscle_group: e.muscle_group || null,
       Esquema: e.Esquema,
     }));
 
@@ -1482,7 +1489,7 @@ export const searchInGeneratedRoutine = async (
       message: "Día completo encontrado",
       response: {
         ejercicios: ejerciciosFormateados,
-        status: day.status || "pending",
+        status: populatedDay.status || "pending",
       },
     });
   } catch (error) {
