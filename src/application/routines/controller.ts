@@ -1093,6 +1093,7 @@ export const editExercise = async (
         if (Esquema) {
           if (Esquema.Series !== undefined) ej.Esquema.Series = Esquema.Series;
           if (Esquema.Descanso !== undefined) ej.Esquema.Descanso = Esquema.Descanso;
+          if (Esquema.Repeticiones !== undefined) ej.Esquema.Repeticiones = Esquema.Repeticiones;
           if (Esquema["Detalle series"]) ej.Esquema["Detalle series"] = Esquema["Detalle series"];
         }
         updatedCount++;
