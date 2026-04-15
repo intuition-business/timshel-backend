@@ -1056,7 +1056,8 @@ export const editExercise = async (
 
     // Body: plan_id + day_rutina_id + db_id (ejercicio a modificar)
     //       + new_db_id (opcional, nuevo ejercicio) + Esquema (opcional)
-    const { plan_id, day_rutina_id, db_id, new_db_id, Esquema } = req.body;
+    const { plan_id, day_rutina_id, db_id, new_db_id, Esquema, updates } = req.body;
+    const esquemaToApply = Esquema || updates;
 
     if (!plan_id || !day_rutina_id || !db_id) {
       res.status(400).json({ error: true, message: "Faltan: plan_id, day_rutina_id, db_id" });
@@ -1084,17 +1085,20 @@ export const editExercise = async (
     }
 
     // Actualizar TODOS los días con ese day_rutina_id
+    console.log("[editExercise] buscando day_rutina_id:", day_rutina_id, "db_id:", db_id);
+    console.log("[editExercise] días en plan:", trainingPlan.map((d: any) => ({ rutina_id: d.rutina_id, fecha: d.fecha })));
     let updatedCount = 0;
     for (const day of trainingPlan) {
       if (day.rutina_id !== day_rutina_id) continue;
+      console.log("[editExercise] día encontrado:", day.fecha, "ejercicios db_ids:", day.ejercicios.map((e: any) => e.db_id));
       for (const ej of day.ejercicios) {
         if (Number(ej.db_id) !== Number(db_id)) continue;
         if (new_db_id !== undefined) ej.db_id = Number(new_db_id);
-        if (Esquema) {
-          if (Esquema.Series !== undefined) ej.Esquema.Series = Esquema.Series;
-          if (Esquema.Descanso !== undefined) ej.Esquema.Descanso = Esquema.Descanso;
-          if (Esquema.Repeticiones !== undefined) ej.Esquema.Repeticiones = Esquema.Repeticiones;
-          if (Esquema["Detalle series"]) ej.Esquema["Detalle series"] = Esquema["Detalle series"];
+        if (esquemaToApply) {
+          if (esquemaToApply.Series !== undefined) ej.Esquema.Series = esquemaToApply.Series;
+          if (esquemaToApply.Descanso !== undefined) ej.Esquema.Descanso = esquemaToApply.Descanso;
+          if (esquemaToApply.Repeticiones !== undefined) ej.Esquema.Repeticiones = esquemaToApply.Repeticiones;
+          if (esquemaToApply["Detalle series"]) ej.Esquema["Detalle series"] = esquemaToApply["Detalle series"];
         }
         updatedCount++;
       }
