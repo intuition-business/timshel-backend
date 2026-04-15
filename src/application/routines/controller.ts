@@ -1462,8 +1462,9 @@ export const searchInGeneratedRoutine = async (
         message: "Ejercicio específico encontrado",
         response: {
           exercise: {
-            nombre_ejercicio: exercise.nombre_ejercicio,
             exercise_id: exercise.exercise_id,
+            db_id: exercise.db_id,
+            nombre_ejercicio: exercise.nombre_ejercicio,
             description: exercise.description || "",
             video_url: exercise.video_url || "",
             thumbnail_url: exercise.thumbnail_url || "",
