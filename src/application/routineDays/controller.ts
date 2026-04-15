@@ -428,6 +428,7 @@ export const getSelectedDays = async (req: Request, res: Response, next: NextFun
       `SELECT day FROM user_routine
        WHERE user_id = ?
          AND start_date = (SELECT MAX(start_date) FROM user_routine WHERE user_id = ?)
+         AND date >= CURDATE()
        GROUP BY day
        ORDER BY MIN(date)`,
       [userId, userId]
