@@ -425,9 +425,10 @@ export const getSelectedDays = async (req: Request, res: Response, next: NextFun
 
   try {
     const [rows]: any = await pool.execute(
-      `SELECT DISTINCT day FROM user_routine
+      `SELECT day FROM user_routine
        WHERE user_id = ?
          AND start_date = (SELECT MAX(start_date) FROM user_routine WHERE user_id = ?)
+       GROUP BY day
        ORDER BY MIN(date)`,
       [userId, userId]
     );
