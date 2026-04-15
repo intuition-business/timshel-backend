@@ -703,6 +703,7 @@ export async function populateExerciseDetails(plan: any[]): Promise<any[]> {
       const ex = exerciseMap.get(Number(ej.db_id));
       return {
         exercise_id: ej.exercise_id,
+        db_id: ej.db_id,
         nombre_ejercicio: ex?.exercise || "",
         description: ex?.description || "",
         video_url: ex?.video_url || "",
