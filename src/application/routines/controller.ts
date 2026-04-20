@@ -1153,23 +1153,32 @@ export const addExercise = async (
       return;
     }
 
-    // 2. BODY (sin cambios)
-    const { rutina_id, day_fecha, new_exercise, updates } = req.body;
-    if (!rutina_id || !day_fecha || !new_exercise || !updates || Object.keys(updates).length === 0) {
-      res.status(400).json({ error: true, message: "Faltan: rutina_id, day_fecha, new_exercise, updates" });
+    // 2. BODY
+    const { day_fecha, db_id, Esquema, updates } = req.body;
+    const esquemaToApply = Esquema || updates;
+    if (!day_fecha || !db_id || !esquemaToApply) {
+      res.status(400).json({ error: true, message: "Faltan: day_fecha, db_id, Esquema" });
       return;
     }
 
-    // 3. OBTENER PLAN + VALIDAR rutina_id (sin cambios)
+    // 3. VALIDAR db_id existe en exercises
+    const [exRows]: any = await pool.execute("SELECT id FROM exercises WHERE id = ? LIMIT 1", [db_id]);
+    if (exRows.length === 0) {
+      res.status(404).json({ error: true, message: "Ejercicio no encontrado en catálogo" });
+      return;
+    }
+
+    // 4. OBTENER PLAN MÁS RECIENTE DEL USUARIO
     const [planRows]: any = await pool.execute(
-      `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND id = ?`,
-      [targetUserId, rutina_id]
+      `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1`,
+      [targetUserId]
     );
 
     if (planRows.length === 0) {
-      res.status(404).json({ error: true, message: "Rutina no encontrada (user_id o rutina_id inválido)" });
+      res.status(404).json({ error: true, message: "No se encontró rutina activa para este usuario" });
       return;
     }
+    const rutina_id = planRows[0].id;
 
     let trainingPlan: any[];
     try {
@@ -1181,53 +1190,50 @@ export const addExercise = async (
       return;
     }
 
-    // 4. CONSTRUIR EL NUEVO EJERCICIO - AGREGAR exercise_id
+    // 5. CONSTRUIR EL TEMPLATE DEL NUEVO EJERCICIO (exercise_id único por día en el loop)
     const constructedExercise = {
-      nombre_ejercicio: new_exercise,
-      exercise_id: uuidv4(),  // ← Nuevo: genera UUID único
+      db_id: Number(db_id),
       Esquema: {
-        Series: updates.Series,
-        Descanso: updates.Descanso,
-        "Detalle series": updates["Detalle series"]
-      },
-      description: updates.description,
-      video_url: updates.video_url,
-      thumbnail_url: updates.thumbnail_url
+        Series: esquemaToApply.Series,
+        Descanso: esquemaToApply.Descanso,
+        "Detalle series": esquemaToApply["Detalle series"]
+      }
     };
 
-    // 5. BUSCAR EL DÍA POR FECHA Y AGREGAR EL EJERCICIO (sin cambios)
-    let found = false;
-
-    for (const day of trainingPlan) {
-      if (new Date(day.fecha).toISOString().split("T")[0] === day_fecha) {
-        // AGREGAR EL NUEVO EJERCICIO
-        day.ejercicios.push(constructedExercise);
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
+    // 6. OBTENER rutina_id DEL DÍA POR FECHA
+    const targetDay = trainingPlan.find(
+      (day: any) => new Date(day.fecha).toISOString().split("T")[0] === day_fecha
+    );
+    if (!targetDay) {
       res.status(404).json({ error: true, message: "Día no encontrado en la rutina" });
       return;
     }
+    const dayRutinaId = targetDay.rutina_id;
 
-    // 6. GUARDAR (sin cambios)
+    // 7. AGREGAR A TODOS LOS DÍAS QUE COMPARTAN ESE rutina_id (misma lógica que edit-exercise)
+    let updatedCount = 0;
+    for (const day of trainingPlan) {
+      if (day.rutina_id === dayRutinaId) {
+        day.ejercicios.push({ ...constructedExercise, exercise_id: uuidv4() });
+        updatedCount++;
+      }
+    }
+
+    // 7. GUARDAR
     await pool.execute(
       `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
       [JSON.stringify(trainingPlan), rutina_id]
     );
 
-    // 7. RESPUESTA - Agrego exercise_id en la response para que el frontend lo sepa
     res.json({
       error: false,
-      message: "Nuevo ejercicio agregado a la rutina",
+      message: `Ejercicio agregado en ${updatedCount} días (todos los que comparten rutina_id)`,
       response: {
         user_id: targetUserId,
         rutina_id,
+        day_rutina_id: dayRutinaId,
         day_fecha,
-        exercise_name: new_exercise,
-        exercise_id: constructedExercise.exercise_id  // ← Nuevo: devuelve el ID generado
+        db_id: constructedExercise.db_id,
       },
     });
   } catch (error) {
