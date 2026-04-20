@@ -47,7 +47,7 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
         // Insertar el nuevo plan (description_items como JSON stringified)
         const [result]: any = await pool.execute(
             "INSERT INTO planes (title, price_cop, description_items, description, activo, generations_allowed) VALUES (?, ?, ?, ?, ?, ?)",
-            [title, price_cop, JSON.stringify(description_items), description, activo, generations_allowed]
+            [title, price_cop, description_items ? JSON.stringify(description_items) : null, description ?? null, activo, generations_allowed]
         );
 
         if (result) {
