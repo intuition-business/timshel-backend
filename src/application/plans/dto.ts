@@ -47,11 +47,10 @@ const generations_allowed = Joi.number()
 const description_items = Joi.array()
     .items(Joi.string().trim().min(1).max(200))
     .min(1)
-    .required()
+    .optional()
     .messages({
         'array.base': 'Los items de descripción deben ser un array',
-        'array.min': 'Debe haber al menos 1 item de descripción',
-        'any.required': 'Los items de descripción son requeridos'
+        'array.min': 'Debe haber al menos 1 item de descripción'
     });
 
 const description = Joi.string()
