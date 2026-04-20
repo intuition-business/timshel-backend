@@ -32,10 +32,16 @@ export const readFiles = async (personData: any, daysData: any) => {
 
   // Categorías complementarias según split (push/pull): si tiene PECHO incluir TRÍCEPS, si tiene ESPALDA incluir BÍCEPS
   const complementMap: Record<string, string[]> = {
-    'PECHO': ['TRICEPS'],
-    'TRICEPS': ['PECHO'],
+    'PECHO': ['TRICEPS', 'HOMBRO'],
+    'TRICEPS': ['PECHO', 'HOMBRO'],
+    'HOMBRO': ['TRICEPS', 'PECHO'],
     'ESPALDA': ['BICEPS'],
     'BICEPS': ['ESPALDA'],
+    'CUADRICEPS': ['ISQUITIBIALES', 'GLUTEO'],
+    'ISQUITIBIALES': ['CUADRICEPS', 'GLUTEO'],
+    'GLUTEO': ['ISQUITIBIALES', 'CUADRICEPS'],
+    'ABDOMEN': [],
+    'PANTORRILLA': ['CUADRICEPS', 'ISQUITIBIALES'],
   };
   const allCategories = new Set<string>(userCategories);
   userCategories.forEach(cat => {
