@@ -1271,31 +1271,23 @@ export const deleteExercise = async (
     }
 
     // 2. BODY
-    const { rutina_id, fecha_rutina, exercise_id } = req.body;
-    if (!rutina_id || !fecha_rutina || !exercise_id) {
-      res.status(400).json({ error: true, message: "Faltan: rutina_id, fecha_rutina, exercise_id" });
+    const { day_fecha, db_id } = req.body;
+    if (!day_fecha || !db_id) {
+      res.status(400).json({ error: true, message: "Faltan: day_fecha, db_id" });
       return;
     }
 
-    // Formatear fecha_rutina a YYYY-MM-DD
-    let formattedFecha: string;
-    try {
-      formattedFecha = convertDate(fecha_rutina);  // Asume tu función convertDate
-    } catch {
-      res.status(400).json({ error: true, message: "Formato de fecha_rutina inválido (usa DD/MM/YYYY)" });
-      return;
-    }
-
-    // 3. OBTENER PLAN + VALIDAR rutina_id
+    // 3. OBTENER PLAN MÁS RECIENTE DEL USUARIO
     const [planRows]: any = await pool.execute(
-      `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND id = ?`,
-      [targetUserId, rutina_id]
+      `SELECT id, training_plan FROM user_training_plans WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1`,
+      [targetUserId]
     );
 
     if (planRows.length === 0) {
-      res.status(404).json({ error: true, message: "Rutina no encontrada (user_id o rutina_id inválido)" });
+      res.status(404).json({ error: true, message: "No se encontró rutina activa para este usuario" });
       return;
     }
+    const rutina_id = planRows[0].id;
 
     let trainingPlan: any[];
     try {
@@ -1307,29 +1299,34 @@ export const deleteExercise = async (
       return;
     }
 
-    // 4. BUSCAR EL DÍA POR FECHA Y ELIMINAR EL EJERCICIO
-    let found = false;
+    // 4. OBTENER rutina_id DEL DÍA POR FECHA
+    const targetDay = trainingPlan.find(
+      (day: any) => new Date(day.fecha).toISOString().split("T")[0] === day_fecha
+    );
+    if (!targetDay) {
+      res.status(404).json({ error: true, message: "Día no encontrado en la rutina" });
+      return;
+    }
+    const dayRutinaId = targetDay.rutina_id;
 
+    // 5. ELIMINAR EN TODOS LOS DÍAS QUE COMPARTAN ESE rutina_id
+    let updatedCount = 0;
     for (const day of trainingPlan) {
-      const dayFecha = new Date(day.fecha).toISOString().split("T")[0];
-      if (dayFecha === formattedFecha) {
-        const exerciseIndex = day.ejercicios.findIndex((e: any) => e.exercise_id === exercise_id);
-
+      if (day.rutina_id === dayRutinaId) {
+        const exerciseIndex = day.ejercicios.findIndex((e: any) => e.db_id === Number(db_id));
         if (exerciseIndex !== -1) {
-          // ELIMINAR EL EJERCICIO DEL ARRAY
           day.ejercicios.splice(exerciseIndex, 1);
-          found = true;
-          break;
+          updatedCount++;
         }
       }
     }
 
-    if (!found) {
-      res.status(404).json({ error: true, message: "Ejercicio no encontrado en la fecha/rutina" });
+    if (updatedCount === 0) {
+      res.status(404).json({ error: true, message: "Ejercicio no encontrado en los días de esa rutina" });
       return;
     }
 
-    // 5. GUARDAR
+    // 6. GUARDAR
     await pool.execute(
       `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
       [JSON.stringify(trainingPlan), rutina_id]
@@ -1337,12 +1334,13 @@ export const deleteExercise = async (
 
     res.json({
       error: false,
-      message: "Ejercicio eliminado exitosamente",
+      message: `Ejercicio eliminado en ${updatedCount} días (todos los que comparten rutina_id)`,
       response: {
         user_id: targetUserId,
         rutina_id,
-        fecha_rutina: formattedFecha,
-        exercise_id,
+        day_rutina_id: dayRutinaId,
+        day_fecha,
+        db_id: Number(db_id),
       },
     });
   } catch (error) {
