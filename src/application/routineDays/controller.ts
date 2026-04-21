@@ -298,6 +298,22 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
         })
       : rutinaFinal;
 
+    // Traer status real de user_routine para cada día del plan
+    if (Array.isArray(rutinaConDia) && rutinaConDia.length > 0) {
+      const fechas = rutinaConDia.map((dia: any) => dia.fecha).filter(Boolean);
+      if (fechas.length > 0) {
+        const placeholders = fechas.map(() => '?').join(',');
+        const [statusRows]: any = await pool.execute(
+          `SELECT date, status FROM user_routine WHERE user_id = ? AND date IN (${placeholders})`,
+          [userId, ...fechas]
+        );
+        const statusMap = new Map(statusRows.map((r: any) => [r.date, r.status]));
+        rutinaConDia.forEach((dia: any) => {
+          if (dia.fecha) dia.status = statusMap.get(dia.fecha) || 'pending';
+        });
+      }
+    }
+
     return res.status(200).json({
       error: false,
       message: "Rutina obtenida exitosamente",

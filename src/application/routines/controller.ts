@@ -544,9 +544,18 @@ export const getRoutinesSaved = async (
     // Start a transaction
     await pool.query("START TRANSACTION");
 
-    // Fetch routines from complete_rutina
+    // Fetch routines from complete_rutina poblando datos del ejercicio desde exercises
     const [rows]: any = await pool.execute(
-      "SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed FROM complete_rutina WHERE user_id = ? ORDER BY fecha_rutina DESC, rutina_id, exercise_name",
+      `SELECT cr.fecha_rutina, cr.routine_name, cr.rutina_id, cr.db_id,
+              COALESCE(e.exercise, cr.exercise_name) AS exercise_name,
+              COALESCE(e.description, cr.description) AS description,
+              COALESCE(e.thumbnail_url, cr.thumbnail_url) AS thumbnail_url,
+              COALESCE(e.video_url, cr.video_url) AS video_url,
+              cr.liked, cr.liked_reason, cr.series_completed
+       FROM complete_rutina cr
+       LEFT JOIN exercises e ON e.id = cr.db_id
+       WHERE cr.user_id = ?
+       ORDER BY cr.fecha_rutina DESC, cr.rutina_id, exercise_name`,
       [userId]
     );
 
@@ -672,7 +681,16 @@ export const getRoutineByDate = async (
     const formattedFecha = convertDate(fecha_rutina as string);
 
     const [rows]: any = await pool.execute(
-      "SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed FROM complete_rutina WHERE user_id = ? AND fecha_rutina = ? ORDER BY fecha_rutina DESC, rutina_id, exercise_name",
+      `SELECT cr.fecha_rutina, cr.routine_name, cr.rutina_id, cr.db_id,
+              COALESCE(e.exercise, cr.exercise_name) AS exercise_name,
+              COALESCE(e.description, cr.description) AS description,
+              COALESCE(e.thumbnail_url, cr.thumbnail_url) AS thumbnail_url,
+              COALESCE(e.video_url, cr.video_url) AS video_url,
+              cr.liked, cr.liked_reason, cr.series_completed
+       FROM complete_rutina cr
+       LEFT JOIN exercises e ON e.id = cr.db_id
+       WHERE cr.user_id = ? AND cr.fecha_rutina = ?
+       ORDER BY cr.fecha_rutina DESC, cr.rutina_id, exercise_name`,
       [userId, formattedFecha]
     );
 
@@ -773,21 +791,27 @@ export const getRoutineByExerciseName = async (
 
     // Construcción de consulta — exercise_name es opcional
     let query = `
-      SELECT fecha_rutina, routine_name, rutina_id, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed
-      FROM complete_rutina
-      WHERE user_id = ?
+      SELECT cr.fecha_rutina, cr.routine_name, cr.rutina_id, cr.db_id,
+             COALESCE(e.exercise, cr.exercise_name) AS exercise_name,
+             COALESCE(e.description, cr.description) AS description,
+             COALESCE(e.thumbnail_url, cr.thumbnail_url) AS thumbnail_url,
+             COALESCE(e.video_url, cr.video_url) AS video_url,
+             cr.liked, cr.liked_reason, cr.series_completed
+      FROM complete_rutina cr
+      LEFT JOIN exercises e ON e.id = cr.db_id
+      WHERE cr.user_id = ?
     `;
     const params: (string | number)[] = [userId];
     if (exercise_name && typeof exercise_name === "string") {
-      query += " AND LOWER(exercise_name) LIKE LOWER(?)";
+      query += " AND LOWER(COALESCE(e.exercise, cr.exercise_name)) LIKE LOWER(?)";
       params.push(`%${exercise_name}%`);
     }
     if (routine_name && typeof routine_name === "string") {
-      query += " AND LOWER(routine_name) LIKE LOWER(?)";
+      query += " AND LOWER(cr.routine_name) LIKE LOWER(?)";
       params.push(`%${routine_name}%`);
     }
     if (formattedFecha) {
-      query += " AND fecha_rutina = ?";
+      query += " AND cr.fecha_rutina = ?";
       params.push(formattedFecha);
     }
     query += " ORDER BY fecha_rutina DESC, rutina_id ASC, exercise_name LIMIT 100";
@@ -935,9 +959,9 @@ export const routinesSaved = async (
     }
 
     const validExercises = exercises.filter((exercise: any, index: number) => {
-      const valid = exercise.exercise_name && exercise.series_completed && exercise.series_completed.length > 0;
+      const valid = exercise.db_id && exercise.series_completed && exercise.series_completed.length > 0;
       if (!valid) {
-        console.log(`Ejercicio inválido en el índice ${index}: ${exercise.exercise_name}`);
+        console.log(`Ejercicio inválido en el índice ${index}: db_id=${exercise.db_id}`);
       }
       return valid;
     });
@@ -974,14 +998,27 @@ export const routinesSaved = async (
       }
 
       for (const exercise of validExercises) {
-        const { exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed } = exercise;
+        const { db_id, liked, liked_reason, series_completed } = exercise;
+
+        // Obtener detalles del ejercicio desde la tabla exercises
+        const [exerciseRows]: any = await connection.execute(
+          "SELECT exercise, description, video_url, thumbnail_url FROM exercises WHERE id = ?",
+          [db_id]
+        );
+
+        if (!exerciseRows || exerciseRows.length === 0) {
+          console.log(`Ejercicio con db_id=${db_id} no encontrado en tabla exercises, se omite.`);
+          continue;
+        }
+
+        const { exercise: exercise_name, description, video_url, thumbnail_url } = exerciseRows[0];
 
         const safeLiked = liked === undefined ? false : liked;
         const safeLikedReason = liked_reason === null || liked_reason === undefined ? '' : liked_reason;
         const safeSeriesCompleted = series_completed === null || series_completed === undefined ? '[]' : JSON.stringify(series_completed);
 
         const [exerciseInsertResult]: any = await connection.execute(
-          "INSERT INTO complete_rutina (fecha_rutina, user_id, routine_name, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed, rutina_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO complete_rutina (fecha_rutina, user_id, routine_name, exercise_name, description, thumbnail_url, video_url, liked, liked_reason, series_completed, rutina_id, db_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           [
             formattedFecha,
             userId,
@@ -994,6 +1031,7 @@ export const routinesSaved = async (
             safeLikedReason,
             safeSeriesCompleted,
             rutinaId,
+            db_id,
           ]
         );
 
