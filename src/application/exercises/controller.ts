@@ -142,7 +142,7 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
     if (result) {
       // Consulta el ejercicio creado para obtener todos los campos, incluyendo at_home
       const [newExercise]: any = await pool.execute(
-        "SELECT id, category, exercise, description, at_home, video_url, thumbnail_url, muscle_group FROM exercises WHERE id = ?",
+        "SELECT id, category, exercise, exercise_en, description, description_en, at_home, video_url, thumbnail_url, muscle_group FROM exercises WHERE id = ?",
         [result.insertId]
       );
       const createdExercise = newExercise[0] || {};
@@ -168,7 +168,7 @@ export const createExercise = async (req: Request, res: Response, next: NextFunc
 // Update con uploads integrados (sobrescribe si se suben nuevos archivos)
 export const updateExercise = async (req: Request, res: Response, next: NextFunction) => {
   const exerciseId = req.params.id;
-  const { new_category, new_exercise, new_description, new_at_home, new_video_url: bodyVideoUrl, new_thumbnail_url: bodyThumbnailUrl, new_muscle_group } = req.body; // Campos de texto opcionales
+  const { new_category, new_exercise, new_exercise_en, new_description, new_description_en, new_at_home, new_video_url: bodyVideoUrl, new_thumbnail_url: bodyThumbnailUrl, new_muscle_group } = req.body; // Campos de texto opcionales
   const files = req.files as { [fieldname: string]: Express.MulterS3.File[] } | undefined;
 
   const response = { message: "", error: false };
@@ -242,6 +242,14 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
       updateFields.push("exercise = ?");
       updateValues.push(new_exercise);
     }
+    if (new_exercise_en) {
+      updateFields.push("exercise_en = ?");
+      updateValues.push(new_exercise_en);
+    }
+    if (new_description_en) {
+      updateFields.push("description_en = ?");
+      updateValues.push(new_description_en);
+    }
     if (new_at_home !== undefined) {
       updateFields.push("at_home = ?");
       updateValues.push(new_at_home === null ? null : (new_at_home ? 1 : 0));
@@ -287,7 +295,7 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
 };
 
 export const getAllExercises = async (req: Request, res: Response, next: NextFunction) => {
-  const { page, limit } = req.query;
+  const { page, limit, lang = 'es' } = req.query;
   const { headers } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
@@ -337,7 +345,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
 
       // Consulta paginada
       const [rows] = await pool.execute(
-        "SELECT id, category, exercise, description, video_url, thumbnail_url, at_home, muscle_group FROM exercises ORDER BY id ASC LIMIT ? OFFSET ?",
+        "SELECT id, category, exercise, exercise_en, description, description_en, video_url, thumbnail_url, at_home, muscle_group FROM exercises ORDER BY id ASC LIMIT ? OFFSET ?",
         [limitNum, offset]
       );
 
@@ -358,7 +366,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
     } else {
       // Traer todos sin paginación
       const [rows] = await pool.execute(
-        "SELECT id, category, exercise, description, video_url, thumbnail_url, at_home, muscle_group FROM exercises ORDER BY id ASC"
+        "SELECT id, category, exercise, exercise_en, description, description_en, video_url, thumbnail_url, at_home, muscle_group FROM exercises ORDER BY id ASC"
       );
 
       exerciseRows = rows as Array<{
@@ -379,7 +387,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
 
     // Enviar respuesta si hay datos
     if (exerciseRows.length > 0) {
-      response.data = adapterExercises(exerciseRows);
+      response.data = adapterExercises(exerciseRows, lang as string);
       response.message = "Ejercicios obtenidos exitosamente";
       if (!shouldPaginate) {
         response.message += " (Todos los ejercicios sin paginación)";
@@ -403,6 +411,7 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
 // Obtener un ejercicio por ID
 export const getExerciseById = async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
+  const { lang = 'es' } = req.query;
 
   const response = {
     message: "",
@@ -426,8 +435,8 @@ export const getExerciseById = async (req: Request, res: Response, next: NextFun
 
     // Consulta por ID
     const [rows] = await pool.execute(
-      `SELECT id, category, exercise, description, video_url, thumbnail_url, at_home, muscle_group 
-       FROM exercises 
+      `SELECT id, category, exercise, exercise_en, description, description_en, video_url, thumbnail_url, at_home, muscle_group
+       FROM exercises
        WHERE id = ?`,
       [id]
     );
@@ -450,7 +459,7 @@ export const getExerciseById = async (req: Request, res: Response, next: NextFun
     }
 
     // Adaptamos el resultado (usamos el mismo adapter que en getAll)
-    const exerciseData = adapterExercises(exerciseRows)[0]; // Solo el primero
+    const exerciseData = adapterExercises(exerciseRows, lang as string)[0]; // Solo el primero
 
     response.data = exerciseData;
     response.message = "Ejercicio obtenido exitosamente";
@@ -464,7 +473,7 @@ export const getExerciseById = async (req: Request, res: Response, next: NextFun
 };
 
 export const getExercisesByCategory = async (req: Request, res: Response, next: NextFunction) => {
-  const { category } = req.query;
+  const { category, lang = 'es' } = req.query;
 
   const { headers } = req;
   const token = headers["x-access-token"];
@@ -489,7 +498,7 @@ export const getExercisesByCategory = async (req: Request, res: Response, next: 
     }
 
     const [rows] = await pool.execute(
-      "SELECT id, category, exercise, description, video_url, thumbnail_url, muscle_group FROM exercises WHERE category = ? ORDER BY exercise ASC",
+      "SELECT id, category, exercise, exercise_en, description, description_en, video_url, thumbnail_url, muscle_group FROM exercises WHERE category = ? ORDER BY exercise ASC",
       [category.toString().toUpperCase()]
     );
 
@@ -504,7 +513,7 @@ export const getExercisesByCategory = async (req: Request, res: Response, next: 
     }>;
 
     if (exerciseRows.length > 0) {
-      response.data = adapterExercises(exerciseRows);
+      response.data = adapterExercises(exerciseRows, lang as string);
       response.message = `Ejercicios de la categoría ${category} obtenidos exitosamente`;
       return res.status(200).json(response);
     } else {

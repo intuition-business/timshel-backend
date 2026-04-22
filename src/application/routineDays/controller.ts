@@ -246,10 +246,11 @@ const generateGlobalRoutine = (selectedDays: string[], startDate: Date, endDate:
 };
 
 export const getRoutineByUserId = async (req: Request, res: Response, next: NextFunction) => {
-  const { headers } = req;
+  const { headers, query } = req;
   const token = headers["x-access-token"];
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
+  const lang = (query.lang as string) || 'es';
 
   try {
     // Buscar el último plan de entrenamiento generado para el usuario
@@ -314,10 +315,16 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
       }
     }
 
+    // Si piden inglés, repoblar nombres/descripciones desde exercises usando db_id
+    let rutinaFinal2 = rutinaConDia;
+    if (lang === 'en' && Array.isArray(rutinaConDia)) {
+      rutinaFinal2 = await populateExerciseDetails(rutinaConDia, 'en');
+    }
+
     return res.status(200).json({
       error: false,
       message: "Rutina obtenida exitosamente",
-      data: rutinaConDia,
+      data: rutinaFinal2,
     });
   } catch (error) {
     console.error("Error al obtener la rutina del usuario:", error);
@@ -697,7 +704,7 @@ function generateDefaultRoutineDays() {
 
 
 // Popula detalles de ejercicios desde la tabla exercises (para responder al cliente)
-export async function populateExerciseDetails(plan: any[]): Promise<any[]> {
+export async function populateExerciseDetails(plan: any[], lang: string = 'es'): Promise<any[]> {
   const allDbIds: number[] = [];
   plan.forEach((day: any) => {
     (day.ejercicios || []).forEach((ej: any) => {
@@ -708,11 +715,12 @@ export async function populateExerciseDetails(plan: any[]): Promise<any[]> {
   const exerciseMap = new Map<number, any>();
   if (uniqueIds.length > 0) {
     const [exRows]: any = await pool.execute(
-      `SELECT * FROM exercises WHERE id IN (${uniqueIds.map(() => '?').join(',')})`,
+      `SELECT id, exercise, exercise_en, description, description_en, video_url, thumbnail_url, muscle_group FROM exercises WHERE id IN (${uniqueIds.map(() => '?').join(',')})`,
       uniqueIds
     );
     exRows.forEach((ex: any) => exerciseMap.set(ex.id, ex));
   }
+  const isEn = lang === 'en';
   return plan.map((day: any) => ({
     ...day,
     ejercicios: (day.ejercicios || []).map((ej: any) => {
@@ -720,8 +728,8 @@ export async function populateExerciseDetails(plan: any[]): Promise<any[]> {
       return {
         exercise_id: ej.exercise_id,
         db_id: ej.db_id,
-        nombre_ejercicio: ex?.exercise || "",
-        description: ex?.description || "",
+        nombre_ejercicio: isEn ? (ex?.exercise_en || ex?.exercise || "") : (ex?.exercise || ""),
+        description: isEn ? (ex?.description_en || ex?.description || "") : (ex?.description || ""),
         video_url: ex?.video_url || "",
         thumbnail_url: ex?.thumbnail_url || "",
         muscle_group: ex?.muscle_group || null,
