@@ -112,7 +112,8 @@ export const getGeneratedRoutinesIa = async (
 
   const month = query.month as string;
   const date = query.date as string;
-  const adminUserId = query.user_id as string; // ← NUEVO: solo para admin
+  const adminUserId = query.user_id as string;
+  const lang = (query.lang as string) || 'es';
 
   // ← NUEVO BLOQUE: decidir qué userId usar
   const targetUserId = adminUserId ? adminUserId : userIdFromToken;
@@ -199,11 +200,13 @@ export const getGeneratedRoutinesIa = async (
     const exerciseMap = new Map<number, any>();
     if (uniqueDbIds.length > 0) {
       const [exRows]: any = await pool.execute(
-        `SELECT * FROM exercises WHERE id IN (${uniqueDbIds.map(() => '?').join(',')})`,
+        `SELECT id, exercise, exercise_en, description, description_en, video_url, thumbnail_url, muscle_group FROM exercises WHERE id IN (${uniqueDbIds.map(() => '?').join(',')})`,
         uniqueDbIds
       );
       exRows.forEach((ex: any) => exerciseMap.set(ex.id, ex));
     }
+
+    const isEn = lang === 'en';
 
     // Integrar estados y poblar ejercicios
     trainingPlan = trainingPlan.map((day: any) => {
@@ -217,8 +220,8 @@ export const getGeneratedRoutinesIa = async (
           return {
             exercise_id: ej.exercise_id,
             db_id: Number(ej.db_id),
-            nombre_ejercicio: ex?.exercise || "",
-            description: ex?.description || "",
+            nombre_ejercicio: isEn ? (ex?.exercise_en || ex?.exercise || "") : (ex?.exercise || ""),
+            description: isEn ? (ex?.description_en || ex?.description || "") : (ex?.description || ""),
             video_url: ex?.video_url || "",
             thumbnail_url: ex?.thumbnail_url || "",
             muscle_group: ex?.muscle_group || null,
@@ -536,10 +539,18 @@ export const getRoutinesSaved = async (
   next: NextFunction
 ) => {
   try {
-    const { headers } = req;
+    const { headers, query } = req;
     const token = headers["x-access-token"];
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
+    const lang = (query.lang as string) || 'es';
+
+    const exNameCol = lang === 'en'
+      ? `COALESCE(e.exercise_en, e.exercise, cr.exercise_name)`
+      : `COALESCE(e.exercise, cr.exercise_name)`;
+    const exDescCol = lang === 'en'
+      ? `COALESCE(e.description_en, e.description, cr.description)`
+      : `COALESCE(e.description, cr.description)`;
 
     // Start a transaction
     await pool.query("START TRANSACTION");
@@ -547,8 +558,8 @@ export const getRoutinesSaved = async (
     // Fetch routines from complete_rutina poblando datos del ejercicio desde exercises
     const [rows]: any = await pool.execute(
       `SELECT cr.fecha_rutina, cr.routine_name, cr.rutina_id, cr.db_id,
-              COALESCE(e.exercise, cr.exercise_name) AS exercise_name,
-              COALESCE(e.description, cr.description) AS description,
+              ${exNameCol} AS exercise_name,
+              ${exDescCol} AS description,
               COALESCE(e.thumbnail_url, cr.thumbnail_url) AS thumbnail_url,
               COALESCE(e.video_url, cr.video_url) AS video_url,
               cr.liked, cr.liked_reason, cr.series_completed
@@ -668,7 +679,7 @@ export const getRoutineByDate = async (
     const decode = token && verify(`${token}`, SECRET);
     const userId = (<any>(<unknown>decode)).userId;
 
-    const { fecha_rutina } = req.query;
+    const { fecha_rutina, lang = 'es' } = req.query;
 
     if (!fecha_rutina) {
       res.status(400).json({
@@ -680,10 +691,17 @@ export const getRoutineByDate = async (
 
     const formattedFecha = convertDate(fecha_rutina as string);
 
+    const exNameCol = lang === 'en'
+      ? `COALESCE(e.exercise_en, e.exercise, cr.exercise_name)`
+      : `COALESCE(e.exercise, cr.exercise_name)`;
+    const exDescCol = lang === 'en'
+      ? `COALESCE(e.description_en, e.description, cr.description)`
+      : `COALESCE(e.description, cr.description)`;
+
     const [rows]: any = await pool.execute(
       `SELECT cr.fecha_rutina, cr.routine_name, cr.rutina_id, cr.db_id,
-              COALESCE(e.exercise, cr.exercise_name) AS exercise_name,
-              COALESCE(e.description, cr.description) AS description,
+              ${exNameCol} AS exercise_name,
+              ${exDescCol} AS description,
               COALESCE(e.thumbnail_url, cr.thumbnail_url) AS thumbnail_url,
               COALESCE(e.video_url, cr.video_url) AS video_url,
               cr.liked, cr.liked_reason, cr.series_completed
@@ -776,7 +794,7 @@ export const getRoutineByExerciseName = async (
     const userId = decode.userId;
 
     // Validación de entrada
-    const { exercise_name, fecha_rutina, routine_name } = req.query;
+    const { exercise_name, fecha_rutina, routine_name, lang = 'es' } = req.query;
 
     // Formato de fecha
     let formattedFecha: string | null = null;
@@ -789,11 +807,18 @@ export const getRoutineByExerciseName = async (
       }
     }
 
+    const exNameCol = lang === 'en'
+      ? `COALESCE(e.exercise_en, e.exercise, cr.exercise_name)`
+      : `COALESCE(e.exercise, cr.exercise_name)`;
+    const exDescCol = lang === 'en'
+      ? `COALESCE(e.description_en, e.description, cr.description)`
+      : `COALESCE(e.description, cr.description)`;
+
     // Construcción de consulta — exercise_name es opcional
     let query = `
       SELECT cr.fecha_rutina, cr.routine_name, cr.rutina_id, cr.db_id,
-             COALESCE(e.exercise, cr.exercise_name) AS exercise_name,
-             COALESCE(e.description, cr.description) AS description,
+             ${exNameCol} AS exercise_name,
+             ${exDescCol} AS description,
              COALESCE(e.thumbnail_url, cr.thumbnail_url) AS thumbnail_url,
              COALESCE(e.video_url, cr.video_url) AS video_url,
              cr.liked, cr.liked_reason, cr.series_completed
@@ -803,7 +828,7 @@ export const getRoutineByExerciseName = async (
     `;
     const params: (string | number)[] = [userId];
     if (exercise_name && typeof exercise_name === "string") {
-      query += " AND LOWER(COALESCE(e.exercise, cr.exercise_name)) LIKE LOWER(?)";
+      query += ` AND LOWER(${exNameCol}) LIKE LOWER(?)`;
       params.push(`%${exercise_name}%`);
     }
     if (routine_name && typeof routine_name === "string") {
@@ -1412,7 +1437,7 @@ export const searchInGeneratedRoutine = async (
     }
 
     // 2. Parámetros
-    const { fecha_rutina, exercise_id } = req.query;
+    const { fecha_rutina, exercise_id, lang = 'es' } = req.query;
 
     if (!fecha_rutina) {
       res.status(400).json({
@@ -1477,7 +1502,7 @@ export const searchInGeneratedRoutine = async (
 
     // 5. Poblar detalles de ejercicios desde tabla exercises
     const { populateExerciseDetails } = require("../routineDays/controller");
-    const [populatedDay] = await populateExerciseDetails([day]);
+    const [populatedDay] = await populateExerciseDetails([day], lang as string);
 
     // 6. Base de la respuesta común
     const baseResponse = {

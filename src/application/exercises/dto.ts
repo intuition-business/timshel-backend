@@ -74,7 +74,10 @@ export const getExerciseDto = Joi.object({
     .optional()
     .messages({
       'any.only': 'Filtro de grupo muscular inválido'
-    })
+    }),
+  lang: Joi.string().valid('es', 'en').optional(),
+  page: Joi.number().integer().positive().optional(),
+  limit: Joi.number().integer().positive().optional(),
 });
 
 // UPDATE EXERCISE DTO
