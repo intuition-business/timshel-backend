@@ -24,42 +24,19 @@ export const readFiles = async (personData: any, daysData: any) => {
   // Leemos la plantilla
   const promptTemplate = await fs.readFile(pathFilePrompt, "utf-8");
 
-  // Filtrar ejercicios solo a las categorías que el usuario entrena
   const DEFAULT_CATEGORIES = ['PECHO', 'ESPALDA'];
   const userCategories: string[] = Array.isArray(personData.grupo_muscular_favorito) && personData.grupo_muscular_favorito.length > 0
     ? personData.grupo_muscular_favorito
     : DEFAULT_CATEGORIES;
 
-  // Categorías complementarias según split (push/pull): si tiene PECHO incluir TRÍCEPS, si tiene ESPALDA incluir BÍCEPS
-  const complementMap: Record<string, string[]> = {
-    'PECHO': ['TRICEPS', 'HOMBRO'],
-    'TRICEPS': ['PECHO', 'HOMBRO'],
-    'HOMBRO': ['TRICEPS', 'PECHO'],
-    'ESPALDA': ['BICEPS'],
-    'BICEPS': ['ESPALDA'],
-    'CUADRICEPS': ['ISQUITIBIALES', 'GLUTEO'],
-    'ISQUITIBIALES': ['CUADRICEPS', 'GLUTEO'],
-    'GLUTEO': ['ISQUITIBIALES', 'CUADRICEPS'],
-    'ABDOMEN': [],
-    'PANTORRILLA': ['CUADRICEPS', 'ISQUITIBIALES'],
-  };
-  const allCategories = new Set<string>(userCategories);
-  userCategories.forEach(cat => {
-    (complementMap[cat] || []).forEach(c => allCategories.add(c));
-  });
+  const favoriteSet = new Set<string>(userCategories);
 
-  let exerciseQuery = "SELECT id, category, exercise, description, video_url, thumbnail_url, muscle_group FROM exercises";
-  let exerciseParams: any[] = [];
-  if (allCategories.size > 0) {
-    const placeholders = [...allCategories].map(() => '?').join(',');
-    exerciseQuery += ` WHERE category IN (${placeholders})`;
-    exerciseParams = [...allCategories];
-  }
-  exerciseQuery += " ORDER BY category ASC, exercise ASC";
+  // Traer todos los ejercicios de todas las categorías
+  const [exerciseRowsRaw] = await pool.execute(
+    "SELECT id, category, exercise, description, video_url, thumbnail_url, muscle_group FROM exercises ORDER BY category ASC, exercise ASC"
+  );
 
-  const [exerciseRowsRaw] = await pool.execute(exerciseQuery, exerciseParams);
-
-  const exerciseRows = exerciseRowsRaw as Array<{
+  const allExerciseRows = exerciseRowsRaw as Array<{
     id: number;
     category: string;
     exercise: string;
@@ -68,6 +45,14 @@ export const readFiles = async (personData: any, daysData: any) => {
     thumbnail_url: string | null;
     muscle_group: string;
   }>;
+
+  // Favoritos: todos. No favoritos: máx 3 por categoría (para no agrandar el prompt)
+  const nonFavCount: Record<string, number> = {};
+  const exerciseRows = allExerciseRows.filter(row => {
+    if (favoriteSet.has(row.category)) return true;
+    nonFavCount[row.category] = (nonFavCount[row.category] || 0) + 1;
+    return nonFavCount[row.category] <= 3;
+  });
 
   // Formateamos los ejercicios como CSV (id incluido para que la IA lo use)
   let ejerciciosCsv = "ID;Categoria;Ejercicio;Descripción;Video_URL;Thumbnail_URL;Muscle_Group\n";
