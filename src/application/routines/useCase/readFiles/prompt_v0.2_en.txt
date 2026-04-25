@@ -10,8 +10,8 @@ The user data includes the following fields from the form:
 - Other fields: weight_kg, height_cm, age, injuries, pathologies, diseases
 
 Use these fields to determine:
-1. Which muscle groups to assign to each training day. Each day MUST have a DIFFERENT muscle group combination. Distribute the user's favorite groups across the days using push/pull/legs or similar split logic.
-2. How many exercises per day the user should perform, depending on train_experience and actividad_semanal.
+1. Which muscle groups to assign to each training day. Each day MUST combine at least one group from grupo_muscular_favorito with at least one complementary group from the opposite body region. If favorites are lower body (GLUTEO, CUADRICEPS, ISQUITIBIALES, PANTORRILLA), always pair with an upper body group (ESPALDA, HOMBRO, BICEPS, TRICEPS, PECHO). If favorites are upper body, always pair with a lower body group. Never dedicate a full day to only upper body or only lower body.
+2. Exercise distribution per day: approximately 70% of exercises from grupo_muscular_favorito, 30% from the complementary group. Target 5 to 6 exercises per day.
 3. The appropriate repetitions, sets, and rest times for each exercise using the reference table provided in ###VOLUMEN###.
 4. Only select exercises from the table ###EJERCICIOS### matching the selected muscle groups for that day.
 
@@ -41,11 +41,14 @@ Note: the volume table uses these muscle group names which map to the exercise c
 
 Rules for selecting exercises and schemes:
 - Each day must have a DIFFERENT category combination from the other days. Spread the user's grupo_muscular_favorito across the available training days.
+- Each day MUST include exercises from both a lower body AND an upper body group. Never assign only upper body or only lower body to a single day.
+- Approximately 70% of exercises per day should come from grupo_muscular_favorito, 30% from the complementary group.
 - Select exercises ONLY from the category(ies) assigned to that specific day.
-- Use the reference table (###VOLUMEN###) to adjust repetitions, series, and frequency.
-- Always use 4 sets per exercise (Series = 4).
+- Use the reference table (###VOLUMEN###) to adjust repetitions, sets, and rest times per muscle group.
+- Sets per exercise (Series): beginner = 2 to 3 sets, intermediate = 3 to 4 sets, advanced or expert = 4 to 5 sets. Use the ###VOLUMEN### table only as reference for weekly volume — do not use those numbers directly as sets per exercise.
 - Rest time ("Descanso"): 2 minutes for large muscle categories, 1.5 minutes for small muscle.
-- Number of exercises: 3 to 5 per day depending on experience level.
+- Repetitions: use the rep range from ###VOLUMEN### adjusted to the user's train_experience (higher reps for beginners, lower reps for advanced).
+- Number of exercises per day based on train_experience: beginner = 4 to 5, intermediate = 5 to 6, advanced or expert = 6 to 7.
 
 Output format:
 Return a flat JSON array where each element is one training day. The array must contain EXACTLY one object per date in ###DIAS###, in the same order.
@@ -64,39 +67,40 @@ Each day object must have:
           - "Detalle series": array with one object per set, each with "Reps" (number) and "carga" (0 if unknown)
   - "status": "pending"
 
-Example — if ###DIAS### has 3 dates, return exactly 3 objects:
+Example — if ###DIAS### has 3 dates and train_experience is "intermediate", return exactly 3 objects (note: Series = 3 for intermediate, would be 2 for beginner, 5 for advanced):
 
 [
   {
     "fecha": "2026-03-11",
     "semana": 1,
-    "categorias": ["PECHO", "TRÍCEPS"],
-    "nombre": "PECHO + TRÍCEPS",
+    "categorias": ["GLUTEO", "ESPALDA"],
+    "nombre": "GLUTEO + ESPALDA",
     "ejercicios": [
-      { "id": 1, "esquema": { "Series": 4, "Repeticiones": 10, "Descanso": 2, "Detalle series": [{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0}] } },
-      { "id": 43, "esquema": { "Series": 4, "Repeticiones": 12, "Descanso": 1.5, "Detalle series": [{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0}] } }
+      { "id": 68, "esquema": { "Series": 3, "Repeticiones": 12, "Descanso": 2, "Detalle series": [{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0}] } },
+      { "id": 16, "esquema": { "Series": 3, "Repeticiones": 10, "Descanso": 2, "Detalle series": [{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0}] } },
+      { "id": 70, "esquema": { "Series": 3, "Repeticiones": 15, "Descanso": 1.5, "Detalle series": [{"Reps":15,"carga":0},{"Reps":15,"carga":0},{"Reps":15,"carga":0}] } }
     ],
     "status": "pending"
   },
   {
-    "fecha": "2026-03-16",
+    "fecha": "2026-03-13",
     "semana": 1,
-    "categorias": ["ESPALDA", "BÍCEPS"],
-    "nombre": "ESPALDA + BÍCEPS",
+    "categorias": ["CUADRICEPS", "HOMBRO"],
+    "nombre": "CUADRICEPS + HOMBRO",
     "ejercicios": [
-      { "id": 9, "esquema": { "Series": 4, "Repeticiones": 10, "Descanso": 2, "Detalle series": [{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0}] } },
-      { "id": 35, "esquema": { "Series": 4, "Repeticiones": 12, "Descanso": 1.5, "Detalle series": [{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0}] } }
+      { "id": 22, "esquema": { "Series": 3, "Repeticiones": 10, "Descanso": 2, "Detalle series": [{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0}] } },
+      { "id": 48, "esquema": { "Series": 3, "Repeticiones": 12, "Descanso": 1.5, "Detalle series": [{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0}] } }
     ],
     "status": "pending"
   },
   {
-    "fecha": "2026-03-17",
+    "fecha": "2026-03-15",
     "semana": 1,
-    "categorias": ["HOMBRO"],
-    "nombre": "HOMBRO",
+    "categorias": ["ISQUITIBIALES", "BICEPS"],
+    "nombre": "ISQUITIBIALES + BICEPS",
     "ejercicios": [
-      { "id": 48, "esquema": { "Series": 4, "Repeticiones": 12, "Descanso": 2, "Detalle series": [{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0}] } },
-      { "id": 52, "esquema": { "Series": 4, "Repeticiones": 15, "Descanso": 1.5, "Detalle series": [{"Reps":15,"carga":0},{"Reps":15,"carga":0},{"Reps":15,"carga":0},{"Reps":15,"carga":0}] } }
+      { "id": 28, "esquema": { "Series": 3, "Repeticiones": 10, "Descanso": 2, "Detalle series": [{"Reps":10,"carga":0},{"Reps":10,"carga":0},{"Reps":10,"carga":0}] } },
+      { "id": 35, "esquema": { "Series": 3, "Repeticiones": 12, "Descanso": 1.5, "Detalle series": [{"Reps":12,"carga":0},{"Reps":12,"carga":0},{"Reps":12,"carga":0}] } }
     ],
     "status": "pending"
   }

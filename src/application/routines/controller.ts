@@ -10,6 +10,17 @@ import pool from "../../config/db";
 import { any } from "joi";
 import { v4 as uuidv4 } from "uuid";
 import { generateRoutinesIaBackground, regenerateRoutinesIaBackground, getLocalDateString } from "../routineDays/controller";
+import { categoryTranslations } from "../exercises/adapter";
+
+const normalizeKey = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+
+const normalizedCategoryTranslations = Object.fromEntries(
+  Object.entries(categoryTranslations).map(([k, v]) => [normalizeKey(k), v])
+);
+
+const translateNombre = (nombre: string): string =>
+  nombre.split(' + ').map(p => normalizedCategoryTranslations[normalizeKey(p.trim())] ?? p.trim()).join(' + ');
 let uuidv4Sync: () => string;
 
 interface Exercise {
@@ -214,6 +225,7 @@ export const getGeneratedRoutinesIa = async (
       const status = normalizedDayDate ? statusMap[normalizedDayDate] || "pending" : "pending";
       return {
         ...day,
+        nombre: isEn ? translateNombre(day.nombre) : day.nombre,
         status,
         ejercicios: (day.ejercicios || []).map((ej: any) => {
           const ex = exerciseMap.get(Number(ej.db_id));

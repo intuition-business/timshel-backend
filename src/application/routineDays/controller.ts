@@ -739,37 +739,61 @@ export async function populateExerciseDetails(plan: any[], lang: string = 'es'):
   }));
 }
 
-// Distribuye grupos musculares del usuario en splits diarios (push/pull/shoulders/legs/other)
+// Distribuye grupos musculares del usuario en splits diarios (70% favoritos + 30% complemento)
 function buildDaySplit(favs: string[], numDays: number): string[][] {
-  // Push: PECHO + TRÍCEPS (sin HOMBRO, va aparte)
-  const push: string[] = [];
-  if (favs.includes('PECHO')) push.push('PECHO');
-  if (favs.includes('PECHO') || favs.includes('TRICEPS')) push.push('TRICEPS');
+  const LOWER = ['CUADRICEPS', 'ISQUITIBIALES', 'GLUTEO', 'PANTORRILLA'];
+  const UPPER = ['PECHO', 'ESPALDA', 'HOMBRO', 'BICEPS', 'TRICEPS'];
 
-  // Pull: ESPALDA + BÍCEPS
-  const pull: string[] = [];
-  if (favs.includes('ESPALDA')) pull.push('ESPALDA');
-  if (favs.includes('ESPALDA') || favs.includes('BICEPS')) pull.push('BICEPS');
+  const lowerFavs = favs.filter(g => LOWER.includes(g));
+  const upperFavs = favs.filter(g => UPPER.includes(g));
 
-  // Shoulders: HOMBRO solo
-  const shoulders: string[] = favs.includes('HOMBRO') ? ['HOMBRO'] : [];
+  // Complementos de tren superior para días de tren inferior (y viceversa)
+  const upperComplements = ['ESPALDA', 'HOMBRO', 'BICEPS', 'TRICEPS', 'PECHO'];
+  const lowerComplements = ['GLUTEO', 'CUADRICEPS', 'ISQUITIBIALES'];
 
-  // Legs
-  const legs = favs.filter(g => ['CUADRICEPS', 'ISQUITIBIALES', 'GLUTEO', 'PANTORRILLA'].includes(g));
-
-  // Core
-  const core = favs.filter(g => g === 'ABDOMEN');
-
-  // Construir lista de splits en orden push → pull → shoulders → legs → core
   const available: string[][] = [];
-  if (push.length > 0) available.push(push);
-  if (pull.length > 0) available.push(pull);
-  if (shoulders.length > 0) available.push(shoulders);
-  if (legs.length > 0) available.push(legs);
-  if (core.length > 0) available.push(core);
-  if (available.length === 0) available.push(['PECHO', 'TRICEPS'], ['ESPALDA', 'BICEPS'], ['HOMBRO']);
 
-  // Asignar un split diferente a cada día (ciclar si hay más días que splits)
+  if (lowerFavs.length > 0 && upperFavs.length === 0) {
+    // Solo tren inferior: cada día = un grupo inferior diferente + complemento superior
+    for (let i = 0; i < Math.max(numDays, lowerFavs.length); i++) {
+      const primary = lowerFavs[i % lowerFavs.length];
+      const complement = upperComplements[i % upperComplements.length];
+      available.push([primary, complement]);
+    }
+  } else if (upperFavs.length > 0 && lowerFavs.length === 0) {
+    // Solo tren superior: push/pull/shoulders cada uno con complemento inferior
+    const push: string[] = [];
+    if (favs.includes('PECHO')) push.push('PECHO');
+    if (favs.includes('PECHO') || favs.includes('TRICEPS')) push.push('TRICEPS');
+    const pull: string[] = [];
+    if (favs.includes('ESPALDA')) pull.push('ESPALDA');
+    if (favs.includes('ESPALDA') || favs.includes('BICEPS')) pull.push('BICEPS');
+    const shoulders: string[] = favs.includes('HOMBRO') ? ['HOMBRO'] : [];
+
+    if (push.length > 0) available.push([...push, lowerComplements[0]]);
+    if (pull.length > 0) available.push([...pull, lowerComplements[1]]);
+    if (shoulders.length > 0) available.push([...shoulders, lowerComplements[2]]);
+    if (available.length === 0) available.push(['PECHO', 'TRICEPS', 'GLUTEO'], ['ESPALDA', 'BICEPS', 'CUADRICEPS'], ['HOMBRO', 'ISQUITIBIALES']);
+  } else {
+    // Mixto: lógica original — push/pull/shoulders/legs separados
+    const push: string[] = [];
+    if (favs.includes('PECHO')) push.push('PECHO');
+    if (favs.includes('PECHO') || favs.includes('TRICEPS')) push.push('TRICEPS');
+    const pull: string[] = [];
+    if (favs.includes('ESPALDA')) pull.push('ESPALDA');
+    if (favs.includes('ESPALDA') || favs.includes('BICEPS')) pull.push('BICEPS');
+    const shoulders: string[] = favs.includes('HOMBRO') ? ['HOMBRO'] : [];
+    const legs = lowerFavs;
+    const core = favs.filter(g => g === 'ABDOMEN');
+
+    if (push.length > 0) available.push(push);
+    if (pull.length > 0) available.push(pull);
+    if (shoulders.length > 0) available.push(shoulders);
+    if (legs.length > 0) available.push(legs);
+    if (core.length > 0) available.push(core);
+    if (available.length === 0) available.push(['PECHO', 'TRICEPS'], ['ESPALDA', 'BICEPS'], ['HOMBRO']);
+  }
+
   return Array.from({ length: numDays }, (_, i) => available[i % available.length]);
 }
 

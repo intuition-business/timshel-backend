@@ -1,4 +1,4 @@
-const categoryTranslations: Record<string, string> = {
+export const categoryTranslations: Record<string, string> = {
   PECHO:         'Chest',
   ESPALDA:       'Back',
   CUADRICEPS:    'Quadriceps',
