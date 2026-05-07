@@ -2,6 +2,39 @@ import { Request, Response, NextFunction } from "express";
 import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
+
+export const registerDeviceToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response<any>> => {
+  try {
+    const token = req.headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    const { device_id, fcm_token, lang } = req.body;
+
+    if (!device_id || !fcm_token) {
+      return res.status(400).json({ error: true, message: "device_id y fcm_token son requeridos" });
+    }
+
+    const validLang = lang === 'en' ? 'en' : 'es';
+
+    await pool.execute(
+      `INSERT INTO device_tokens (user_id, device_id, fcm_token, lang)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE fcm_token = VALUES(fcm_token), lang = VALUES(lang), updated_at = NOW()`,
+      [userId, device_id, fcm_token, validLang]
+    );
+
+    return res.status(200).json({ error: false, message: "Token registrado" });
+  } catch (error) {
+    console.error("Error al registrar device token:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
 import multer from "multer";
 import path from "path";
 import multerS3 from "multer-s3";
