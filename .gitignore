@@ -5,3 +5,4 @@ connectionaws.txt
 .DS_Store
 
 /src/application/routines/data
+/src/infrastructure/firebase/*.json

@@ -18,6 +18,7 @@ import { NODE_ENV, PORT, URL, SECRET } from "../config";  // Asegúrate de tener
 import { openapiSpecification } from "../infrastructure/swagger";
 import cron from 'node-cron';
 import { renewRoutines } from "../application/routineDays/controller";
+import { checkExpiringPlans } from "../infrastructure/firebase/notifications";
 
 // NUEVO: Importamos http
 import { createServer } from "http";
@@ -83,6 +84,11 @@ const Server = () => {
         cron.schedule('0 0 * * *', async () => {
           console.log("Ejecutando renovación de rutinas (cron medianoche)...");
           await renewRoutines();
+        }, { timezone: 'America/Bogota' });
+
+        cron.schedule('0 12 * * *', async () => {
+          console.log("Verificando planes por vencer (cron mediodía)...");
+          await checkExpiringPlans();
         }, { timezone: 'America/Bogota' });
       });
     } catch (error) {
