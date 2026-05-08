@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { verifyToken } from "../../middleware/jwtVerify";
 import { uploadChatMedia } from "../../middleware/uploadChatMedia";
-import { uploadChatMediaController } from "./controller";
+import { uploadChatMediaController, getChatWithUserController } from "./controller";
 
 
 // Función para manejar errores asíncronos
@@ -19,6 +19,13 @@ router.post(
     verifyToken,
     uploadChatMedia,
     asyncHandler(uploadChatMediaController)
+);
+
+// GET /api/chat/with/:receiverId — info de la conversación con un usuario
+router.get(
+    "/with/:receiverId",
+    verifyToken,
+    asyncHandler(getChatWithUserController)
 );
 
 export default router;

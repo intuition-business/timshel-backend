@@ -15,8 +15,13 @@ export const registerDeviceToken = async (
 
     const { device_id, fcm_token, lang } = req.body;
 
-    if (!device_id || !fcm_token) {
-      return res.status(400).json({ error: true, message: "device_id y fcm_token son requeridos" });
+    console.log("[device-token] body recibido:", JSON.stringify(req.body));
+
+    if (!device_id) {
+      return res.status(400).json({ error: true, message: "device_id es requerido" });
+    }
+    if (!fcm_token) {
+      return res.status(400).json({ error: true, message: "fcm_token es requerido" });
     }
 
     const validLang = lang === 'en' ? 'en' : 'es';
@@ -31,6 +36,35 @@ export const registerDeviceToken = async (
     return res.status(200).json({ error: false, message: "Token registrado" });
   } catch (error) {
     console.error("Error al registrar device token:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const deleteDeviceToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response<any>> => {
+  try {
+    const token = req.headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    const { device_id } = req.body;
+
+    if (!device_id) {
+      return res.status(400).json({ error: true, message: "device_id es requerido" });
+    }
+
+    await pool.execute(
+      `DELETE FROM device_tokens WHERE user_id = ? AND device_id = ?`,
+      [userId, device_id]
+    );
+
+    return res.status(200).json({ error: false, message: "Token eliminado" });
+  } catch (error) {
+    console.error("Error al eliminar device token:", error);
     next(error);
     return res.status(500).json({ message: "Error interno del servidor" });
   }

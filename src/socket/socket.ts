@@ -182,6 +182,29 @@ export const initSocket = (httpServer: any) => {
             // if (msg) io.to([msg.user_id_sender, userId].sort().join("_")).emit("message-seen", messageId);
         });
 
+        // Eliminar chat con un usuario (borra todos los mensajes del lado de ambos)
+        socket.on("delete-chat", async (receiverId: string) => {
+            if (!receiverId || userId === receiverId) {
+                socket.emit("error", "ID de receptor inválido");
+                return;
+            }
+
+            await pool.execute(
+                `DELETE FROM messages
+                 WHERE (user_id_sender = ? AND user_id_receiver = ?)
+                    OR (user_id_sender = ? AND user_id_receiver = ?)`,
+                [userId, receiverId, receiverId, userId]
+            );
+
+            const room = [userId, receiverId].sort().join("_");
+            io.to(room).emit("chat-history", []);
+
+            await emitUserChatsList(io, userId);
+            await emitUserChatsList(io, receiverId);
+
+            socket.emit("chat-deleted", { receiverId });
+        });
+
         socket.on("disconnect", () => {
             console.log(`Usuario desconectado: ${userId}`);
         });
@@ -193,7 +216,7 @@ export const initSocket = (httpServer: any) => {
 // ───────────────────────────────────────────────
 // NUEVA FUNCIÓN: Lista de conversaciones del usuario
 // ───────────────────────────────────────────────
-async function getUserChatList(userId: string): Promise<ChatPreview[]> {
+export async function getUserChatList(userId: string): Promise<ChatPreview[]> {
     try {
         const [rows]: any = await pool.execute(
             `
@@ -264,7 +287,59 @@ async function getUserChatList(userId: string): Promise<ChatPreview[]> {
 // Funciones ya existentes (sin cambios importantes)
 // ───────────────────────────────────────────────
 
-async function getUserDetails(userId: string): Promise<UserDetails> {
+export async function getChatPreviewWithUser(userId: string, receiverId: string): Promise<ChatPreview | null> {
+    try {
+        const [rows]: any = await pool.execute(
+            `SELECT
+                ? AS receiver_id,
+                MAX(m.created_at) AS last_time,
+                SUBSTRING_INDEX(
+                    GROUP_CONCAT(m.message ORDER BY m.created_at DESC SEPARATOR '||'), '||', 1
+                ) AS last_message_text,
+                SUBSTRING_INDEX(
+                    GROUP_CONCAT(m.files ORDER BY m.created_at DESC SEPARATOR '||'), '||', 1
+                ) AS last_message_files,
+                COUNT(CASE
+                    WHEN m.user_id_receiver = ? AND m.seen = FALSE THEN 1
+                    ELSE NULL
+                END) AS unread_count
+            FROM messages m
+            WHERE (m.user_id_sender = ? AND m.user_id_receiver = ?)
+               OR (m.user_id_sender = ? AND m.user_id_receiver = ?)`,
+            [receiverId, userId, userId, receiverId, receiverId, userId]
+        );
+
+        if (!rows || rows.length === 0 || !rows[0].last_time) return null;
+
+        const row = rows[0];
+        const receiver = await getUserDetails(receiverId);
+        const lastAttachment = getLastAttachment(row.last_message_files);
+
+        let lastMsg = (row.last_message_text || "").trim() || null;
+        if (!lastMsg && lastAttachment) {
+            lastMsg = getAttachmentPreviewLabel(lastAttachment.file_type);
+        } else if (lastMsg && lastAttachment) {
+            lastMsg = `${lastMsg} ${getAttachmentPreviewLabel(lastAttachment.file_type)}`;
+        }
+        if (lastMsg && lastMsg.length > 80) lastMsg = lastMsg.substring(0, 77) + "...";
+
+        return {
+            receiverId,
+            receiverName: receiver.name,
+            receiverImage: receiver.image,
+            lastMessage: lastMsg,
+            lastMessageTime: row.last_time ? new Date(row.last_time).toISOString() : null,
+            unreadCount: Number(row.unread_count) || 0,
+            attachmentType: lastAttachment?.file_type || null,
+            attachmentUrl: lastAttachment?.file_url || null,
+        };
+    } catch (err) {
+        console.error("Error en getChatPreviewWithUser:", err);
+        return null;
+    }
+}
+
+export async function getUserDetails(userId: string): Promise<UserDetails> {
     const [rows]: any = await pool.execute(
         `SELECT name, email, phone FROM formulario WHERE usuario_id = ? ORDER BY id DESC LIMIT 1`,
         [userId]
