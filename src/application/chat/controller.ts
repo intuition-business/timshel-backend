@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { getChatPreviewWithUser } from "../../socket/socket";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { promises as fs } from "fs";
@@ -20,6 +21,33 @@ const safeUnlink = async (targetPath: string, retries = 3, delayMs = 150) => {
 
             await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
+    }
+};
+
+export const getChatWithUserController = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<Response<any>> => {
+    try {
+        const userId = String((req as any).userId);
+        const { receiverId } = req.params;
+
+        if (!receiverId) {
+            return res.status(400).json({ error: true, message: "receiverId es requerido" });
+        }
+
+        const preview = await getChatPreviewWithUser(userId, receiverId);
+
+        if (!preview) {
+            return res.status(404).json({ error: true, message: "No hay conversación con este usuario" });
+        }
+
+        return res.status(200).json({ error: false, data: preview });
+    } catch (error) {
+        console.error("Error al obtener chat:", error);
+        next(error);
+        return res.status(500).json({ message: "Error interno del servidor" });
     }
 };
 
