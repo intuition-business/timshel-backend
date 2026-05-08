@@ -1,3 +1,3 @@
-import chatUploadMediaRouter from "./router";
+import chatUploadMediaRouter, { chatInfoRouter } from "./router";
 
-export { chatUploadMediaRouter };
+export { chatUploadMediaRouter, chatInfoRouter };

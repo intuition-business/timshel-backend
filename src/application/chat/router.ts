@@ -4,16 +4,15 @@ import { uploadChatMedia } from "../../middleware/uploadChatMedia";
 import { uploadChatMediaController, getChatWithUserController } from "./controller";
 
 
-// Función para manejar errores asíncronos
 function asyncHandler(fn: any) {
     return function (req: any, res: any, next: any) {
         Promise.resolve(fn(req, res, next)).catch(next);
     };
 }
 
+// Router para upload de media — montado en /api/chat/upload-media
 const router = Router();
 
-// Ruta POST para upload de media en chat
 router.post(
     "/",
     verifyToken,
@@ -21,11 +20,13 @@ router.post(
     asyncHandler(uploadChatMediaController)
 );
 
-// GET /api/chat/with/:receiverId — info de la conversación con un usuario
-router.get(
+export default router;
+
+// Router para info de chat — montado en /api/chat
+export const chatInfoRouter = Router();
+
+chatInfoRouter.get(
     "/with/:receiverId",
     verifyToken,
     asyncHandler(getChatWithUserController)
 );
-
-export default router;
