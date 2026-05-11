@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { uploadUserImage, upload, getUserImage, deleteUserImage, getUserProfile, cancelPlanController, registerDeviceToken, deleteDeviceToken } from "./controller";
+import { uploadUserImage, upload, getUserImage, deleteUserImage, getUserProfile, cancelPlanController, registerDeviceToken, deleteDeviceToken, sendTestNotification } from "./controller";
 import { verifyToken } from "../../middleware/jwtVerify";
 
 const router = Router();
@@ -26,6 +26,7 @@ router.get("/me", verifyToken, asyncHandler(getUserProfile));
 router.patch("/plan/cancel", verifyToken, asyncHandler(cancelPlanController));
 router.post("/device-token", verifyToken, asyncHandler(registerDeviceToken));
 router.delete("/device-token", verifyToken, asyncHandler(deleteDeviceToken));
+router.post("/device-token/test-notification", verifyToken, asyncHandler(sendTestNotification));
 
 router.delete(
   "/user/image/delete",

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { verifyToken } from "../../middleware/jwtVerify";
 import { uploadChatMedia } from "../../middleware/uploadChatMedia";
-import { uploadChatMediaController, getChatWithUserController } from "./controller";
+import { uploadChatMediaController, getChatWithUserController, blockUserController, unblockUserController, getBlockedUsersController } from "./controller";
 
 
 function asyncHandler(fn: any) {
@@ -29,4 +29,22 @@ chatInfoRouter.get(
     "/with/:receiverId",
     verifyToken,
     asyncHandler(getChatWithUserController)
+);
+
+chatInfoRouter.post(
+    "/block/:userId",
+    verifyToken,
+    asyncHandler(blockUserController)
+);
+
+chatInfoRouter.delete(
+    "/block/:userId",
+    verifyToken,
+    asyncHandler(unblockUserController)
+);
+
+chatInfoRouter.get(
+    "/blocked",
+    verifyToken,
+    asyncHandler(getBlockedUsersController)
 );
