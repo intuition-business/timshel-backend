@@ -178,7 +178,7 @@ export const initSocket = (httpServer: any) => {
             await emitUserChatsList(io, receiverId);
 
             // Push notification al receptor
-            sendChatPushNotification(senderId, receiverId, senderDetails.name, message, files).catch(() => {});
+            sendChatPushNotification(senderId, receiverId, senderDetails.name, message, files).catch((e) => console.error('[chat-push] error:', e?.message || e));
         });
 
         // Marcar como visto
