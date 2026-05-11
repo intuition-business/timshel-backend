@@ -41,6 +41,42 @@ export const registerDeviceToken = async (
   }
 };
 
+export const sendTestNotification = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response<any>> => {
+  try {
+    const token = req.headers["x-access-token"];
+    const decode = token && verify(`${token}`, SECRET);
+    const userId = (<any>(<unknown>decode)).userId;
+
+    const [rows]: any = await pool.execute(
+      `SELECT fcm_token FROM device_tokens WHERE user_id = ?`,
+      [userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: true, message: "No hay tokens registrados para este usuario" });
+    }
+
+    const { sendPushNotification } = await import("../../infrastructure/firebase/notifications");
+    const tokens = rows.map((r: any) => r.fcm_token);
+
+    await sendPushNotification(tokens, {
+      title: "🔔 Notificación de prueba",
+      body: "Si ves esto, las notificaciones push están funcionando correctamente.",
+      data: { route: "/home" },
+    });
+
+    return res.status(200).json({ error: false, message: `Notificación enviada a ${tokens.length} dispositivo(s)` });
+  } catch (error) {
+    console.error("Error al enviar notificación de prueba:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
 export const deleteDeviceToken = async (
   req: Request,
   res: Response,

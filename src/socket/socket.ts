@@ -20,6 +20,8 @@ interface ChatPreview {
     unreadCount: number;
     attachmentType: string | null;
     attachmentUrl: string | null;
+    blocked_by_me: boolean;
+    is_blocked: boolean;
 }
 
 interface MessageAttachment {
@@ -127,6 +129,19 @@ export const initSocket = (httpServer: any) => {
 
             if (!message?.trim() && (!files || files.length === 0)) {
                 socket.emit("error", "El mensaje debe contener texto o archivos");
+                return;
+            }
+
+            // Verificar bloqueo en cualquier dirección
+            const [blockRows]: any = await pool.execute(
+                `SELECT id FROM blocked_users
+                 WHERE (blocker_id = ? AND blocked_id = ?)
+                    OR (blocker_id = ? AND blocked_id = ?)
+                 LIMIT 1`,
+                [senderId, receiverId, receiverId, senderId]
+            );
+            if (blockRows.length > 0) {
+                socket.emit("message-blocked", { receiverId });
                 return;
             }
 
@@ -264,6 +279,8 @@ export async function getUserChatList(userId: string): Promise<ChatPreview[]> {
                 lastMsg = lastMsg.substring(0, 77) + "...";
             }
 
+            const blockStatus = await getBlockStatus(userId, row.receiver_id);
+
             previews.push({
                 receiverId: row.receiver_id,
                 receiverName: receiver.name,
@@ -273,6 +290,8 @@ export async function getUserChatList(userId: string): Promise<ChatPreview[]> {
                 unreadCount: Number(row.unread_count) || 0,
                 attachmentType: lastAttachment?.file_type || null,
                 attachmentUrl: lastAttachment?.file_url || null,
+                blocked_by_me: blockStatus.blocked_by_me,
+                is_blocked: blockStatus.is_blocked,
             });
         }
 
@@ -323,6 +342,8 @@ export async function getChatPreviewWithUser(userId: string, receiverId: string)
         }
         if (lastMsg && lastMsg.length > 80) lastMsg = lastMsg.substring(0, 77) + "...";
 
+        const blockStatus = await getBlockStatus(userId, receiverId);
+
         return {
             receiverId,
             receiverName: receiver.name,
@@ -332,6 +353,8 @@ export async function getChatPreviewWithUser(userId: string, receiverId: string)
             unreadCount: Number(row.unread_count) || 0,
             attachmentType: lastAttachment?.file_type || null,
             attachmentUrl: lastAttachment?.file_url || null,
+            blocked_by_me: blockStatus.blocked_by_me,
+            is_blocked: blockStatus.is_blocked,
         };
     } catch (err) {
         console.error("Error en getChatPreviewWithUser:", err);
@@ -366,6 +389,23 @@ export async function getUserDetails(userId: string): Promise<UserDetails> {
 
     const image = await getUserImage(userId);
     return { name: "Usuario desconocido", email: null, phone: null, image };
+}
+
+async function getBlockStatus(userId: string, otherId: string): Promise<{ blocked_by_me: boolean; is_blocked: boolean }> {
+    const [rows]: any = await pool.execute(
+        `SELECT blocker_id FROM blocked_users
+         WHERE (blocker_id = ? AND blocked_id = ?)
+            OR (blocker_id = ? AND blocked_id = ?)
+         LIMIT 2`,
+        [userId, otherId, otherId, userId]
+    );
+    let blocked_by_me = false;
+    let is_blocked = false;
+    for (const row of rows) {
+        if (String(row.blocker_id) === String(userId)) blocked_by_me = true;
+        else is_blocked = true;
+    }
+    return { blocked_by_me, is_blocked };
 }
 
 async function getUserImage(userId: string): Promise<string | null> {

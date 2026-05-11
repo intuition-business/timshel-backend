@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { getChatPreviewWithUser } from "../../socket/socket";
+import pool from "../../config/db";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { promises as fs } from "fs";
@@ -48,6 +49,83 @@ export const getChatWithUserController = async (
         console.error("Error al obtener chat:", error);
         next(error);
         return res.status(500).json({ message: "Error interno del servidor" });
+    }
+};
+
+export const blockUserController = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<Response<any>> => {
+    try {
+        const userId = String((req as any).userId);
+        const { userId: targetId } = req.params;
+
+        if (!targetId || userId === targetId) {
+            return res.status(400).json({ error: true, message: "ID de usuario inválido" });
+        }
+
+        await pool.execute(
+            `INSERT IGNORE INTO blocked_users (blocker_id, blocked_id) VALUES (?, ?)`,
+            [userId, targetId]
+        );
+
+        return res.status(200).json({ error: false, message: "Usuario bloqueado" });
+    } catch (error) {
+        next(error);
+        return res.status(500).json({ error: true, message: "Error interno del servidor" });
+    }
+};
+
+export const unblockUserController = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<Response<any>> => {
+    try {
+        const userId = String((req as any).userId);
+        const { userId: targetId } = req.params;
+
+        if (!targetId || userId === targetId) {
+            return res.status(400).json({ error: true, message: "ID de usuario inválido" });
+        }
+
+        await pool.execute(
+            `DELETE FROM blocked_users WHERE blocker_id = ? AND blocked_id = ?`,
+            [userId, targetId]
+        );
+
+        return res.status(200).json({ error: false, message: "Usuario desbloqueado" });
+    } catch (error) {
+        next(error);
+        return res.status(500).json({ error: true, message: "Error interno del servidor" });
+    }
+};
+
+export const getBlockedUsersController = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<Response<any>> => {
+    try {
+        const userId = String((req as any).userId);
+
+        const [rows]: any = await pool.execute(
+            `SELECT bu.blocked_id AS userId, COALESCE(f.name, e.name, 'Usuario') AS name,
+                    ui.image_path AS image
+             FROM blocked_users bu
+             LEFT JOIN formulario f ON f.usuario_id = bu.blocked_id
+             LEFT JOIN entrenadores e ON e.id = bu.blocked_id
+             LEFT JOIN user_images ui ON ui.user_id = bu.blocked_id
+               AND ui.created_at = (SELECT MAX(created_at) FROM user_images WHERE user_id = bu.blocked_id)
+             WHERE bu.blocker_id = ?`,
+            [userId]
+        );
+
+        return res.status(200).json({ error: false, data: rows });
+    } catch (error) {
+        next(error);
+        return res.status(500).json({ error: true, message: "Error interno del servidor" });
     }
 };
 
