@@ -176,6 +176,9 @@ export const initSocket = (httpServer: any) => {
             await emitChatHistoryToRoom(io, senderId, receiverId);
             await emitUserChatsList(io, senderId);
             await emitUserChatsList(io, receiverId);
+
+            // Push notification al receptor
+            sendChatPushNotification(senderId, receiverId, senderDetails.name, message, files).catch(() => {});
         });
 
         // Marcar como visto
@@ -521,4 +524,31 @@ function getAttachmentPreviewLabel(fileType?: string): string {
         default:
             return "📎 Archivo adjunto";
     }
+}
+
+async function sendChatPushNotification(
+    senderId: string,
+    receiverId: string,
+    senderName: string,
+    message: string,
+    files: { file_url: string; file_type: string }[]
+): Promise<void> {
+    const [rows]: any = await pool.execute(
+        `SELECT fcm_token FROM device_tokens WHERE user_id = ?`,
+        [receiverId]
+    );
+    if (!rows.length) return;
+
+    const tokens = rows.map((r: any) => r.fcm_token);
+    const body = message?.trim() || (files.length > 0 ? getAttachmentPreviewLabel(files[0].file_type) : "Nuevo mensaje");
+
+    const { sendPushNotification } = await import("../infrastructure/firebase/notifications");
+    await sendPushNotification(tokens, {
+        title: senderName,
+        body,
+        data: {
+            route: '/chat/chat-user',
+            userIdToConnect: senderId,
+        },
+    });
 }
