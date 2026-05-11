@@ -71,7 +71,7 @@ export const checkExpiringPlans = async (): Promise<void> => {
       await sendPushNotification(tokens, {
         ...msg,
         data: {
-          route: '/subscription',
+          route: '/trainer',
           days_remaining: String(days),
         },
       });
