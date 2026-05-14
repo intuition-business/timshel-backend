@@ -212,7 +212,8 @@ export const initSocket = (httpServer: any) => {
 
         // Bloquear usuario
         socket.on("block-user", async (targetId: string) => {
-            if (!targetId || userId === targetId) {
+            console.log(`[block-user] userId=${userId} bloqueando targetId=${targetId}`);
+            if (!targetId || String(userId) === String(targetId)) {
                 socket.emit("error", "ID de usuario inválido");
                 return;
             }
@@ -222,15 +223,17 @@ export const initSocket = (httpServer: any) => {
                 [userId, targetId]
             );
 
-            await emitUserChatsList(io, userId);
-            await emitUserChatsList(io, targetId);
+            await emitUserChatsList(io, String(userId));
+            await emitUserChatsList(io, String(targetId));
 
             socket.emit("block-success", { targetId });
+            console.log(`[block-user] OK — my-chats-list emitido a ${userId} y ${targetId}`);
         });
 
         // Desbloquear usuario
         socket.on("unblock-user", async (targetId: string) => {
-            if (!targetId || userId === targetId) {
+            console.log(`[unblock-user] userId=${userId} desbloqueando targetId=${targetId}`);
+            if (!targetId || String(userId) === String(targetId)) {
                 socket.emit("error", "ID de usuario inválido");
                 return;
             }
@@ -240,10 +243,11 @@ export const initSocket = (httpServer: any) => {
                 [userId, targetId]
             );
 
-            await emitUserChatsList(io, userId);
-            await emitUserChatsList(io, targetId);
+            await emitUserChatsList(io, String(userId));
+            await emitUserChatsList(io, String(targetId));
 
             socket.emit("unblock-success", { targetId });
+            console.log(`[unblock-user] OK — my-chats-list emitido a ${userId} y ${targetId}`);
         });
 
         // Eliminar chat solo para mí (el otro usuario conserva sus mensajes)
@@ -278,8 +282,7 @@ export const initSocket = (httpServer: any) => {
 export async function getUserChatList(userId: string): Promise<ChatPreview[]> {
     try {
         const [rows]: any = await pool.execute(
-            `
-            SELECT
+            `SELECT
                 CASE
                     WHEN m.user_id_sender = ? THEN m.user_id_receiver
                     ELSE m.user_id_sender
@@ -292,32 +295,34 @@ export async function getUserChatList(userId: string): Promise<ChatPreview[]> {
                     GROUP_CONCAT(m.files ORDER BY m.created_at DESC SEPARATOR '||'), '||', 1
                 ) AS last_message_files,
                 COUNT(CASE
-                    WHEN m.user_id_receiver = ?
-                    AND m.seen = FALSE
-                    THEN 1
+                    WHEN m.user_id_receiver = ? AND m.seen = FALSE THEN 1
                     ELSE NULL
                 END) AS unread_count
             FROM messages m
-            WHERE (m.user_id_sender = ? OR m.user_id_receiver = ?)
-              AND m.created_at > COALESCE(
-                  (SELECT deleted_at FROM chat_deletions
-                   WHERE user_id = ? AND other_user_id = CASE
-                       WHEN m.user_id_sender = ? THEN m.user_id_receiver
-                       ELSE m.user_id_sender
-                   END),
-                  '1970-01-01'
-              )
+            WHERE m.user_id_sender = ? OR m.user_id_receiver = ?
             GROUP BY receiver_id
-            HAVING last_time IS NOT NULL
             ORDER BY last_time DESC
-            LIMIT 50
-            `,
-            [userId, userId, userId, userId, userId, userId]
+            LIMIT 50`,
+            [userId, userId, userId, userId]
         );
+
+        // Filtro de eliminaciones: traer deleted_at del usuario en una sola query
+        const [deletions]: any = await pool.execute(
+            `SELECT other_user_id, deleted_at FROM chat_deletions WHERE user_id = ?`,
+            [userId]
+        );
+        const deletionMap: Record<string, Date> = {};
+        for (const d of deletions) {
+            deletionMap[String(d.other_user_id)] = new Date(d.deleted_at);
+        }
 
         const previews: ChatPreview[] = [];
 
         for (const row of rows) {
+            // Saltar si el último mensaje es anterior a cuando el usuario eliminó el chat
+            const deletedAt = deletionMap[String(row.receiver_id)];
+            if (deletedAt && new Date(row.last_time) <= deletedAt) continue;
+
             const receiver = await getUserDetails(row.receiver_id);
             const lastAttachment = getLastAttachment(row.last_message_files);
 
@@ -511,13 +516,13 @@ async function updateMessageSeen(messageId: string, userId: string) {
 async function getChatHistory(userId: string, receiverId: string) {
     const [rows]: any = await pool.execute(
         `SELECT m.* FROM messages m
-         WHERE (m.user_id_sender = ? AND m.user_id_receiver = ?)
-            OR (m.user_id_sender = ? AND m.user_id_receiver = ?)
-         AND m.created_at > COALESCE(
-             (SELECT deleted_at FROM chat_deletions
-              WHERE user_id = ? AND other_user_id = ?),
-             '1970-01-01'
-         )
+         WHERE ((m.user_id_sender = ? AND m.user_id_receiver = ?)
+            OR (m.user_id_sender = ? AND m.user_id_receiver = ?))
+           AND m.created_at > COALESCE(
+               (SELECT deleted_at FROM chat_deletions
+                WHERE user_id = ? AND other_user_id = ?),
+               '1970-01-01'
+           )
          ORDER BY m.created_at ASC
          LIMIT 100`,
         [userId, receiverId, receiverId, userId, userId, receiverId]
