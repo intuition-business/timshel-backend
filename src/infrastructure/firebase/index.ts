@@ -3,12 +3,12 @@ import * as admin from 'firebase-admin';
 const getFirebasePrivateKey = (): string | undefined => {
   const key = process.env.FIREBASE_PRIVATE_KEY;
   if (!key) return undefined;
-  // JSON.parse convierte \n escapados en saltos de línea reales (necesario en Docker)
-  try {
-    return JSON.parse(`"${key}"`);
-  } catch {
-    return key.replace(/\\n/g, '\n');
+  // Si es base64 (una sola línea sin espacios ni guiones) → decodificar
+  if (!key.includes('-----BEGIN')) {
+    return Buffer.from(key.trim(), 'base64').toString('utf8');
   }
+  // Fallback: reemplazar \n literales por saltos de línea reales
+  return key.replace(/\\n/g, '\n');
 };
 
 if (!admin.apps.length) {
