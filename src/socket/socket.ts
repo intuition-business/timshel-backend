@@ -210,6 +210,42 @@ export const initSocket = (httpServer: any) => {
             // if (msg) io.to([msg.user_id_sender, userId].sort().join("_")).emit("message-seen", messageId);
         });
 
+        // Bloquear usuario
+        socket.on("block-user", async (targetId: string) => {
+            if (!targetId || userId === targetId) {
+                socket.emit("error", "ID de usuario inválido");
+                return;
+            }
+
+            await pool.execute(
+                `INSERT IGNORE INTO blocked_users (blocker_id, blocked_id) VALUES (?, ?)`,
+                [userId, targetId]
+            );
+
+            await emitUserChatsList(io, userId);
+            await emitUserChatsList(io, targetId);
+
+            socket.emit("block-success", { targetId });
+        });
+
+        // Desbloquear usuario
+        socket.on("unblock-user", async (targetId: string) => {
+            if (!targetId || userId === targetId) {
+                socket.emit("error", "ID de usuario inválido");
+                return;
+            }
+
+            await pool.execute(
+                `DELETE FROM blocked_users WHERE blocker_id = ? AND blocked_id = ?`,
+                [userId, targetId]
+            );
+
+            await emitUserChatsList(io, userId);
+            await emitUserChatsList(io, targetId);
+
+            socket.emit("unblock-success", { targetId });
+        });
+
         // Eliminar chat con un usuario (borra todos los mensajes del lado de ambos)
         socket.on("delete-chat", async (receiverId: string) => {
             if (!receiverId || userId === receiverId) {
