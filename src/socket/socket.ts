@@ -29,6 +29,14 @@ interface MessageAttachment {
     file_type?: string;
 }
 
+let ioInstance: SocketIOServer | null = null;
+
+export async function refreshBlockStatus(userId: string, targetId: string): Promise<void> {
+    if (!ioInstance) return;
+    await emitUserChatsList(ioInstance, userId);
+    await emitUserChatsList(ioInstance, targetId);
+}
+
 // Función principal para inicializar Socket.IO
 export const initSocket = (httpServer: any) => {
     const io = new SocketIOServer(httpServer, {
@@ -37,6 +45,8 @@ export const initSocket = (httpServer: any) => {
             methods: ["GET", "POST"]
         }
     });
+
+    ioInstance = io;
 
     io.use((socket, next) => {
         const token = (socket.handshake.auth as { token?: string })?.token || socket.handshake.query.token as string;
@@ -543,12 +553,20 @@ async function sendChatPushNotification(
     const body = message?.trim() || (files.length > 0 ? getAttachmentPreviewLabel(files[0].file_type) : "Nuevo mensaje");
 
     const { sendPushNotification } = await import("../infrastructure/firebase/notifications");
-    await sendPushNotification(tokens, {
+    const { invalidTokens } = await sendPushNotification(tokens, {
         title: senderName,
         body,
         data: {
             route: '/chat/chat-user',
-            userIdToConnect: senderId,
+            userIdToConnect: String(senderId),
         },
     });
+
+    if (invalidTokens.length > 0) {
+        await pool.execute(
+            `DELETE FROM device_tokens WHERE fcm_token IN (${invalidTokens.map(() => '?').join(',')})`,
+            invalidTokens
+        );
+        console.log(`[FCM] ${invalidTokens.length} tokens inválidos eliminados`);
+    }
 }
