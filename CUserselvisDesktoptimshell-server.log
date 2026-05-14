@@ -1,0 +1,20 @@
+
+> auth@1.0.0 start
+> node dist/index.js
+
+✅ middleware/google cargado
+🔥 GoogleRouter cargado correctamente
+(node:19140) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+NODE_ENV=development
+Server + Socket.IO corriendo en puerto 4000
+App: localhost:4000
+¡Conexión a la base de datos exitosa!
+Usuario conectado: 136 (socket: Y6NIrK3wua-cqTBqAAAB)
+Lista de chats enviada a 136
+[block-user] userId=136 bloqueando targetId=160
+[block-user] OK — my-chats-list emitido a 136 y 160
+Usuario desconectado: 136
+Verificando planes por vencer (cron mediodía)...
+FCM: 1 enviadas, 0 fallidas
+Notificaciones D-7: 1 dispositivos notificados

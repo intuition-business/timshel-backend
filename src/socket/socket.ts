@@ -611,8 +611,7 @@ async function sendChatPushNotification(
         title: senderName,
         body,
         data: {
-            route: '/chat/chat-user',
-            userIdToConnect: String(senderId),
+            route: `/chat/chat-user?userIdToConnect=${senderId}`,
         },
     });
 
