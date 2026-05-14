@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { getChatPreviewWithUser } from "../../socket/socket";
+import { getChatPreviewWithUser, refreshBlockStatus } from "../../socket/socket";
 import pool from "../../config/db";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
@@ -70,6 +70,8 @@ export const blockUserController = async (
             [userId, targetId]
         );
 
+        refreshBlockStatus(userId, targetId).catch(() => {});
+
         return res.status(200).json({ error: false, message: "Usuario bloqueado" });
     } catch (error) {
         next(error);
@@ -94,6 +96,8 @@ export const unblockUserController = async (
             `DELETE FROM blocked_users WHERE blocker_id = ? AND blocked_id = ?`,
             [userId, targetId]
         );
+
+        refreshBlockStatus(userId, targetId).catch(() => {});
 
         return res.status(200).json({ error: false, message: "Usuario desbloqueado" });
     } catch (error) {

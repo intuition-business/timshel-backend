@@ -10,8 +10,8 @@ interface NotificationPayload {
 export const sendPushNotification = async (
   tokens: string[],
   payload: NotificationPayload
-): Promise<void> => {
-  if (!tokens.length) return;
+): Promise<{ invalidTokens: string[] }> => {
+  if (!tokens.length) return { invalidTokens: [] };
 
   const message: admin.messaging.MulticastMessage = {
     tokens,
@@ -26,6 +26,24 @@ export const sendPushNotification = async (
 
   const response = await admin.messaging().sendEachForMulticast(message);
   console.log(`FCM: ${response.successCount} enviadas, ${response.failureCount} fallidas`);
+
+  const invalidTokens: string[] = [];
+  if (response.failureCount > 0) {
+    response.responses.forEach((r, i) => {
+      if (!r.success) {
+        const code = r.error?.code || 'unknown';
+        console.error(`[FCM] Token[${i}] falló: ${code} — ${r.error?.message}`);
+        if (
+          code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token'
+        ) {
+          invalidTokens.push(tokens[i]);
+        }
+      }
+    });
+  }
+
+  return { invalidTokens };
 };
 
 const MESSAGES = {
@@ -68,13 +86,19 @@ export const checkExpiringPlans = async (): Promise<void> => {
 
     for (const [, { tokens, lang }] of Object.entries(userMap)) {
       const msg = MESSAGES[lang][days];
-      await sendPushNotification(tokens, {
+      const { invalidTokens } = await sendPushNotification(tokens, {
         ...msg,
         data: {
           route: '/trainer',
           days_remaining: String(days),
         },
       });
+      if (invalidTokens.length > 0) {
+        await pool.execute(
+          `DELETE FROM device_tokens WHERE fcm_token IN (${invalidTokens.map(() => '?').join(',')})`,
+          invalidTokens
+        );
+      }
     }
 
     if (rows.length > 0) {
