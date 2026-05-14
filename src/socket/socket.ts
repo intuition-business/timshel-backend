@@ -246,7 +246,7 @@ export const initSocket = (httpServer: any) => {
             socket.emit("unblock-success", { targetId });
         });
 
-        // Eliminar chat con un usuario (borra todos los mensajes del lado de ambos)
+        // Eliminar chat solo para mí (el otro usuario conserva sus mensajes)
         socket.on("delete-chat", async (receiverId: string) => {
             if (!receiverId || userId === receiverId) {
                 socket.emit("error", "ID de receptor inválido");
@@ -254,18 +254,13 @@ export const initSocket = (httpServer: any) => {
             }
 
             await pool.execute(
-                `DELETE FROM messages
-                 WHERE (user_id_sender = ? AND user_id_receiver = ?)
-                    OR (user_id_sender = ? AND user_id_receiver = ?)`,
-                [userId, receiverId, receiverId, userId]
+                `INSERT INTO chat_deletions (user_id, other_user_id, deleted_at)
+                 VALUES (?, ?, NOW())
+                 ON DUPLICATE KEY UPDATE deleted_at = NOW()`,
+                [userId, receiverId]
             );
 
-            const room = [userId, receiverId].sort().join("_");
-            io.to(room).emit("chat-history", []);
-
             await emitUserChatsList(io, userId);
-            await emitUserChatsList(io, receiverId);
-
             socket.emit("chat-deleted", { receiverId });
         });
 
@@ -284,10 +279,10 @@ export async function getUserChatList(userId: string): Promise<ChatPreview[]> {
     try {
         const [rows]: any = await pool.execute(
             `
-            SELECT 
-                CASE 
-                    WHEN m.user_id_sender = ? THEN m.user_id_receiver 
-                    ELSE m.user_id_sender 
+            SELECT
+                CASE
+                    WHEN m.user_id_sender = ? THEN m.user_id_receiver
+                    ELSE m.user_id_sender
                 END AS receiver_id,
                 MAX(m.created_at) AS last_time,
                 SUBSTRING_INDEX(
@@ -296,19 +291,28 @@ export async function getUserChatList(userId: string): Promise<ChatPreview[]> {
                 SUBSTRING_INDEX(
                     GROUP_CONCAT(m.files ORDER BY m.created_at DESC SEPARATOR '||'), '||', 1
                 ) AS last_message_files,
-                COUNT(CASE 
-                    WHEN m.user_id_receiver = ? 
-                    AND m.seen = FALSE 
-                    THEN 1 
-                    ELSE NULL 
+                COUNT(CASE
+                    WHEN m.user_id_receiver = ?
+                    AND m.seen = FALSE
+                    THEN 1
+                    ELSE NULL
                 END) AS unread_count
             FROM messages m
-            WHERE m.user_id_sender = ? OR m.user_id_receiver = ?
+            WHERE (m.user_id_sender = ? OR m.user_id_receiver = ?)
+              AND m.created_at > COALESCE(
+                  (SELECT deleted_at FROM chat_deletions
+                   WHERE user_id = ? AND other_user_id = CASE
+                       WHEN m.user_id_sender = ? THEN m.user_id_receiver
+                       ELSE m.user_id_sender
+                   END),
+                  '1970-01-01'
+              )
             GROUP BY receiver_id
+            HAVING last_time IS NOT NULL
             ORDER BY last_time DESC
             LIMIT 50
             `,
-            [userId, userId, userId, userId]
+            [userId, userId, userId, userId, userId, userId]
         );
 
         const previews: ChatPreview[] = [];
@@ -372,9 +376,13 @@ export async function getChatPreviewWithUser(userId: string, receiverId: string)
                     ELSE NULL
                 END) AS unread_count
             FROM messages m
-            WHERE (m.user_id_sender = ? AND m.user_id_receiver = ?)
-               OR (m.user_id_sender = ? AND m.user_id_receiver = ?)`,
-            [receiverId, userId, userId, receiverId, receiverId, userId]
+            WHERE ((m.user_id_sender = ? AND m.user_id_receiver = ?)
+               OR (m.user_id_sender = ? AND m.user_id_receiver = ?))
+              AND m.created_at > COALESCE(
+                  (SELECT deleted_at FROM chat_deletions WHERE user_id = ? AND other_user_id = ?),
+                  '1970-01-01'
+              )`,
+            [receiverId, userId, userId, receiverId, receiverId, userId, userId, receiverId]
         );
 
         if (!rows || rows.length === 0 || !rows[0].last_time) return null;
@@ -502,12 +510,17 @@ async function updateMessageSeen(messageId: string, userId: string) {
 
 async function getChatHistory(userId: string, receiverId: string) {
     const [rows]: any = await pool.execute(
-        `SELECT * FROM messages 
-         WHERE (user_id_sender = ? AND user_id_receiver = ?) 
-            OR (user_id_sender = ? AND user_id_receiver = ?) 
-         ORDER BY created_at ASC
-         LIMIT 100`,  // ← límite razonable para evitar sobrecarga
-        [userId, receiverId, receiverId, userId]
+        `SELECT m.* FROM messages m
+         WHERE (m.user_id_sender = ? AND m.user_id_receiver = ?)
+            OR (m.user_id_sender = ? AND m.user_id_receiver = ?)
+         AND m.created_at > COALESCE(
+             (SELECT deleted_at FROM chat_deletions
+              WHERE user_id = ? AND other_user_id = ?),
+             '1970-01-01'
+         )
+         ORDER BY m.created_at ASC
+         LIMIT 100`,
+        [userId, receiverId, receiverId, userId, userId, receiverId]
     );
 
     return rows;
