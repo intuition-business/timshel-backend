@@ -133,6 +133,78 @@ export const getBlockedUsersController = async (
     }
 };
 
+export const getChatMediaController = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<Response<any>> => {
+    try {
+        const userId = String((req as any).userId);
+        const { receiverId } = req.params;
+        const page = Math.max(1, parseInt(String(req.query.page || "1"), 10));
+        const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || "20"), 10)));
+        const offset = (page - 1) * limit;
+
+        if (!receiverId) {
+            return res.status(400).json({ error: true, message: "receiverId es requerido" });
+        }
+
+        const mediaFilter = `
+            AND (JSON_SEARCH(files, 'one', 'image', null, '$[*].file_type') IS NOT NULL
+              OR JSON_SEARCH(files, 'one', 'video', null, '$[*].file_type') IS NOT NULL)`;
+
+        const deletionFilter = `
+            AND m.created_at > COALESCE(
+                (SELECT deleted_at FROM chat_deletions WHERE user_id = ? AND other_user_id = ?),
+                '1970-01-01'
+            )`;
+
+        const baseWhere = `
+            WHERE ((m.user_id_sender = ? AND m.user_id_receiver = ?)
+                OR (m.user_id_sender = ? AND m.user_id_receiver = ?))
+            ${deletionFilter}
+            ${mediaFilter}`;
+
+        const [[{ total }]]: any = await pool.execute(
+            `SELECT COUNT(*) AS total FROM messages m ${baseWhere}`,
+            [userId, receiverId, receiverId, userId, userId, receiverId]
+        );
+
+        const [rows]: any = await pool.execute(
+            `SELECT m.id, m.created_at, m.files
+             FROM messages m
+             ${baseWhere}
+             ORDER BY m.created_at DESC
+             LIMIT ? OFFSET ?`,
+            [userId, receiverId, receiverId, userId, userId, receiverId, limit, offset]
+        );
+
+        const data = rows.map((row: any) => {
+            const files: { file_url: string; file_type: string }[] =
+                typeof row.files === "string" ? JSON.parse(row.files) : (row.files || []);
+            return {
+                message_id: row.id,
+                created_at: row.created_at,
+                files: files.filter((f) => f.file_type === "image" || f.file_type === "video"),
+            };
+        });
+
+        return res.status(200).json({
+            error: false,
+            data,
+            pagination: {
+                page,
+                limit,
+                total,
+                total_pages: Math.ceil(total / limit),
+            },
+        });
+    } catch (error) {
+        next(error);
+        return res.status(500).json({ error: true, message: "Error interno del servidor" });
+    }
+};
+
 export const uploadChatMediaController = async (
     req: Request,
     res: Response,
