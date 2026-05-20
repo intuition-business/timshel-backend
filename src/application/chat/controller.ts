@@ -149,34 +149,31 @@ export const getChatMediaController = async (
             return res.status(400).json({ error: true, message: "receiverId es requerido" });
         }
 
-        const mediaFilter = `
-            AND (JSON_SEARCH(files, 'one', 'image', null, '$[*].file_type') IS NOT NULL
-              OR JSON_SEARCH(files, 'one', 'video', null, '$[*].file_type') IS NOT NULL)`;
-
-        const deletionFilter = `
-            AND m.created_at > COALESCE(
-                (SELECT deleted_at FROM chat_deletions WHERE user_id = ? AND other_user_id = ?),
-                '1970-01-01'
-            )`;
+        const params = [userId, receiverId, receiverId, userId, userId, receiverId];
 
         const baseWhere = `
             WHERE ((m.user_id_sender = ? AND m.user_id_receiver = ?)
                 OR (m.user_id_sender = ? AND m.user_id_receiver = ?))
-            ${deletionFilter}
-            ${mediaFilter}`;
+            AND m.created_at > COALESCE(
+                (SELECT deleted_at FROM chat_deletions WHERE user_id = ? AND other_user_id = ?),
+                '1970-01-01'
+            )
+            AND (m.files LIKE '%"image"%' OR m.files LIKE '%"video"%')
+            AND m.files != '[]'`;
 
-        const [[{ total }]]: any = await pool.execute(
+        const [[countRow]]: any = await pool.query(
             `SELECT COUNT(*) AS total FROM messages m ${baseWhere}`,
-            [userId, receiverId, receiverId, userId, userId, receiverId]
+            params
         );
+        const total = countRow.total;
 
-        const [rows]: any = await pool.execute(
+        const [rows]: any = await pool.query(
             `SELECT m.id, m.created_at, m.files
              FROM messages m
              ${baseWhere}
              ORDER BY m.created_at DESC
-             LIMIT ? OFFSET ?`,
-            [userId, receiverId, receiverId, userId, userId, receiverId, limit, offset]
+             LIMIT ${limit} OFFSET ${offset}`,
+            params
         );
 
         const data = rows.map((row: any) => {
@@ -200,6 +197,7 @@ export const getChatMediaController = async (
             },
         });
     } catch (error) {
+        console.error("[chat-media] error:", error);
         next(error);
         return res.status(500).json({ error: true, message: "Error interno del servidor" });
     }
