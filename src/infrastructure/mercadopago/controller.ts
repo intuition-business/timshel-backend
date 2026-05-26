@@ -18,7 +18,9 @@ export const createPaymentController = async (req: Request, res: Response) => {
                 console.error('Error al verificar el token JWT:', jwtError);
             }
         }
-        const response = await createPayment(req.body);
+        const { isRenovation, ...paymentBody } = req.body;
+        paymentBody.metadata = { ...(paymentBody.metadata || {}), is_renovation: !!isRenovation };
+        const response = await createPayment(paymentBody);
         // Guardar el pago en la base de datos
         try {
             const payment = response;

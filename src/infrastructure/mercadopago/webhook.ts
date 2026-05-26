@@ -19,6 +19,7 @@ export const mercadopagoWebhook = async (req: Request, res: Response) => {
         const planId = metadata.plan_id || metadata.planId || null;
         const userId = metadata.user_id || metadata.userId || null;
         const entrenadorId = metadata.entrenador_id || metadata.entrenadorId || null;
+        const isRenovation = metadata.is_renovation === true;
 
         // Validar si el pago ya existe en la BD
         const [rows]: any = await pool.execute(
@@ -77,8 +78,19 @@ export const mercadopagoWebhook = async (req: Request, res: Response) => {
                 if (planRows.length > 0) {
                     const { generations_allowed } = planRows[0];
 
-                    // Calcular plan_valid_until = hoy + 30 días
-                    const planValidUntil = new Date();
+                    // Calcular plan_valid_until: renovación extiende desde la fecha actual de vencimiento
+                    let planValidUntil: Date;
+                    if (isRenovation) {
+                        const [authRows]: any = await pool.execute(
+                            'SELECT plan_valid_until FROM auth WHERE id = ?',
+                            [resolvedUserId]
+                        );
+                        const currentExpiry = authRows[0]?.plan_valid_until ? new Date(authRows[0].plan_valid_until) : new Date();
+                        const base = currentExpiry > new Date() ? currentExpiry : new Date();
+                        planValidUntil = new Date(base);
+                    } else {
+                        planValidUntil = new Date();
+                    }
                     planValidUntil.setDate(planValidUntil.getDate() + 30);
 
                     // 2. Actualizar plan, sumar generaciones y setear plan_valid_until
