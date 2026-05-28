@@ -100,13 +100,15 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
         a.plan_id,
         f.peso,
         f.estatura,
-        f.edad
+        f.edad,
+        f.objetivo
       FROM auth
       LEFT JOIN formulario f ON auth.id = f.usuario_id
-      LEFT JOIN asignaciones a ON auth.id = a.usuario_id
+      LEFT JOIN asignaciones a ON auth.id = a.usuario_id AND a.status = 'active'
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
       LEFT JOIN user_images ui ON auth.id = ui.user_id
       ${whereClause}
+      GROUP BY auth.id
       ORDER BY auth.id DESC
       LIMIT ? OFFSET ?
     `;

@@ -7,6 +7,7 @@ export interface UserResponse {
   peso?: number;
   estatura?: number;
   edad?: number;
+  objetivo?: string;
   fecha_registro: Date;
   trainer_id: number | null;
   trainer_name: string | null;
@@ -24,6 +25,7 @@ export const adapterUsers = (data: any[]): UserResponse[] => {
     peso: item?.peso ?? undefined,
     estatura: item?.estatura ?? undefined,
     edad: item?.edad ?? undefined,
+    objetivo: item?.objetivo ?? undefined,
     fecha_registro: item?.fecha_registro ?? new Date(),
     trainer_id: item?.trainer_id ?? null,
     trainer_name: item?.trainer_name ?? null,
