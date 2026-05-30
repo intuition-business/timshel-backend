@@ -160,6 +160,7 @@ export const initSocket = (httpServer: any) => {
                 const senderDetails = await getUserDetails(senderId);
                 const receiverDetails = await getUserDetails(receiverId);
 
+                const now = new Date();
                 const newMessage = {
                     id: uuidv4(),
                     user_id_sender: senderId,
@@ -174,9 +175,10 @@ export const initSocket = (httpServer: any) => {
                     user_phone_receiver: receiverDetails.phone,
                     message,
                     files,
-                    created_at: new Date().toISOString(),
+                    created_at: now.toISOString(),
                     seen: false,
                     received: true,
+                    _created_at_db: now,
                 };
 
                 await saveMessageToDB(newMessage);
@@ -482,10 +484,10 @@ async function getUserImage(userId: string): Promise<string | null> {
 
 async function saveMessageToDB(message: any) {
     await pool.execute(
-        `INSERT INTO messages 
+        `INSERT INTO messages
         (id, user_id_sender, user_image_sender, user_name_sender, user_email_sender, user_phone_sender,
          user_id_receiver, user_image_receiver, user_name_receiver, user_email_receiver, user_phone_receiver,
-         message, files, created_at, seen, received) 
+         message, files, created_at, seen, received)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             message.id,
@@ -501,7 +503,7 @@ async function saveMessageToDB(message: any) {
             message.user_phone_receiver,
             message.message,
             JSON.stringify(message.files || []),
-            message.created_at,
+            message._created_at_db || new Date(),
             message.seen,
             message.received
         ]
