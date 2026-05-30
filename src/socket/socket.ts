@@ -128,67 +128,69 @@ export const initSocket = (httpServer: any) => {
 
         // Enviar mensaje
         socket.on("send-message", async (data: { receiverId: string; message?: string; files?: { file_url: string; file_type: 'image' | 'video' }[] }) => {
-            const senderId = userId;
-            const { receiverId, message = "", files = [] } = data;
+            try {
+                const senderId = userId;
+                const { receiverId, message = "", files = [] } = data;
 
-            // Validar: debe haber al menos un receiverId válido y (texto o archivos)
-            if (!receiverId || senderId === receiverId) {
-                socket.emit("error", "ID de receptor inválido");
-                return;
+                if (!receiverId || senderId === receiverId) {
+                    socket.emit("error", "ID de receptor inválido");
+                    return;
+                }
+
+                if (!message?.trim() && (!files || files.length === 0)) {
+                    socket.emit("error", "El mensaje debe contener texto o archivos");
+                    return;
+                }
+
+                // Verificar bloqueo en cualquier dirección
+                const [blockRows]: any = await pool.execute(
+                    `SELECT id FROM blocked_users
+                     WHERE (blocker_id = ? AND blocked_id = ?)
+                        OR (blocker_id = ? AND blocked_id = ?)
+                     LIMIT 1`,
+                    [senderId, receiverId, receiverId, senderId]
+                );
+                if (blockRows.length > 0) {
+                    socket.emit("message-blocked", { receiverId });
+                    return;
+                }
+
+                const room = [senderId, receiverId].sort().join("_");
+
+                const senderDetails = await getUserDetails(senderId);
+                const receiverDetails = await getUserDetails(receiverId);
+
+                const newMessage = {
+                    id: uuidv4(),
+                    user_id_sender: senderId,
+                    user_image_sender: senderDetails.image,
+                    user_name_sender: senderDetails.name,
+                    user_email_sender: senderDetails.email,
+                    user_phone_sender: senderDetails.phone,
+                    user_id_receiver: receiverId,
+                    user_image_receiver: receiverDetails.image,
+                    user_name_receiver: receiverDetails.name,
+                    user_email_receiver: receiverDetails.email,
+                    user_phone_receiver: receiverDetails.phone,
+                    message,
+                    files,
+                    created_at: new Date().toISOString(),
+                    seen: false,
+                    received: true,
+                };
+
+                await saveMessageToDB(newMessage);
+                io.to(room).emit("receive-message", newMessage);
+
+                await emitChatHistoryToRoom(io, senderId, receiverId);
+                await emitUserChatsList(io, senderId);
+                await emitUserChatsList(io, receiverId);
+
+                sendChatPushNotification(senderId, receiverId, senderDetails.name, message, files).catch((e) => console.error('[chat-push] error:', e?.message || e));
+            } catch (err: any) {
+                console.error('[send-message] error:', err?.message || err);
+                socket.emit("error", "No se pudo enviar el mensaje");
             }
-
-            if (!message?.trim() && (!files || files.length === 0)) {
-                socket.emit("error", "El mensaje debe contener texto o archivos");
-                return;
-            }
-
-            // Verificar bloqueo en cualquier dirección
-            const [blockRows]: any = await pool.execute(
-                `SELECT id FROM blocked_users
-                 WHERE (blocker_id = ? AND blocked_id = ?)
-                    OR (blocker_id = ? AND blocked_id = ?)
-                 LIMIT 1`,
-                [senderId, receiverId, receiverId, senderId]
-            );
-            if (blockRows.length > 0) {
-                socket.emit("message-blocked", { receiverId });
-                return;
-            }
-
-            const room = [senderId, receiverId].sort().join("_");
-
-            const senderDetails = await getUserDetails(senderId);
-            const receiverDetails = await getUserDetails(receiverId);
-
-            const newMessage = {
-                id: uuidv4(),
-                user_id_sender: senderId,
-                user_image_sender: senderDetails.image,
-                user_name_sender: senderDetails.name,
-                user_email_sender: senderDetails.email,
-                user_phone_sender: senderDetails.phone,
-                user_id_receiver: receiverId,
-                user_image_receiver: receiverDetails.image,
-                user_name_receiver: receiverDetails.name,
-                user_email_receiver: receiverDetails.email,
-                user_phone_receiver: receiverDetails.phone,
-                message,
-                files,
-                created_at: new Date().toISOString(),
-                seen: false,
-                received: true,
-            };
-
-            await saveMessageToDB(newMessage);
-            io.to(room).emit("receive-message", newMessage);
-
-            // Historial y previews reactivas sin recarga manual
-            await emitChatHistoryToRoom(io, senderId, receiverId);
-            await emitUserChatsList(io, senderId);
-            await emitUserChatsList(io, receiverId);
-
-            // Push notification al receptor
-            sendChatPushNotification(senderId, receiverId, senderDetails.name, message, files).catch((e) => console.error('[chat-push] error:', e?.message || e));
         });
 
         // Marcar como visto
