@@ -108,7 +108,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
       LEFT JOIN user_images ui ON auth.id = ui.user_id
       ${whereClause}
-      GROUP BY auth.id
+      GROUP BY auth.id, f.name, auth.email, auth.telefono, e.id, e.name, e.image, ui.image_path, a.plan_id, f.peso, f.estatura, f.edad, f.objetivo
       ORDER BY auth.id DESC
       LIMIT ? OFFSET ?
     `;
