@@ -675,9 +675,9 @@ export const getRoutinesSaved = async (
 };
 
 const convertDate = (date: string): string => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
   const [day, month, year] = date.split('/');
-  const formattedDate = new Date(`${year}-${month}-${day}`);
-  return formattedDate.toISOString().split('T')[0];
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 };
 
 export const getRoutineByDate = async (
@@ -995,8 +995,10 @@ export const routinesSaved = async (
       return;
     }
 
+    console.log('[routinesSave] body recibido:', JSON.stringify(body).slice(0, 500));
+
     const validExercises = exercises.filter((exercise: any, index: number) => {
-      const valid = exercise.db_id && exercise.series_completed && exercise.series_completed.length > 0;
+      const valid = exercise.db_id != null && exercise.db_id !== 0;
       if (!valid) {
         console.log(`Ejercicio inválido en el índice ${index}: db_id=${exercise.db_id}`);
       }
@@ -1079,9 +1081,8 @@ export const routinesSaved = async (
         }
       }
 
-      await connection.commit();
-
       if (totalInsertedExercises > 0) {
+        await connection.commit();
         res.status(200).json({
           error: false,
           message: `Rutina y ${totalInsertedExercises} ejercicios guardados correctamente con rutina_id: ${rutinaId}`,
@@ -1094,7 +1095,7 @@ export const routinesSaved = async (
         await connection.rollback();
         res.status(400).json({
           error: true,
-          message: "No se insertó ningún ejercicio válido.",
+          message: "No se insertó ningún ejercicio válido. Verifica que los db_id existan en la tabla exercises.",
           response: undefined,
         });
       }
