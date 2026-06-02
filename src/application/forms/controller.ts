@@ -47,27 +47,29 @@ export const createforms = async (
   const decode = token && verify(`${token}`, SECRET);
   const userId = (<any>(<unknown>decode)).userId;
 
-  let normalized_train_experience = train_experience;
-  if (normalized_train_experience == null) normalized_train_experience = null;
+  let normalized_train_experience: string | null | undefined = train_experience;
 
-  if (typeof normalized_train_experience === 'string') {
-    try {
-      const parsed = JSON.parse(normalized_train_experience);
-      if (typeof parsed === 'string') {
-        normalized_train_experience = parsed;
-      } else if (Array.isArray(parsed) && parsed.length > 0) {
-        normalized_train_experience = parsed[0]; // Tomamos el primero si es array
+  if (normalized_train_experience !== undefined) {
+    if (typeof normalized_train_experience === 'string') {
+      try {
+        const parsed = JSON.parse(normalized_train_experience);
+        if (typeof parsed === 'string') {
+          normalized_train_experience = parsed;
+        } else if (Array.isArray(parsed) && parsed.length > 0) {
+          normalized_train_experience = parsed[0];
+        }
+      } catch (e) {
+        // No es JSON válido, usamos el string original
       }
-    } catch (e) {
-      // No es JSON válido, usamos el string original
     }
-  }
 
-  if (typeof normalized_train_experience !== 'string') normalized_train_experience = null;
-  else {
-    const normalized = normalized_train_experience.toLowerCase().trim();
-    const enumValues = ['basic', 'beginner', 'intermediate', 'advanced', 'expert'];
-    normalized_train_experience = enumValues.includes(normalized) ? normalized : null;
+    if (typeof normalized_train_experience !== 'string') {
+      normalized_train_experience = null;
+    } else {
+      const normalized = normalized_train_experience.toLowerCase().trim();
+      const enumValues = ['basic', 'beginner', 'intermediate', 'advanced', 'expert'];
+      normalized_train_experience = enumValues.includes(normalized) ? normalized : null;
+    }
   }
 
   try {
