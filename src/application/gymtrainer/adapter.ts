@@ -13,7 +13,7 @@ export const adapterTrainers = (data: any) => {
       image: item?.image,
       rating: item?.rating,
       experience_years: item?.experience_years,
-      certifications: item?.certifications,
+      certifications: typeof item?.certifications === 'string' ? JSON.parse(item.certifications) : (item?.certifications || []),
       assigned_users: typeof item?.assigned_users === 'string'
         ? JSON.parse(item.assigned_users)
         : (item?.assigned_users || []),
