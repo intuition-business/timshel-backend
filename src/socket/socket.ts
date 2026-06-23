@@ -441,9 +441,12 @@ export async function getUserDetails(userId: string): Promise<UserDetails> {
         return { name: displayName, email: user.email || null, phone: user.phone || null, image };
     }
 
-    // Si no es usuario normal, buscar en entrenadores
+    // Si no es usuario normal, buscar en entrenadores via auth.entrenador_id
     const [trainerRows]: any = await pool.execute(
-        `SELECT name, email, phone, image FROM entrenadores WHERE id = ? LIMIT 1`,
+        `SELECT e.name, e.email, e.phone, e.image
+         FROM entrenadores e
+         JOIN auth a ON a.entrenador_id = e.id
+         WHERE a.id = ? LIMIT 1`,
         [userId]
     );
 
