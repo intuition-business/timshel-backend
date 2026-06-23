@@ -538,6 +538,54 @@ export const getUserTrainerAndPlan = async (req: Request, res: Response, next: N
   }
 };
 
+export const getMyUsers = async (req: Request, res: Response, next: NextFunction) => {
+  const token = req.headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (decode as any)?.userId;
+
+  const response = { message: "", error: false, data: [] as any[] };
+
+  try {
+    if (!userId) {
+      response.error = true;
+      response.message = "Token inválido";
+      return res.status(401).json(response);
+    }
+
+    const [rows] = await pool.query(`
+      SELECT
+        auth.id,
+        COALESCE(f.name, auth.name, 'Sin nombre') AS name,
+        auth.email,
+        auth.telefono AS phone,
+        ui.image_path AS user_image,
+        a.id AS assignment_id,
+        a.plan_id,
+        a.status,
+        a.fecha_asignacion AS assigned_date
+      FROM asignaciones a
+      JOIN auth ON auth.id = a.usuario_id
+      LEFT JOIN formulario f ON f.usuario_id = auth.id
+      LEFT JOIN user_images ui ON ui.user_id = auth.id
+      WHERE a.entrenador_id = (
+        SELECT entrenador_id FROM auth WHERE id = ?
+      )
+      AND a.status = 'active'
+      ORDER BY a.fecha_asignacion DESC
+    `, [userId]);
+
+    response.data = rows as any[];
+    response.message = response.data.length > 0
+      ? "Usuarios obtenidos exitosamente"
+      : "No tienes usuarios asignados";
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("Error al obtener usuarios del entrenador:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
 // Actualizar entrenador (PUT /update)
 export const updateTrainer = async (req: Request, res: Response) => {
   try {
