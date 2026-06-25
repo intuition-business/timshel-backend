@@ -10,10 +10,10 @@ The user data includes the following fields from the form:
 - Other fields: weight_kg, height_cm, age, injuries, pathologies, diseases
 
 Use these fields to determine:
-1. Which muscle groups to assign to each training day. Each day MUST combine at least one group from grupo_muscular_favorito with at least one complementary group from the opposite body region. If favorites are lower body (GLUTEO, CUADRICEPS, ISQUITIBIALES, PANTORRILLA), always pair with an upper body group (ESPALDA, HOMBRO, BICEPS, TRICEPS, PECHO). If favorites are upper body, always pair with a lower body group. Never dedicate a full day to only upper body or only lower body.
-2. Exercise distribution per day: approximately 70% of exercises from grupo_muscular_favorito, 30% from the complementary group. Target 5 to 6 exercises per day.
+1. The muscle groups for each day are already assigned in ###DIAS### under "categorias". Use EXACTLY those categories — do not add or remove any.
+2. Exercise distribution per day: select exercises ONLY from the categories listed in that day's "categorias". Distribute exercises proportionally among them. Target 5 to 6 exercises per day.
 3. The appropriate repetitions, sets, and rest times for each exercise using the reference table provided in ###VOLUMEN###.
-4. Only select exercises from the table ###EJERCICIOS### matching the selected muscle groups for that day.
+4. Only select exercises from the table ###EJERCICIOS### matching the categories for that specific day.
 
 The user has selected the following training days:
 ###DIAS###
@@ -40,10 +40,9 @@ Note: the volume table uses these muscle group names which map to the exercise c
 - Core → ABDOMEN
 
 Rules for selecting exercises and schemes:
-- Each day must have a DIFFERENT category combination from the other days. Spread the user's grupo_muscular_favorito across the available training days.
-- Each day MUST include exercises from both a lower body AND an upper body group. Never assign only upper body or only lower body to a single day.
-- Approximately 70% of exercises per day should come from grupo_muscular_favorito, 30% from the complementary group.
-- Select exercises ONLY from the category(ies) assigned to that specific day.
+- Each day has a PRE-ASSIGNED category combination listed in that day's "categorias" field in ###DIAS###. Use it exactly — do not modify it.
+- Select exercises ONLY from the category(ies) listed in that day's "categorias". Do not add exercises from other categories.
+- Distribute exercises proportionally among the assigned categories for that day.
 - Use the reference table (###VOLUMEN###) to adjust repetitions, sets, and rest times per muscle group.
 - Sets per exercise (Series): beginner = 2 to 3 sets, intermediate = 3 to 4 sets, advanced or expert = 4 to 5 sets. Use the ###VOLUMEN### table only as reference for weekly volume — do not use those numbers directly as sets per exercise.
 - Rest time ("Descanso"): 2 minutes for large muscle categories, 1.5 minutes for small muscle.

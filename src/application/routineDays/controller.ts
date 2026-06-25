@@ -623,8 +623,7 @@ export const updateRoutineDays = async (req: Request, res: Response, next: NextF
           const [rows]: any = await pool.execute("SELECT * FROM formulario WHERE usuario_id = ?", [userId]);
           if (!rows?.[0]) return;
           const personData = adapter(rows[0]);
-          const favs: string[] = Array.isArray(personData.grupo_muscular_favorito) ? personData.grupo_muscular_favorito : [];
-          const splitGroups = buildDaySplit(favs, needsAI.length);
+          const splitGroups = buildBalancedSplit(needsAI.length);
 
           for (let i = 0; i < needsAI.length; i++) {
             const extra = needsAI[i];
@@ -739,62 +738,55 @@ export async function populateExerciseDetails(plan: any[], lang: string = 'es'):
   }));
 }
 
-// Distribuye grupos musculares del usuario en splits diarios (70% favoritos + 30% complemento)
-function buildDaySplit(favs: string[], numDays: number): string[][] {
-  const LOWER = ['CUADRICEPS', 'ISQUITIBIALES', 'GLUTEO', 'PANTORRILLA'];
-  const UPPER = ['PECHO', 'ESPALDA', 'HOMBRO', 'BICEPS', 'TRICEPS'];
+// Distribuye los 10 grupos musculares en splits balanceados según número de días.
+// Cubre todo el cuerpo en la semana sin repetir grupos por día.
+function buildBalancedSplit(numDays: number): string[][] {
+  const SPLITS: Record<number, string[][]> = {
+    1: [['PECHO', 'ESPALDA', 'CUADRICEPS', 'GLUTEO', 'HOMBRO']],
+    2: [
+      ['PECHO', 'TRICEPS', 'HOMBRO', 'CUADRICEPS', 'PANTORRILLA'],
+      ['ESPALDA', 'BICEPS', 'GLUTEO', 'ISQUITIBIALES', 'ABDOMEN'],
+    ],
+    3: [
+      ['PECHO', 'TRICEPS', 'HOMBRO'],
+      ['ESPALDA', 'BICEPS'],
+      ['CUADRICEPS', 'ISQUITIBIALES', 'GLUTEO', 'PANTORRILLA', 'ABDOMEN'],
+    ],
+    4: [
+      ['PECHO', 'TRICEPS', 'HOMBRO'],
+      ['CUADRICEPS', 'PANTORRILLA'],
+      ['ESPALDA', 'BICEPS'],
+      ['GLUTEO', 'ISQUITIBIALES', 'ABDOMEN'],
+    ],
+    5: [
+      ['PECHO', 'TRICEPS'],
+      ['ESPALDA', 'BICEPS'],
+      ['CUADRICEPS', 'PANTORRILLA'],
+      ['HOMBRO', 'ABDOMEN'],
+      ['GLUTEO', 'ISQUITIBIALES'],
+    ],
+    6: [
+      ['PECHO', 'TRICEPS'],
+      ['ESPALDA', 'BICEPS'],
+      ['CUADRICEPS', 'PANTORRILLA'],
+      ['HOMBRO', 'ABDOMEN'],
+      ['GLUTEO', 'ISQUITIBIALES'],
+      ['PECHO', 'ESPALDA'],
+    ],
+    7: [
+      ['PECHO', 'TRICEPS'],
+      ['ESPALDA', 'BICEPS'],
+      ['CUADRICEPS', 'PANTORRILLA'],
+      ['HOMBRO', 'ABDOMEN'],
+      ['GLUTEO', 'ISQUITIBIALES'],
+      ['PECHO', 'ESPALDA'],
+      ['HOMBRO', 'CUADRICEPS'],
+    ],
+  };
 
-  const lowerFavs = favs.filter(g => LOWER.includes(g));
-  const upperFavs = favs.filter(g => UPPER.includes(g));
-
-  // Complementos de tren superior para días de tren inferior (y viceversa)
-  const upperComplements = ['ESPALDA', 'HOMBRO', 'BICEPS', 'TRICEPS', 'PECHO'];
-  const lowerComplements = ['GLUTEO', 'CUADRICEPS', 'ISQUITIBIALES'];
-
-  const available: string[][] = [];
-
-  if (lowerFavs.length > 0 && upperFavs.length === 0) {
-    // Solo tren inferior: cada día = un grupo inferior diferente + complemento superior
-    for (let i = 0; i < Math.max(numDays, lowerFavs.length); i++) {
-      const primary = lowerFavs[i % lowerFavs.length];
-      const complement = upperComplements[i % upperComplements.length];
-      available.push([primary, complement]);
-    }
-  } else if (upperFavs.length > 0 && lowerFavs.length === 0) {
-    // Solo tren superior: push/pull/shoulders cada uno con complemento inferior
-    const push: string[] = [];
-    if (favs.includes('PECHO')) push.push('PECHO');
-    if (favs.includes('PECHO') || favs.includes('TRICEPS')) push.push('TRICEPS');
-    const pull: string[] = [];
-    if (favs.includes('ESPALDA')) pull.push('ESPALDA');
-    if (favs.includes('ESPALDA') || favs.includes('BICEPS')) pull.push('BICEPS');
-    const shoulders: string[] = favs.includes('HOMBRO') ? ['HOMBRO'] : [];
-
-    if (push.length > 0) available.push([...push, lowerComplements[0]]);
-    if (pull.length > 0) available.push([...pull, lowerComplements[1]]);
-    if (shoulders.length > 0) available.push([...shoulders, lowerComplements[2]]);
-    if (available.length === 0) available.push(['PECHO', 'TRICEPS', 'GLUTEO'], ['ESPALDA', 'BICEPS', 'CUADRICEPS'], ['HOMBRO', 'ISQUITIBIALES']);
-  } else {
-    // Mixto: lógica original — push/pull/shoulders/legs separados
-    const push: string[] = [];
-    if (favs.includes('PECHO')) push.push('PECHO');
-    if (favs.includes('PECHO') || favs.includes('TRICEPS')) push.push('TRICEPS');
-    const pull: string[] = [];
-    if (favs.includes('ESPALDA')) pull.push('ESPALDA');
-    if (favs.includes('ESPALDA') || favs.includes('BICEPS')) pull.push('BICEPS');
-    const shoulders: string[] = favs.includes('HOMBRO') ? ['HOMBRO'] : [];
-    const legs = lowerFavs;
-    const core = favs.filter(g => g === 'ABDOMEN');
-
-    if (push.length > 0) available.push(push);
-    if (pull.length > 0) available.push(pull);
-    if (shoulders.length > 0) available.push(shoulders);
-    if (legs.length > 0) available.push(legs);
-    if (core.length > 0) available.push(core);
-    if (available.length === 0) available.push(['PECHO', 'TRICEPS'], ['ESPALDA', 'BICEPS'], ['HOMBRO']);
-  }
-
-  return Array.from({ length: numDays }, (_, i) => available[i % available.length]);
+  const clamped = Math.min(Math.max(numDays, 1), 7);
+  const split = SPLITS[clamped];
+  return Array.from({ length: numDays }, (_, i) => split[i % split.length]);
 }
 
 export const generateRoutinesIaBackground = async (
@@ -840,8 +832,7 @@ export const generateRoutinesIaBackground = async (
     const templateWeek = weeks.reduce((max, w) => w.days.length >= max.days.length ? w : max, weeks[0]);
 
     // Pre-asignar categorías distintas a cada día del template (push/pull/other)
-    const favs: string[] = Array.isArray(personData.grupo_muscular_favorito) ? personData.grupo_muscular_favorito : [];
-    const splitGroups = buildDaySplit(favs, templateWeek.days.length);
+    const splitGroups = buildBalancedSplit(templateWeek.days.length);
 
     // UUID fijo por día-de-semana: todos los lunes comparten el mismo rutina_id, etc.
     const dayTemplateIds = new Map<string, string>();
@@ -975,8 +966,7 @@ export const regenerateRoutinesIaBackground = async (
     // Semana template = la semana con más días entre las futuras
     const templateWeek = weeks.reduce((max, w) => w.days.length >= max.days.length ? w : max, weeks[0]);
 
-    const favs: string[] = Array.isArray(personData.grupo_muscular_favorito) ? personData.grupo_muscular_favorito : [];
-    const splitGroups = buildDaySplit(favs, templateWeek.days.length);
+    const splitGroups = buildBalancedSplit(templateWeek.days.length);
 
     // Nuevos rutina_id por día-de-semana (todos los lunes futuros comparten uno, etc.)
     const dayTemplateIds = new Map<string, string>();
