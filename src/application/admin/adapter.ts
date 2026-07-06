@@ -14,6 +14,7 @@ export interface UserResponse {
   trainer_image: string | null;
   user_image: string | null;
   plan_id: number | null;
+  plan_name: string | null;
 }
 
 export const adapterUsers = (data: any[]): UserResponse[] => {
@@ -32,5 +33,6 @@ export const adapterUsers = (data: any[]): UserResponse[] => {
     trainer_image: item?.trainer_image ?? null,
     user_image: item?.user_image ?? null,
     plan_id: item?.plan_id ?? null,
+    plan_name: item?.plan_name ?? null,
   }));
 };

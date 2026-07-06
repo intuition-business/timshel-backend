@@ -98,6 +98,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
         e.image AS trainer_image,
         ui.image_path AS user_image,
         a.plan_id,
+        p.title AS plan_name,
         f.peso,
         f.estatura,
         f.edad,
@@ -106,9 +107,10 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
       LEFT JOIN formulario f ON auth.id = f.usuario_id
       LEFT JOIN asignaciones a ON auth.id = a.usuario_id AND a.status = 'active'
       LEFT JOIN entrenadores e ON a.entrenador_id = e.id
+      LEFT JOIN planes p ON a.plan_id = p.id
       LEFT JOIN user_images ui ON auth.id = ui.user_id
       ${whereClause}
-      GROUP BY auth.id, f.name, auth.email, auth.telefono, e.id, e.name, e.image, ui.image_path, a.plan_id, f.peso, f.estatura, f.edad, f.objetivo
+      GROUP BY auth.id, f.name, auth.email, auth.telefono, e.id, e.name, e.image, ui.image_path, a.plan_id, p.title, f.peso, f.estatura, f.edad, f.objetivo
       ORDER BY auth.id DESC
       LIMIT ? OFFSET ?
     `;
