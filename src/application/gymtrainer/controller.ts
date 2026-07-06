@@ -564,6 +564,10 @@ export const getMyUsers = async (req: Request, res: Response, next: NextFunction
         p.title AS plan_name,
         e.name AS trainer_name,
         e.image AS trainer_image,
+        f.peso,
+        f.estatura,
+        f.edad,
+        f.objetivo,
         a.status,
         a.fecha_asignacion AS assigned_date
       FROM asignaciones a
