@@ -561,12 +561,17 @@ export const getMyUsers = async (req: Request, res: Response, next: NextFunction
         ui.image_path AS user_image,
         a.id AS assignment_id,
         a.plan_id,
+        p.title AS plan_name,
+        e.name AS trainer_name,
+        e.image AS trainer_image,
         a.status,
         a.fecha_asignacion AS assigned_date
       FROM asignaciones a
       JOIN auth ON auth.id = a.usuario_id
       LEFT JOIN formulario f ON f.usuario_id = auth.id
       LEFT JOIN user_images ui ON ui.user_id = auth.id
+      LEFT JOIN entrenadores e ON e.id = a.entrenador_id
+      LEFT JOIN planes p ON p.id = a.plan_id
       WHERE a.entrenador_id = (
         SELECT entrenador_id FROM auth WHERE id = ?
       )
