@@ -132,6 +132,11 @@ export const mercadopagoWebhook = async (req: Request, res: Response) => {
                     );
 
                     if (existing.length === 0) {
+                        // Cancelar asignaciones activas con otros entrenadores
+                        await pool.execute(
+                            `UPDATE asignaciones SET status = 'cancelled' WHERE usuario_id = ? AND entrenador_id != ? AND status = 'active'`,
+                            [resolvedUserId, resolvedEntrenadorId]
+                        );
                         await pool.execute(
                             `INSERT INTO asignaciones (usuario_id, entrenador_id, plan_id, fecha_asignacion, status) VALUES (?, ?, ?, ?, 'active')`,
                             [resolvedUserId, resolvedEntrenadorId, planId, new Date()]
