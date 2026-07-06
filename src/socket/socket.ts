@@ -394,10 +394,25 @@ export async function getChatPreviewWithUser(userId: string, receiverId: string)
             [receiverId, userId, userId, receiverId, receiverId, userId, userId, receiverId]
         );
 
-        if (!rows || rows.length === 0 || !rows[0].last_time) return null;
+        const receiver = await getUserDetails(receiverId);
+        const blockStatus = await getBlockStatus(userId, receiverId);
+
+        if (!rows || rows.length === 0 || !rows[0].last_time) {
+            return {
+                receiverId,
+                receiverName: receiver.name,
+                receiverImage: receiver.image,
+                lastMessage: null,
+                lastMessageTime: null,
+                unreadCount: 0,
+                attachmentType: null,
+                attachmentUrl: null,
+                blocked_by_me: blockStatus.blocked_by_me,
+                is_blocked: blockStatus.is_blocked,
+            };
+        }
 
         const row = rows[0];
-        const receiver = await getUserDetails(receiverId);
         const lastAttachment = getLastAttachment(row.last_message_files);
 
         let lastMsg = (row.last_message_text || "").trim() || null;
@@ -407,8 +422,6 @@ export async function getChatPreviewWithUser(userId: string, receiverId: string)
             lastMsg = `${lastMsg} ${getAttachmentPreviewLabel(lastAttachment.file_type)}`;
         }
         if (lastMsg && lastMsg.length > 80) lastMsg = lastMsg.substring(0, 77) + "...";
-
-        const blockStatus = await getBlockStatus(userId, receiverId);
 
         return {
             receiverId,
