@@ -15,6 +15,93 @@ interface GetUsersResponse {
   total_pages: number;
 }
 
+export const assignTrainer = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId, entrenadorId, planId, createPeriod = false } = req.body;
+
+    if (!userId || !entrenadorId) {
+      return res.status(400).json({ error: true, message: "userId y entrenadorId son requeridos" });
+    }
+
+    // Verificar que el usuario existe
+    const [userRows]: any = await pool.execute("SELECT id FROM auth WHERE id = ?", [userId]);
+    if (!userRows.length) {
+      return res.status(404).json({ error: true, message: "Usuario no encontrado" });
+    }
+
+    // Verificar que el entrenador existe
+    const [trainerRows]: any = await pool.execute("SELECT id FROM entrenadores WHERE id = ?", [entrenadorId]);
+    if (!trainerRows.length) {
+      return res.status(404).json({ error: true, message: "Entrenador no encontrado" });
+    }
+
+    const resolvedPlanId = planId ?? 0;
+
+    // Cancelar asignaciones activas previas
+    await pool.execute(
+      "UPDATE asignaciones SET status = 'cancelled' WHERE usuario_id = ? AND status = 'active'",
+      [userId]
+    );
+
+    // Crear nueva asignación
+    await pool.execute(
+      "INSERT INTO asignaciones (usuario_id, entrenador_id, plan_id, fecha_asignacion, status) VALUES (?, ?, ?, ?, 'active')",
+      [userId, entrenadorId, resolvedPlanId, new Date()]
+    );
+
+    // Actualizar auth
+    await pool.execute(
+      "UPDATE auth SET entrenador_id = ?, plan_id = COALESCE(?, plan_id) WHERE id = ?",
+      [entrenadorId, planId ?? null, userId]
+    );
+
+    let periodCreated = false;
+    if (createPeriod) {
+      // Limpiar períodos anteriores del usuario
+      await pool.execute("DELETE FROM user_routine WHERE user_id = ?", [userId]);
+
+      // Crear período de 30 días desde hoy con días lunes, miércoles y viernes
+      const today = new Date();
+      const endDate = new Date(today);
+      endDate.setDate(today.getDate() + 29);
+
+      const startStr = today.toISOString().split('T')[0];
+      const endStr = endDate.toISOString().split('T')[0];
+
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const trainingDays = [1, 3, 5]; // Lunes, Miércoles, Viernes
+
+      const rows: any[] = [];
+      const cursor = new Date(today);
+      while (cursor <= endDate) {
+        const dow = cursor.getDay();
+        if (trainingDays.includes(dow)) {
+          rows.push([userId, dayNames[dow], cursor.toISOString().split('T')[0], startStr, endStr, 'pending']);
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      for (const row of rows) {
+        await pool.execute(
+          "INSERT INTO user_routine (user_id, day, date, start_date, end_date, status) VALUES (?, ?, ?, ?, ?, ?)",
+          row
+        );
+      }
+
+      periodCreated = true;
+    }
+
+    return res.status(200).json({
+      error: false,
+      message: `Usuario ${userId} asignado al entrenador ${entrenadorId}${periodCreated ? ' y período creado' : ''}`,
+      data: { userId, entrenadorId, planId: resolvedPlanId, periodCreated }
+    });
+  } catch (error) {
+    console.error("Error en assignTrainer:", error);
+    return res.status(500).json({ error: true, message: "Error interno del servidor" });
+  }
+};
+
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   const { page = 1, limit = 20, name = "", with_trainer, with_image, plan_id } = req.query;
   const { headers } = req;

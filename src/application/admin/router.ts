@@ -2,6 +2,7 @@
 import { Router } from "express";
 import {
   getUsers,
+  assignTrainer,
 } from "./controller";  // Importamos los controladores de users
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 
@@ -19,6 +20,13 @@ router.get(
   "/users",
   verifyToken,
   asyncHandler(getUsers)
+);
+
+// Ruta POST para asignar entrenador y opcionalmente crear período
+router.post(
+  "/assign-trainer",
+  verifyToken,
+  asyncHandler(assignTrainer)
 );
 
 export default router;
