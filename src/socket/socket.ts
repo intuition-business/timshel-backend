@@ -469,6 +469,18 @@ export async function getUserDetails(userId: string): Promise<UserDetails> {
         return { name: displayName, email: trainer.email || null, phone: trainer.phone || null, image: trainer.image || null };
     }
 
+    // Fallback: buscar directamente en entrenadores por entrenadores.id
+    const [entRows]: any = await pool.execute(
+        `SELECT name, email, phone, image FROM entrenadores WHERE id = ? LIMIT 1`,
+        [userId]
+    );
+
+    if (entRows.length > 0) {
+        const ent = entRows[0];
+        const displayName = ent.name?.trim() || ent.email?.trim() || "Entrenador";
+        return { name: displayName, email: ent.email || null, phone: ent.phone || null, image: ent.image || null };
+    }
+
     const image = await getUserImage(userId);
     return { name: "Usuario desconocido", email: null, phone: null, image };
 }

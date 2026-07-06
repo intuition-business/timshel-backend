@@ -180,6 +180,7 @@ export const getUserProfile = async (
         e.rating AS e_rating,
         e.experience_years AS e_experience_years,
         e.certifications AS e_certifications,
+        (SELECT id FROM auth WHERE entrenador_id = e.id LIMIT 1) AS e_auth_id,
         ui.image_path AS user_image,
         asig.id AS asignacion_id,
         asig.status AS asignacion_status
@@ -218,6 +219,7 @@ export const getUserProfile = async (
 
     const trainer = row.e_id != null ? {
       id: row.e_id,
+      auth_id: row.e_auth_id || null,
       name: row.e_name,
       email: row.e_email,
       phone: row.e_phone,
