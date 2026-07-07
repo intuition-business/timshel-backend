@@ -225,3 +225,101 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
+
+export const getPayments = async (req: Request, res: Response, next: NextFunction) => {
+  const { page = 1, limit = 20, plan_id, entrenador_id, date_from, date_to, status } = req.query;
+
+  try {
+    const pageNum = Math.max(1, parseInt(page as string, 10));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const whereConditions: string[] = [];
+    const params: any[] = [];
+
+    if (plan_id) {
+      whereConditions.push("pay.plan_id = ?");
+      params.push(parseInt(plan_id as string, 10));
+    }
+
+    if (entrenador_id) {
+      whereConditions.push("pay.entrenador_id = ?");
+      params.push(parseInt(entrenador_id as string, 10));
+    }
+
+    if (status) {
+      whereConditions.push("pay.status = ?");
+      params.push(status);
+    }
+
+    if (date_from) {
+      whereConditions.push("DATE(pay.created_at) >= ?");
+      params.push(date_from);
+    }
+
+    if (date_to) {
+      whereConditions.push("DATE(pay.created_at) <= ?");
+      params.push(date_to);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
+
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM payments pay
+      LEFT JOIN planes p ON pay.plan_id = p.id
+      LEFT JOIN entrenadores e ON pay.entrenador_id = e.id
+      ${whereClause}
+    `;
+    const [countRows] = await pool.query(countQuery, params);
+    const total = (countRows as any)[0].total;
+    const totalPages = Math.ceil(total / limitNum);
+
+    const query = `
+      SELECT
+        pay.id,
+        pay.mercadopago_id,
+        pay.user_id,
+        COALESCE(f.name, a.email, 'Sin nombre') AS user_name,
+        a.email AS user_email,
+        pay.plan_id,
+        p.title AS plan_name,
+        pay.entrenador_id,
+        e.name AS trainer_name,
+        pay.amount,
+        pay.net_amount,
+        pay.fee_amount,
+        pay.status,
+        pay.payment_method_id,
+        pay.payment_type_id,
+        pay.currency_id,
+        pay.payer_email,
+        pay.period_start,
+        pay.period_end,
+        pay.approved_at,
+        pay.created_at
+      FROM payments pay
+      LEFT JOIN auth a ON pay.user_id = a.id
+      LEFT JOIN formulario f ON f.usuario_id = a.id
+      LEFT JOIN planes p ON pay.plan_id = p.id
+      LEFT JOIN entrenadores e ON pay.entrenador_id = e.id
+      ${whereClause}
+      ORDER BY pay.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const [rows] = await pool.query(query, [...params, limitNum, offset]);
+
+    return res.status(200).json({
+      error: false,
+      message: "Pagos obtenidos exitosamente",
+      data: rows,
+      current_page: pageNum,
+      total_payments: total,
+      total_pages: totalPages,
+    });
+  } catch (error) {
+    console.error("Error al obtener pagos:", error);
+    return res.status(500).json({ error: true, message: "Error interno del servidor" });
+  }
+};

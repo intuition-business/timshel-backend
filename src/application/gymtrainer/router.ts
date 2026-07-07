@@ -10,6 +10,7 @@ import {
   assignUserWithPlan,
   getUserTrainerAndPlan,
   getMyUsers,
+  getMyProfile,
 } from "./controller";  // Importamos los controladores de trainers
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 import { uploadTrainerFiles } from "../../middleware/uploadTrainerFiles";
@@ -29,6 +30,8 @@ function asyncHandler(fn: any) {
 router.get("/", verifyToken, asyncHandler(getTrainers));
 
 router.get("/my-users", verifyToken, asyncHandler(getMyUsers));
+
+router.get("/me", verifyToken, asyncHandler(getMyProfile));
 
 router.get("/:id", verifyToken, asyncHandler(getTrainerById));
 

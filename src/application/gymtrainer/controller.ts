@@ -595,6 +595,77 @@ export const getMyUsers = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+export const getMyProfile = async (req: Request, res: Response, next: NextFunction) => {
+  const token = req.headers["x-access-token"];
+  const decode = token && verify(`${token}`, SECRET);
+  const userId = (decode as any)?.userId;
+
+  const response = { message: "", error: false, data: null as any };
+
+  try {
+    if (!userId) {
+      response.error = true;
+      response.message = "Token inválido";
+      return res.status(401).json(response);
+    }
+
+    const [authRows]: any = await pool.execute(
+      "SELECT entrenador_id FROM auth WHERE id = ?",
+      [userId]
+    );
+
+    if (!authRows.length || !authRows[0].entrenador_id) {
+      response.error = true;
+      response.message = "No se encontró perfil de entrenador para este usuario";
+      return res.status(404).json(response);
+    }
+
+    const entrenadorId = authRows[0].entrenador_id;
+
+    const [rows]: any = await pool.query(`
+      SELECT
+        e.id,
+        e.name,
+        e.email,
+        e.phone,
+        e.description,
+        e.address,
+        e.goal,
+        e.price,
+        e.rating,
+        e.experience_years,
+        e.certifications,
+        e.image,
+        e.created_at,
+        COUNT(DISTINCT a.usuario_id) AS user_count
+      FROM entrenadores e
+      LEFT JOIN asignaciones a ON a.entrenador_id = e.id AND a.status = 'active'
+      WHERE e.id = ?
+      GROUP BY e.id
+    `, [entrenadorId]);
+
+    if (!rows.length) {
+      response.error = true;
+      response.message = "Entrenador no encontrado";
+      return res.status(404).json(response);
+    }
+
+    const trainer = rows[0];
+    response.data = {
+      ...trainer,
+      certifications: typeof trainer.certifications === 'string'
+        ? JSON.parse(trainer.certifications)
+        : (trainer.certifications || []),
+    };
+    response.message = "Perfil obtenido exitosamente";
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("Error al obtener perfil del entrenador:", error);
+    next(error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
 // Actualizar entrenador (PUT /update)
 export const updateTrainer = async (req: Request, res: Response) => {
   try {

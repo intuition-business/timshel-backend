@@ -3,6 +3,7 @@ import { Router } from "express";
 import {
   getUsers,
   assignTrainer,
+  getPayments,
 } from "./controller";  // Importamos los controladores de users
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 
@@ -27,6 +28,13 @@ router.post(
   "/assign-trainer",
   verifyToken,
   asyncHandler(assignTrainer)
+);
+
+// Historial de pagos con filtros
+router.get(
+  "/payments",
+  verifyToken,
+  asyncHandler(getPayments)
 );
 
 export default router;
