@@ -4,6 +4,7 @@ import {
   getUsers,
   assignTrainer,
   getPayments,
+  getDashboardStats,
 } from "./controller";  // Importamos los controladores de users
 import { verifyToken } from "../../middleware/jwtVerify";  // Middleware para verificar el token
 
@@ -35,6 +36,13 @@ router.get(
   "/payments",
   verifyToken,
   asyncHandler(getPayments)
+);
+
+// Stats del dashboard (stats + movimiento + entrenadores + ingresos + planes)
+router.get(
+  "/dashboard",
+  verifyToken,
+  asyncHandler(getDashboardStats)
 );
 
 export default router;

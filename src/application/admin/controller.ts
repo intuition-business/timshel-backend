@@ -226,6 +226,75 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
   }
 };
 
+export const getDashboardStats = async (req: Request, res: Response) => {
+  try {
+    const { date_from, date_to } = req.query;
+    const currentYear = new Date().getFullYear();
+    const from = date_from ? String(date_from) : `${currentYear}-01-01`;
+    const to = date_to ? String(date_to) : `${currentYear}-12-31`;
+
+    const [[stats]]: any = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS nuevos,
+        SUM(CASE WHEN plan_valid_until IS NOT NULL AND plan_valid_until >= CURDATE() THEN 1 ELSE 0 END) AS activos,
+        SUM(CASE WHEN (plan_valid_until IS NULL OR plan_valid_until < DATE_SUB(CURDATE(), INTERVAL 90 DAY))
+                  AND created_at < DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) AS inactivos
+      FROM auth WHERE rol = 'user'
+    `);
+
+    const [movimiento]: any = await pool.query(`
+      SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS count
+      FROM auth
+      WHERE rol = 'user' AND DATE(created_at) BETWEEN ? AND ?
+      GROUP BY month ORDER BY month ASC
+    `, [from, to]);
+
+    const [top_entrenadores]: any = await pool.query(`
+      SELECT e.id, e.name, e.image, COUNT(a.usuario_id) AS user_count
+      FROM entrenadores e
+      JOIN asignaciones a ON e.id = a.entrenador_id AND a.status = 'active'
+      GROUP BY e.id, e.name, e.image
+      ORDER BY user_count DESC
+      LIMIT 10
+    `);
+
+    const [ingresos]: any = await pool.query(`
+      SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(amount) AS total
+      FROM payments
+      WHERE status = 'approved' AND DATE(created_at) BETWEEN ? AND ?
+      GROUP BY month ORDER BY month ASC
+    `, [from, to]);
+
+    const [planes]: any = await pool.query(`
+      SELECT COALESCE(p.title, 'Sin plan') AS plan_name, COUNT(a.id) AS count
+      FROM asignaciones a
+      LEFT JOIN planes p ON a.plan_id = p.id
+      WHERE a.status = 'active'
+      GROUP BY a.plan_id, p.title
+      ORDER BY count DESC
+    `);
+
+    return res.status(200).json({
+      error: false,
+      stats: {
+        total: Number(stats.total),
+        nuevos: Number(stats.nuevos),
+        activos: Number(stats.activos),
+        inactivos: Number(stats.inactivos),
+        suspendidos: 0,
+      },
+      movimiento,
+      top_entrenadores,
+      ingresos,
+      planes,
+    });
+  } catch (error) {
+    console.error("Error en getDashboardStats:", error);
+    return res.status(500).json({ error: true, message: "Error interno del servidor" });
+  }
+};
+
 export const getPayments = async (req: Request, res: Response, next: NextFunction) => {
   const { page = 1, limit = 20, plan_id, entrenador_id, date_from, date_to, status } = req.query;
 
