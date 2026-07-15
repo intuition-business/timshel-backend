@@ -4,6 +4,7 @@ import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import { adapterTrainers } from "./adapter";
+import { presignFields, presignUrl } from "../../services/s3Presigner";
 import { createTrainerDto, getTrainerDto, updateTrainerDto, deleteTrainerDto, assignUserDto, getTrainersListDto, assignUserWithPlanDto } from "./dto"; // Importamos los DTOs
 import { OtpModel } from "../otp/model";
 import { sendWithEmail } from "../otp/sendOtp/controller/sendWithEmail";
@@ -583,7 +584,7 @@ export const getMyUsers = async (req: Request, res: Response, next: NextFunction
       ORDER BY a.fecha_asignacion DESC
     `, [userId]);
 
-    response.data = rows as any[];
+    response.data = await presignFields(rows as any[], ['user_image', 'trainer_image']);
     response.message = response.data.length > 0
       ? "Usuarios obtenidos exitosamente"
       : "No tienes usuarios asignados";

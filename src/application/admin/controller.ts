@@ -5,6 +5,7 @@ import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import { adapterUsers, UserResponse } from "./adapter";
 import { getUsersListDto } from "./dto";
+import { presignFields } from "../../services/s3Presigner";
 
 interface GetUsersResponse {
   message: string;
@@ -212,7 +213,8 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     response.total_pages = totalPages;
 
     if (userRows.length > 0) {
-      response.data = adapterUsers(userRows);
+      const adapted = adapterUsers(userRows);
+      response.data = await presignFields(adapted, ['user_image', 'trainer_image']);
       response.message = "Usuarios obtenidos exitosamente";
       return res.status(200).json(response);
     } else {

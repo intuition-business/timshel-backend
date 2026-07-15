@@ -3,6 +3,7 @@ import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import { adapterExercises } from "./adapter";
+import { presignFields } from "../../services/s3Presigner";
 import { createExerciseDto, getExerciseDto, updateExerciseDto, deleteExerciseDto } from "./dto"; // Importamos los DTOs
 // Agrega estas importaciones (de mi código anterior)
 import path from "path";
@@ -387,7 +388,8 @@ export const getAllExercises = async (req: Request, res: Response, next: NextFun
 
     // Enviar respuesta si hay datos
     if (exerciseRows.length > 0) {
-      response.data = adapterExercises(exerciseRows, lang as string);
+      const adapted = adapterExercises(exerciseRows, lang as string);
+      response.data = await presignFields(adapted, ['video_url', 'thumbnail_url']);
       response.message = "Ejercicios obtenidos exitosamente";
       if (!shouldPaginate) {
         response.message += " (Todos los ejercicios sin paginación)";
