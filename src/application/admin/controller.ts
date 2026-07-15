@@ -233,20 +233,23 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     const from = date_from ? String(date_from) : `${currentYear}-01-01`;
     const to = date_to ? String(date_to) : `${currentYear}-12-31`;
 
+    // auth no tiene created_at — usamos asignaciones.fecha_asignacion como proxy de incorporación
     const [[stats]]: any = await pool.query(`
       SELECT
-        COUNT(*) AS total,
-        SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS nuevos,
-        SUM(CASE WHEN plan_valid_until IS NOT NULL AND plan_valid_until >= CURDATE() THEN 1 ELSE 0 END) AS activos,
-        SUM(CASE WHEN (plan_valid_until IS NULL OR plan_valid_until < DATE_SUB(CURDATE(), INTERVAL 90 DAY))
-                  AND created_at < DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) AS inactivos
-      FROM auth WHERE rol = 'user'
+        (SELECT COUNT(*) FROM auth WHERE rol = 'user') AS total,
+        (SELECT COUNT(DISTINCT usuario_id) FROM asignaciones
+         WHERE fecha_asignacion >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)) AS nuevos,
+        (SELECT COUNT(*) FROM auth a
+         WHERE a.rol = 'user' AND a.plan_valid_until IS NOT NULL AND a.plan_valid_until >= CURDATE()) AS activos,
+        (SELECT COUNT(*) FROM auth a
+         WHERE a.rol = 'user'
+         AND NOT EXISTS (SELECT 1 FROM asignaciones WHERE usuario_id = a.id AND status = 'active')) AS inactivos
     `);
 
     const [movimiento]: any = await pool.query(`
-      SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS count
-      FROM auth
-      WHERE rol = 'user' AND DATE(created_at) BETWEEN ? AND ?
+      SELECT DATE_FORMAT(fecha_asignacion, '%Y-%m') AS month, COUNT(DISTINCT usuario_id) AS count
+      FROM asignaciones
+      WHERE DATE(fecha_asignacion) BETWEEN ? AND ?
       GROUP BY month ORDER BY month ASC
     `, [from, to]);
 
