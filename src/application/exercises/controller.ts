@@ -14,6 +14,7 @@ import { minioS3, MINIO_BUCKET, deleteFromMinio } from "../../services/minioClie
 const storage = multerS3({
   s3: minioS3,
   bucket: MINIO_BUCKET,
+  contentType: multerS3.AUTO_CONTENT_TYPE,
   metadata: function (req, file, cb) {
     cb(null, { fieldName: file.fieldname });
   },
