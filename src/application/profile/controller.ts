@@ -108,26 +108,12 @@ export const deleteDeviceToken = async (
 import multer from "multer";
 import path from "path";
 import multerS3 from "multer-s3";
-import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import dotenv from "dotenv";
+import { minioS3, MINIO_BUCKET } from "../../services/minioClient";
 
-// Cargar variables de entorno de AWS
-dotenv.config();
-
-// Configuración de AWS S3
-const s3 = new S3Client({
-  region: process.env.AWS_REGION || "us-east-2",
-  endpoint: "https://s3.us-east-2.amazonaws.com",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
-
-// Configuración de multer para subir archivos a S3
+// Configuración de multer para subir archivos a MinIO
 const storage = multerS3({
-  s3: s3,
-  bucket: process.env.AWS_BUCKET_NAME!,
+  s3: minioS3,
+  bucket: MINIO_BUCKET,
   metadata: function (req, file, cb) {
     cb(null, { fieldName: file.fieldname });
   },

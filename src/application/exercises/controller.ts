@@ -5,24 +5,15 @@ import { SECRET } from "../../config";
 import { adapterExercises } from "./adapter";
 import { presignFields } from "../../services/s3Presigner";
 import { createExerciseDto, getExerciseDto, updateExerciseDto, deleteExerciseDto } from "./dto"; // Importamos los DTOs
-// Agrega estas importaciones (de mi código anterior)
 import path from "path";
 import multer from "multer";
 import multerS3 from "multer-s3";
-import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
-
-// S3 config (cópialo de antes si no lo tienes)
-const s3 = new S3Client({
-  region: process.env.AWS_REGION || "us-east-2",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { minioS3, MINIO_BUCKET, deleteFromMinio } from "../../services/minioClient";
 
 const storage = multerS3({
-  s3: s3,
-  bucket: process.env.AWS_BUCKET_NAME!,
+  s3: minioS3,
+  bucket: MINIO_BUCKET,
   metadata: function (req, file, cb) {
     cb(null, { fieldName: file.fieldname });
   },
@@ -211,7 +202,7 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
       // Eliminar viejo de S3 si existe
       if (currentData.video_url) {
         const oldKey = currentData.video_url.split('/').slice(3).join('/');
-        await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME!, Key: oldKey }));
+        await minioS3.send(new DeleteObjectCommand({ Bucket: MINIO_BUCKET, Key: oldKey }));
       }
     } else if (bodyVideoUrl) {
       new_video_url = bodyVideoUrl;
@@ -221,7 +212,7 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
       new_thumbnail_url = files['thumbnail'][0].location;
       if (currentData.thumbnail_url) {
         const oldKey = currentData.thumbnail_url.split('/').slice(3).join('/');
-        await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME!, Key: oldKey }));
+        await minioS3.send(new DeleteObjectCommand({ Bucket: MINIO_BUCKET, Key: oldKey }));
       }
     } else if (bodyThumbnailUrl) {
       new_thumbnail_url = bodyThumbnailUrl;
