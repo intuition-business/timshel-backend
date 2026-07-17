@@ -20,7 +20,7 @@ const storage = multerS3({
   },
   key: function (req, file, cb) {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname) || `.${file.mimetype.split('/')[1]}`;
     let folder = 'exercise-videos';
     if (file.fieldname === 'thumbnail') folder = 'exercise-thumbnails';
     cb(null, `${folder}/${uniqueSuffix}${ext}`);
@@ -453,7 +453,9 @@ export const getExerciseById = async (req: Request, res: Response, next: NextFun
     }
 
     // Adaptamos el resultado (usamos el mismo adapter que en getAll)
-    const exerciseData = adapterExercises(exerciseRows, lang as string)[0]; // Solo el primero
+    const adapted = adapterExercises(exerciseRows, lang as string);
+    const presigned = await presignFields(adapted as any[], ['video_url', 'thumbnail_url']);
+    const exerciseData = presigned[0];
 
     response.data = exerciseData;
     response.message = "Ejercicio obtenido exitosamente";
