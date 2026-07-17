@@ -57,7 +57,7 @@ export const validateOtpEmail = async (
       response.error = false;
       response.status = 200;
       response.token = token;
-      return { ...response, user_id: auth_id };
+      return { ...response, user_id: auth_id, role: rol || 'user' };
     }
     // === Fin de bypass ===
 
@@ -121,7 +121,7 @@ export const validateOtpEmail = async (
     response.error = false;
     response.status = 200;
     response.token = token;
-    return { ...response, user_id: auth_id };
+    return { ...response, user_id: auth_id, role: rol || 'user' };
 
   } catch (error) {
     console.error("Error en validateOtpEmail:", error);

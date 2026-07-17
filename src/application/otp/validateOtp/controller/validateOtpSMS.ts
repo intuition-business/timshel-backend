@@ -77,7 +77,7 @@ export const validateOtpSMS = async (
     // Opcional: marcar como usado
     // await services.markOtpAsUsed(record.auth_id);
 
-    return { ...response, user_id: record.auth_id };
+    return { ...response, user_id: record.auth_id, role: record.rol || 'user' };
 
   } catch (error) {
     console.error("[validateOtpSMS] Error:", error);
