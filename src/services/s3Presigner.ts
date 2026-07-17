@@ -1,29 +1,29 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { MINIO_BUCKET } from "./minioClient";
 
-const s3 = new S3Client({
-  region: process.env.AWS_REGION || "us-east-2",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+const STORAGE_URL = process.env.STORAGE_URL!;
+const STORAGE_API_KEY = process.env.STORAGE_API_KEY!;
 
-const BUCKET = process.env.AWS_BUCKET_NAME!;
-const EXPIRES_IN = 43200; // 12 horas
+const extractKey = (url: string): string => {
+  const p = decodeURIComponent(new URL(url).pathname.slice(1));
+  return p.startsWith(`${MINIO_BUCKET}/`) ? p.slice(MINIO_BUCKET.length + 1) : p;
+};
 
 export const presignUrl = async (url: string | null | undefined): Promise<string | null> => {
   if (!url) return null;
   try {
-    const key = decodeURIComponent(new URL(url).pathname.slice(1));
-    const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-    return await getSignedUrl(s3, command, { expiresIn: EXPIRES_IN });
+    const key = extractKey(url);
+    const res = await fetch(`${STORAGE_URL}/presign/get`, {
+      method: "POST",
+      headers: { "x-api-key": STORAGE_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    const data = await res.json() as { url: string };
+    return data.url;
   } catch {
     return url;
   }
 };
 
-// Presigna campos de imagen/video en un array de objetos en paralelo
 export const presignFields = async <T extends Record<string, any>>(
   items: T[],
   fields: (keyof T)[]

@@ -2,8 +2,9 @@ import multer from "multer";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { promises as fs } from "fs";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createReadStream } from "fs";
+import { minioS3, MINIO_BUCKET, deleteFromMinio } from "../services/minioClient";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
@@ -12,14 +13,6 @@ import sharp from "sharp";
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
 // Configurar FFmpeg (una vez en la aplicación, puedes moverlo a un archivo de inicialización)
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
-
-const s3 = new S3Client({
-    region: process.env.AWS_REGION || "us-east-2",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
-});
 
 // Carpeta temporal (crearla si no existe)
 export const tempDir = path.join(__dirname, "../../temp"); // Ajusta la ruta según tu estructura
@@ -69,14 +62,13 @@ export const uploadChatMedia = multer({
 // Función auxiliar para subir a S3
 export async function uploadToS3(filePath: string, key: string, contentType: string): Promise<string> {
     const fileStream = createReadStream(filePath);
-    await s3.send(new PutObjectCommand({
-        Bucket: process.env.AWS_BUCKET_NAME!,
+    await minioS3.send(new PutObjectCommand({
+        Bucket: MINIO_BUCKET,
         Key: key,
         Body: fileStream,
         ContentType: contentType,
-
     }));
-    return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    return `${process.env.MINIO_ENDPOINT}/${MINIO_BUCKET}/${key}`;
 }
 
 // Generar thumbnail para videos
@@ -115,12 +107,4 @@ export async function generateImageThumbnail(imagePath: string, outputPath: stri
     await fs.mkdir(tempDir, { recursive: true });
 })();
 // Exportamos para usar en controlador si es necesario
-export const deleteFromS3 = async (url?: string) => {
-    if (!url) return;
-    try {
-        const Key = new URL(url).pathname.slice(1);
-        await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME!, Key }));
-    } catch (err) {
-        console.warn("No se pudo eliminar archivo de S3:", err);
-    }
-};
+export const deleteFromS3 = deleteFromMinio;
