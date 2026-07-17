@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import pool from "../../config/db";
 import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
+import { presignUrl } from "../../services/s3Presigner";
 
 export const registerDeviceToken = async (
   req: Request,
@@ -222,6 +223,12 @@ export const getUserProfile = async (
       user_count: 0,
     } : null;
 
+    const [userImagePresigned, trainerImagePresigned] = await Promise.all([
+      presignUrl(row.user_image),
+      trainer ? presignUrl(row.e_image) : Promise.resolve(null),
+    ]);
+    if (trainer) trainer.image = trainerImagePresigned;
+
     return res.status(200).json({
       error: false,
       data: {
@@ -235,7 +242,7 @@ export const getUserProfile = async (
         plan_valid_until: row.plan_valid_until,
         asignacion_id: row.asignacion_id,
         asignacion_status: row.asignacion_status,
-        user_image: row.user_image,
+        user_image: userImagePresigned,
         plan,
         trainer,
       },
@@ -338,7 +345,7 @@ export const uploadUserImage = async (
       response.message = "Imagen subida exitosamente";
     }
 
-    response.imageUrl = imageUrl;
+    response.imageUrl = await presignUrl(imageUrl);
     res.status(201).json(response);
   } catch (error) {
     console.error("Error al subir imagen:", error);
@@ -380,7 +387,7 @@ export const getUserImage = async (
     if ((rows as any[]).length > 0) {
       // Si se encuentra una imagen, devolverla
       const imageUrl = (rows as any[])[0].image_path;
-      response.imageUrl = imageUrl;
+      response.imageUrl = await presignUrl(imageUrl);
       return res.status(200).json(response);
     } else {
       // Si no se encuentra la imagen, enviar un mensaje de error
