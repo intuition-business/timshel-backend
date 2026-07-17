@@ -1551,8 +1551,8 @@ export const searchInGeneratedRoutine = async (
             db_id: exercise.db_id,
             nombre_ejercicio: exercise.nombre_ejercicio,
             description: exercise.description || "",
-            video_url: await presignUrl(exercise.video_url) || "",
-            thumbnail_url: await presignUrl(exercise.thumbnail_url) || "",
+            video_url: exercise.video_url || "",
+            thumbnail_url: exercise.thumbnail_url || "",
             muscle_group: exercise.muscle_group || null,
             Esquema: exercise.Esquema,
           },
@@ -1562,16 +1562,16 @@ export const searchInGeneratedRoutine = async (
     }
 
     // 8. Caso: solo fecha_rutina → devolver todos los ejercicios del día
-    const ejerciciosFormateados = await Promise.all(populatedDay.ejercicios.map(async (e: any) => ({
+    const ejerciciosFormateados = populatedDay.ejercicios.map((e: any) => ({
       exercise_id: e.exercise_id,
       db_id: e.db_id,
       nombre_ejercicio: e.nombre_ejercicio,
       description: e.description || "",
-      video_url: await presignUrl(e.video_url) || "",
-      thumbnail_url: await presignUrl(e.thumbnail_url) || "",
+      video_url: e.video_url || "",
+      thumbnail_url: e.thumbnail_url || "",
       muscle_group: e.muscle_group || null,
       Esquema: e.Esquema,
-    })));
+    }));
 
     res.json({
       ...baseResponse,

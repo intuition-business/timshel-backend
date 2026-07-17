@@ -11,6 +11,7 @@ import {
   deleteWarmUpDto,
 } from "./dto";
 import { deleteFromS3, uploadWarmUpMedia } from "../../middleware/uploadWarmUpMedia";
+import { presignFields } from "../../services/s3Presigner";
 
 interface WarmUp {
   id: number;
@@ -125,9 +126,10 @@ export const getWarmUps = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
+    const data = await presignFields(adapterWarmUps(warmUps), ["video_url", "video_thumbnail"]);
     res.status(200).json({
       message: "Calentamientos obtenidos exitosamente",
-      data: adapterWarmUps(warmUps),
+      data,
     });
   } catch (error) {
     console.error("Error al obtener warm-ups:", error);

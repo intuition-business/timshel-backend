@@ -66,6 +66,7 @@ import { verify } from "jsonwebtoken";
 import { SECRET } from "../../config";
 import { adapterRoutineDays } from "./adapter";
 import { createRoutineDto, getRoutineDto, updateRoutineStatusDto, deleteRoutineDto } from "./dto"; // Importamos los DTOs
+import { presignUrl } from "../../services/s3Presigner";
 // Para ejecutar como cron (agrega esto en tu app principal o un archivo init)
 
 
@@ -720,22 +721,22 @@ export async function populateExerciseDetails(plan: any[], lang: string = 'es'):
     exRows.forEach((ex: any) => exerciseMap.set(ex.id, ex));
   }
   const isEn = lang === 'en';
-  return plan.map((day: any) => ({
+  return Promise.all(plan.map(async (day: any) => ({
     ...day,
-    ejercicios: (day.ejercicios || []).map((ej: any) => {
+    ejercicios: await Promise.all((day.ejercicios || []).map(async (ej: any) => {
       const ex = exerciseMap.get(Number(ej.db_id));
       return {
         exercise_id: ej.exercise_id,
         db_id: ej.db_id,
         nombre_ejercicio: isEn ? (ex?.exercise_en || ex?.exercise || "") : (ex?.exercise || ""),
         description: isEn ? (ex?.description_en || ex?.description || "") : (ex?.description || ""),
-        video_url: ex?.video_url || "",
-        thumbnail_url: ex?.thumbnail_url || "",
+        video_url: await presignUrl(ex?.video_url) || "",
+        thumbnail_url: await presignUrl(ex?.thumbnail_url) || "",
         muscle_group: ex?.muscle_group || null,
         Esquema: ej.Esquema,
       };
-    }),
-  }));
+    })),
+  })));
 }
 
 // Distribuye los 10 grupos musculares en splits balanceados según número de días.
