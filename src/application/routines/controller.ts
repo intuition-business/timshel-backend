@@ -215,7 +215,13 @@ export const getGeneratedRoutinesIa = async (
         `SELECT id, exercise, exercise_en, description, description_en, video_url, thumbnail_url, muscle_group FROM exercises WHERE id IN (${uniqueDbIds.map(() => '?').join(',')})`,
         uniqueDbIds
       );
-      exRows.forEach((ex: any) => exerciseMap.set(ex.id, ex));
+      await Promise.all(exRows.map(async (ex: any) => {
+        exerciseMap.set(ex.id, {
+          ...ex,
+          video_url: await presignUrl(ex.video_url) || "",
+          thumbnail_url: await presignUrl(ex.thumbnail_url) || "",
+        });
+      }));
     }
 
     const isEn = lang === 'en';
@@ -646,6 +652,12 @@ export const getRoutinesSaved = async (
       await pool.query("COMMIT");
 
       const responseData = Array.from(routinesMap.values());
+      await Promise.all(responseData.flatMap((r: any) =>
+        r.exercises.map(async (ex: any) => {
+          ex.thumbnail_url = await presignUrl(ex.thumbnail_url) || ex.thumbnail_url;
+          ex.video_url = await presignUrl(ex.video_url) || ex.video_url;
+        })
+      ));
 
       res.status(200).json({
         error: false,
@@ -764,6 +776,12 @@ export const getRoutineByDate = async (
       }
 
       const responseData = Array.from(routinesMap.values());
+      await Promise.all(responseData.flatMap((r: any) =>
+        r.exercises.map(async (ex: any) => {
+          ex.thumbnail_url = await presignUrl(ex.thumbnail_url) || ex.thumbnail_url;
+          ex.video_url = await presignUrl(ex.video_url) || ex.video_url;
+        })
+      ));
 
       res.status(200).json({
         error: false,
@@ -942,6 +960,14 @@ export const getRoutineByExerciseName = async (
         fecha_rutina: dateEntry.fecha_rutina,
         routines: Array.from(dateEntry.routines.values()),
       }));
+      await Promise.all(responseData.flatMap((dateEntry: any) =>
+        dateEntry.routines.flatMap((r: any) =>
+          r.exercises.map(async (ex: any) => {
+            ex.thumbnail_url = await presignUrl(ex.thumbnail_url) || ex.thumbnail_url;
+            ex.video_url = await presignUrl(ex.video_url) || ex.video_url;
+          })
+        )
+      ));
 
       let message = "Rutinas encontradas con el ejercicio especificado";
       if (routine_name) message += " en la rutina especificada";
