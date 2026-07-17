@@ -359,7 +359,7 @@ export const getUserImage = async (
   res: Response,
   next: NextFunction
 ): Promise<Response<any>> => {
-  const response = {
+  const response: { message: string; error: boolean; imageUrl: string | null } = {
     message: "",
     error: false,
     imageUrl: null,
