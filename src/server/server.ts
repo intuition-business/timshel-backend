@@ -58,6 +58,10 @@ const Server = () => {
     res.json({ auth: "on", version: "alpha" });
   });
 
+  app.get("/health", (req, res) => {
+    res.json({ status: "ok" });
+  });
+
   // Exportamos io para usarlo en controladores si quieres
   (app as any).io = io;
 
