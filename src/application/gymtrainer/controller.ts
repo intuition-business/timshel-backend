@@ -450,7 +450,12 @@ export const getTrainerById = async (req: Request, res: Response, next: NextFunc
       };
 
       // 6. Usar adapter para consistencia
-      response.data = adapterTrainers([trainer])[0];
+      const adapted = adapterTrainers([trainer])[0];
+      const [presignedImage, presignedCerts] = await Promise.all([
+        presignUrl(adapted.image),
+        Promise.all((adapted.certifications as string[]).map((c: string) => presignUrl(c))),
+      ]);
+      response.data = { ...adapted, image: presignedImage, certifications: presignedCerts };
       response.message = "Entrenador obtenido exitosamente";
       return res.status(200).json(response);
     } else {
@@ -652,11 +657,19 @@ export const getMyProfile = async (req: Request, res: Response, next: NextFuncti
     }
 
     const trainer = rows[0];
+    const certs: string[] = typeof trainer.certifications === 'string'
+      ? JSON.parse(trainer.certifications)
+      : (trainer.certifications || []);
+
+    const [presignedImage, presignedCerts] = await Promise.all([
+      presignUrl(trainer.image),
+      Promise.all(certs.map((c: string) => presignUrl(c))),
+    ]);
+
     response.data = {
       ...trainer,
-      certifications: typeof trainer.certifications === 'string'
-        ? JSON.parse(trainer.certifications)
-        : (trainer.certifications || []),
+      image: presignedImage,
+      certifications: presignedCerts,
     };
     response.message = "Perfil obtenido exitosamente";
     return res.status(200).json(response);
