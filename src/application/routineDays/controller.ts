@@ -256,7 +256,7 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
   try {
     // Buscar el último plan de entrenamiento generado para el usuario
     const [planRows]: any = await pool.execute(
-      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
+      "SELECT id, training_plan, is_edited FROM user_training_plans WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
       [userId]
     );
 
@@ -326,6 +326,7 @@ export const getRoutineByUserId = async (req: Request, res: Response, next: Next
       error: false,
       message: "Rutina obtenida exitosamente",
       data: rutinaFinal2,
+      is_edited: planRows[0].is_edited === 1,
     });
   } catch (error) {
     console.error("Error al obtener la rutina del usuario:", error);
@@ -533,12 +534,21 @@ export const updateRoutineDays = async (req: Request, res: Response, next: NextF
 
     // 3. Obtener plan existente de BD
     const [planRows]: any = await pool.execute(
-      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+      "SELECT id, training_plan, is_edited FROM user_training_plans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
       [userId]
     );
     if (!planRows.length) {
       return res.status(404).json({ error: true, message: "No se encontró un plan de entrenamiento activo." });
     }
+
+    if (planRows[0].is_edited) {
+      return res.status(403).json({
+        error: true,
+        message: "Tu entrenador ha personalizado tu rutina. No puedes cambiar los días de entrenamiento.",
+        code: "ROUTINE_EDITED_BY_TRAINER"
+      });
+    }
+
     const planId = planRows[0].id;
     const existingPlan: any[] = typeof planRows[0].training_plan === 'string'
       ? JSON.parse(planRows[0].training_plan)

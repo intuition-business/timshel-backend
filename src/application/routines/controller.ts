@@ -131,7 +131,7 @@ export const getGeneratedRoutinesIa = async (
   const targetUserId = adminUserId ? adminUserId : userIdFromToken;
 
   try {
-    let sql = "SELECT id, training_plan, created_at FROM user_training_plans WHERE user_id = ?";
+    let sql = "SELECT id, training_plan, created_at, is_edited FROM user_training_plans WHERE user_id = ?";
     let params: any[] = [targetUserId]; // ← usamos targetUserId (puede ser del token o del query)
 
     // Si se pasa un mes, filtrar por mes en created_at (ej: created_at LIKE '2025-09%')
@@ -255,9 +255,10 @@ export const getGeneratedRoutinesIa = async (
       error: false,
       message: "Plan de entrenamiento obtenido con éxito.",
       routine_id: planRows[0].id,
-      user_id: targetUserId, // ← devuelve el ID real consultado
-      queried_by_admin: !!adminUserId, // ← opcional: para saber si fue consulta externa
-      created_at: planRows[0].created_at
+      user_id: targetUserId,
+      queried_by_admin: !!adminUserId,
+      created_at: planRows[0].created_at,
+      is_edited: planRows[0].is_edited === 1
     });
   } catch (error: any) {
     console.error("Error al obtener el plan de entrenamiento:", error);
@@ -1213,7 +1214,7 @@ export const editExercise = async (
     }
 
     await pool.execute(
-      "UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?",
+      "UPDATE user_training_plans SET training_plan = ?, updated_at = NOW(), is_edited = 1 WHERE id = ?",
       [JSON.stringify(trainingPlan), plan_id]
     );
 
@@ -1324,7 +1325,7 @@ export const addExercise = async (
 
     // 7. GUARDAR
     await pool.execute(
-      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
+      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW(), is_edited = 1 WHERE id = ?`,
       [JSON.stringify(trainingPlan), rutina_id]
     );
 
@@ -1431,7 +1432,7 @@ export const deleteExercise = async (
 
     // 6. GUARDAR
     await pool.execute(
-      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW() WHERE id = ?`,
+      `UPDATE user_training_plans SET training_plan = ?, updated_at = NOW(), is_edited = 1 WHERE id = ?`,
       [JSON.stringify(trainingPlan), rutina_id]
     );
 
@@ -1706,7 +1707,7 @@ export const regenerateRoutinesIa = async (
 
     // 4. Obtener plan existente (DEBE existir para poder regenerar)
     const [existingPlanRows]: any = await pool.execute(
-      "SELECT id, training_plan FROM user_training_plans WHERE user_id = ? AND updated_at >= ? LIMIT 1",
+      "SELECT id, training_plan, is_edited FROM user_training_plans WHERE user_id = ? AND updated_at >= ? LIMIT 1",
       [userId, startDateStr]
     );
     if (!existingPlanRows?.length) {
@@ -1714,6 +1715,15 @@ export const regenerateRoutinesIa = async (
         error: true,
         message: "No hay rutina activa en este periodo. Genera una rutina primero.",
         code: "NO_ROUTINE"
+      });
+      return;
+    }
+
+    if (existingPlanRows[0].is_edited) {
+      res.status(403).json({
+        error: true,
+        message: "Tu entrenador ha personalizado tu rutina. No puedes regenerarla.",
+        code: "ROUTINE_EDITED_BY_TRAINER"
       });
       return;
     }
