@@ -84,11 +84,14 @@ export const getExerciseDto = Joi.object({
 export const updateExerciseDto = Joi.object({
   new_category: Joi.string().trim().optional(),
   new_exercise: Joi.string().trim().optional(),
+  new_exercise_en: Joi.string().trim().optional(),
   new_description: Joi.string().trim().optional(),
+  new_description_en: Joi.string().trim().optional(),
   new_video_url,
   new_thumbnail_url,
   new_at_home,
-  new_muscle_group // ← Campo nuevo para actualización
+  new_muscle_group,
+  clear_video: Joi.boolean().optional(),
 });
 
 // DELETE EXERCISE DTO (sin cambios)
