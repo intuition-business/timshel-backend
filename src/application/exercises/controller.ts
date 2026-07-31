@@ -207,6 +207,12 @@ export const updateExercise = async (req: Request, res: Response, next: NextFunc
       }
     } else if (bodyVideoUrl) {
       new_video_url = bodyVideoUrl;
+    } else if (req.body.clear_video === 'true' || req.body.clear_video === true) {
+      if (currentData.video_url) {
+        const oldKey = currentData.video_url.split('/').slice(3).join('/');
+        await minioS3.send(new DeleteObjectCommand({ Bucket: MINIO_BUCKET, Key: oldKey }));
+      }
+      new_video_url = null;
     }
 
     if (files && files['thumbnail'] && files['thumbnail'][0]) {
