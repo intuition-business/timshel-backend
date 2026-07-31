@@ -280,6 +280,8 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       ORDER BY count DESC
     `);
 
+    const top_entrenadores_signed = await presignFields(top_entrenadores, ['image']);
+
     return res.status(200).json({
       error: false,
       stats: {
@@ -290,7 +292,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         suspendidos: 0,
       },
       movimiento,
-      top_entrenadores,
+      top_entrenadores: top_entrenadores_signed,
       ingresos,
       planes,
     });
