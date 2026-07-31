@@ -321,7 +321,12 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
     response.total_pages = totalPages;
 
     if (trainerRows.length > 0) {
-      response.data = adapterTrainers(trainerRows); // Asegúrate de que adapterTrainers maneje estos campos
+      const adapted = adapterTrainers(trainerRows);
+      response.data = await Promise.all(adapted.map(async (trainer: any) => ({
+        ...trainer,
+        image: trainer.image ? await presignUrl(trainer.image) : null,
+        certifications: await Promise.all((trainer.certifications || []).map((url: string) => presignUrl(url))),
+      })));
       response.message = "Entrenadores obtenidos exitosamente";
       return res.status(200).json(response);
     } else {
