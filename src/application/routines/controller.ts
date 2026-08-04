@@ -10,7 +10,7 @@ import pool from "../../config/db";
 import { any } from "joi";
 import { presignUrl } from "../../services/s3Presigner";
 import { v4 as uuidv4 } from "uuid";
-import { generateRoutinesIaBackground, regenerateRoutinesIaBackground, getLocalDateString } from "../routineDays/controller";
+import { generateRoutinesIaBackground, regenerateRoutinesIaBackground, getLocalDateString, buildBalancedSplit } from "../routineDays/controller";
 import { categoryTranslations } from "../exercises/adapter";
 
 const normalizeKey = (s: string) =>
@@ -417,7 +417,30 @@ export const generateRoutinesIa = async (
 
     // --- Generar solo el PRIMER DÍA vía IA ---
     const firstDay = daysData[0];
-    const firstPrompt = await readFiles(personData, [{ date: firstDay.dateStr, day: firstDay.day }]);
+
+    // Reproducir la lógica del background para saber qué categorías (push/pull/other)
+    // le tocan al primer día en el split balanceado. Así el primer día ya nace consistente
+    // con el resto del plan y el background puede reutilizarlo sin regenerar.
+    const startMsFirst = new Date(startDateStr + 'T12:00:00Z').getTime();
+    const weekMapFirst = new Map<number, any[]>();
+    for (const day of daysData) {
+      const dayMs = new Date(day.dateStr + 'T12:00:00Z').getTime();
+      const weekNum = Math.floor((dayMs - startMsFirst) / (7 * 24 * 60 * 60 * 1000)) + 1;
+      if (!weekMapFirst.has(weekNum)) weekMapFirst.set(weekNum, []);
+      weekMapFirst.get(weekNum)!.push(day);
+    }
+    const weeksFirst = [...weekMapFirst.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([semana, days]) => ({ semana, days }));
+    const templateWeekFirst = weeksFirst.reduce((max, w) => w.days.length >= max.days.length ? w : max, weeksFirst[0]);
+    const splitGroupsFirst = buildBalancedSplit(templateWeekFirst.days.length);
+    const firstDayIdx = templateWeekFirst.days.findIndex((d: any) => d.day === firstDay.day);
+    const firstDayCats = firstDayIdx >= 0 ? splitGroupsFirst[firstDayIdx] : splitGroupsFirst[0];
+
+    const firstPrompt = await readFiles(
+      { ...personData, grupo_muscular_favorito: firstDayCats },
+      [{ date: firstDay.dateStr, day: firstDay.day, categorias: firstDayCats }]
+    );
 
     let parsedFirstDay: any;
     try {
@@ -455,12 +478,24 @@ export const generateRoutinesIa = async (
       return;
     }
 
-    // Asignar fecha y semana=1 al primer día
+    // Asignar fecha, semana=1 y categorías del split al primer día
     parsedFirstDay.fecha = firstDay.dateStr;
     parsedFirstDay.semana = 1;
+    if (!parsedFirstDay.categorias || parsedFirstDay.categorias.length === 0) {
+      parsedFirstDay.categorias = firstDayCats;
+    }
+    if (!parsedFirstDay.nombre) parsedFirstDay.nombre = firstDayCats.join(' + ');
 
     // Construir primer día (mínimo para BD)
     const [firstDayBuilt]: any[] = await buildRoutineWithExerciseDetails([parsedFirstDay]);
+
+    // Anotar el día-de-semana para que el background pueda emparejarlo por día (no solo por fecha)
+    firstDayBuilt.day = firstDay.day;
+
+    // Asignar rutina_id fijo: buildRoutineWithExerciseDetails no lo genera y el cliente
+    // ya recibe este id en la respuesta — al pasarlo al background, todos los días del
+    // mismo día-de-semana lo heredarán vía dayTemplateIds (consistencia total).
+    firstDayBuilt.rutina_id = uuidv4();
 
     // Guardar plan inicial con solo el primer día
     const [insertResult]: any = await pool.execute(
@@ -489,8 +524,10 @@ export const generateRoutinesIa = async (
     });
 
     // --- Lanzar background: genera semana template y distribuye a todas las semanas ---
+    // Pasamos firstDayBuilt para que el background lo reutilice tal cual y no lo
+    // sobrescriba (evita que el primer día "cambie" cuando termina la generación).
     require("../routineDays/controller")
-      .generateRoutinesIaBackground(userId, startDateStr, endDateStr, routineId)
+      .generateRoutinesIaBackground(userId, startDateStr, endDateStr, routineId, firstDayBuilt)
       .catch((err: any) => console.error("[BG] Error en background:", err));
 
   } catch (error) {

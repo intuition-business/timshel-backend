@@ -751,7 +751,7 @@ export async function populateExerciseDetails(plan: any[], lang: string = 'es'):
 
 // Distribuye los 10 grupos musculares en splits balanceados según número de días.
 // Cubre todo el cuerpo en la semana sin repetir grupos por día.
-function buildBalancedSplit(numDays: number): string[][] {
+export function buildBalancedSplit(numDays: number): string[][] {
   const SPLITS: Record<number, string[][]> = {
     1: [['PECHO', 'ESPALDA', 'CUADRICEPS', 'GLUTEO', 'HOMBRO']],
     2: [
@@ -804,7 +804,8 @@ export const generateRoutinesIaBackground = async (
   userId: number,
   startDate: string,
   endDate: string,
-  routineId?: number
+  routineId?: number,
+  firstDayBuilt?: any
 ): Promise<{ error: boolean; message: string; routine_id?: number; isGeneratingRoutine?: boolean }> => {
   try {
     // Obtener todos los días del período
@@ -846,13 +847,31 @@ export const generateRoutinesIaBackground = async (
     const splitGroups = buildBalancedSplit(templateWeek.days.length);
 
     // UUID fijo por día-de-semana: todos los lunes comparten el mismo rutina_id, etc.
+    // Si el primer día ya viene generado, preservamos su rutina_id para su día-de-semana
+    // para que el cliente no vea cambiar el ID que ya recibió.
     const dayTemplateIds = new Map<string, string>();
     templateWeek.days.forEach((wd: any) => dayTemplateIds.set(wd.day, uuidv4()));
+    if (firstDayBuilt?.day && firstDayBuilt?.rutina_id) {
+      dayTemplateIds.set(firstDayBuilt.day, firstDayBuilt.rutina_id);
+    }
 
-    // Generar ejercicios: UNA llamada por día con la categoría pre-asignada
+    // Si el día-de-semana del primer día no está en el template (edge case: semana 1
+    // incompleta), lo agregamos para que no se pierda al distribuir.
+    if (firstDayBuilt?.day && !templateWeek.days.some((d: any) => d.day === firstDayBuilt.day)) {
+      templateWeek.days.push({ day: firstDayBuilt.day, dateStr: firstDayBuilt.fecha });
+    }
+
+    // Generar ejercicios: UNA llamada por día con la categoría pre-asignada.
+    // Si el primer día ya viene generado, reutilizarlo tal cual (ahorra 1 llamada IA
+    // y evita que el usuario vea cambiar su primer día).
     const dayOfWeekMap = new Map<string, any>();
+    if (firstDayBuilt?.day) {
+      dayOfWeekMap.set(firstDayBuilt.day, { ...firstDayBuilt, rutina_id: dayTemplateIds.get(firstDayBuilt.day) });
+      console.log(`[BG] ${firstDayBuilt.day} → reutilizado del Paso 1 (${firstDayBuilt.ejercicios?.length} ejercicios)`);
+    }
     for (let i = 0; i < templateWeek.days.length; i++) {
       const wd = templateWeek.days[i];
+      if (dayOfWeekMap.has(wd.day)) continue; // ya lo tenemos del Paso 1
       const cats = splitGroups[i] || splitGroups[0];
       const dayInput = [{ date: wd.dateStr, day: wd.day, categorias: cats }];
       const dayPrompt = await readFiles({ ...personData, grupo_muscular_favorito: cats }, dayInput);
@@ -891,6 +910,12 @@ export const generateRoutinesIaBackground = async (
       for (const wd of days) {
         const templateDay = dayOfWeekMap.get(wd.day);
         if (!templateDay) continue;
+        // Si es exactamente el primer día ya entregado al cliente, preservarlo tal cual
+        // (mismos exercise_id, misma semana) para no romper referencias del frontend.
+        if (firstDayBuilt && wd.dateStr === firstDayBuilt.fecha) {
+          fullPlan.push({ ...firstDayBuilt });
+          continue;
+        }
         fullPlan.push({
           ...templateDay,
           fecha: wd.dateStr,
