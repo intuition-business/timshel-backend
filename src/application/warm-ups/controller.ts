@@ -64,12 +64,16 @@ export const createWarmUp = [
 
       const video_url = files.video[0].location;
       const video_thumbnail = files.thumbnail[0].location;
+      const muscleGroupsRaw = req.body.muscle_groups;
+      const muscle_groups = muscleGroupsRaw
+        ? JSON.stringify(Array.isArray(muscleGroupsRaw) ? muscleGroupsRaw : JSON.parse(muscleGroupsRaw))
+        : null;
 
       const [result]: any = await pool.query(
-        `INSERT INTO warm_ups 
-         (name, description, video_url, video_thumbnail, duration_in_minutes) 
-         VALUES (?, ?, ?, ?, ?)`,
-        [name, description, video_url, video_thumbnail, Number(duration_in_minutes)]
+        `INSERT INTO warm_ups
+         (name, description, video_url, video_thumbnail, duration_in_minutes, muscle_groups)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [name, description, video_url, video_thumbnail, Number(duration_in_minutes), muscle_groups]
       );
 
       res.status(201).json({
@@ -80,6 +84,7 @@ export const createWarmUp = [
           video_url,
           video_thumbnail,
           duration_in_minutes: Number(duration_in_minutes),
+          muscle_groups: muscle_groups ? JSON.parse(muscle_groups) : [],
         },
       });
     } catch (error: any) {
@@ -93,9 +98,9 @@ export const createWarmUp = [
   },
 ];
 
-// READ ALL - con random y limit
+// READ ALL - con random, limit y filtro por categorías del día (3 matching + 1 any)
 export const getWarmUps = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { length, random } = req.query;
+  const { length, random, categories } = req.query;
 
   try {
     const token = req.headers["x-access-token"] as string;
@@ -107,23 +112,49 @@ export const getWarmUps = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    let query = "SELECT id, name, description, video_url, video_thumbnail, duration_in_minutes FROM warm_ups";
-    const params: any[] = [];
+    const [allRows] = await pool.query(
+      "SELECT id, name, description, video_url, video_thumbnail, duration_in_minutes, muscle_groups FROM warm_ups"
+    );
+    const all = allRows as any[];
 
-    query += random === "true" ? " ORDER BY RAND()" : " ORDER BY name ASC";
-
-    if (length) {
-      const limit = Math.min(100, Math.max(1, parseInt(length as string, 10)));
-      query += " LIMIT ?";
-      params.push(String(limit));  // ← CAMBIO: Convertir a cadena explícitamente
-    }
-
-    const [rows] = params.length > 0 ? await pool.execute(query, params) : await pool.query(query);
-    const warmUps = rows as WarmUp[];
-
-    if (warmUps.length === 0) {
+    if (all.length === 0) {
       res.status(404).json({ error: true, message: "No se encontraron calentamientos" });
       return;
+    }
+
+    let warmUps: any[];
+
+    if (categories) {
+      // Lógica: 3 que correspondan a las categorías del día + 1 cualquiera
+      const requestedCats = (categories as string).split(",").map(c => c.trim().toUpperCase());
+
+      const matching = all.filter(w => {
+        const groups: string[] = typeof w.muscle_groups === "string"
+          ? JSON.parse(w.muscle_groups)
+          : (w.muscle_groups ?? []);
+        return groups.some(g => requestedCats.includes(g));
+      });
+
+      const nonMatching = all.filter(w => !matching.includes(w));
+
+      const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5);
+
+      const picked3 = shuffle([...matching]).slice(0, 3);
+      const usedIds = new Set(picked3.map(w => w.id));
+
+      // El 4to: preferir uno que no haya salido, de cualquier categoría
+      const remaining = all.filter(w => !usedIds.has(w.id));
+      const picked1 = shuffle(remaining).slice(0, 1);
+
+      warmUps = [...picked3, ...picked1];
+    } else {
+      // Sin filtro: comportamiento original
+      const sorted = random === "true"
+        ? [...all].sort(() => Math.random() - 0.5)
+        : [...all].sort((a, b) => a.name.localeCompare(b.name));
+
+      const limit = length ? Math.min(100, Math.max(1, parseInt(length as string, 10))) : all.length;
+      warmUps = sorted.slice(0, limit);
     }
 
     const data = await presignFields(adapterWarmUps(warmUps), ["video_url", "video_thumbnail"]);
@@ -176,6 +207,13 @@ export const updateWarmUp = [
       if (name !== undefined) { updates.push("name = ?"); values.push(name); }
       if (description !== undefined) { updates.push("description = ?"); values.push(description); }
       if (duration_in_minutes !== undefined) { updates.push("duration_in_minutes = ?"); values.push(Number(duration_in_minutes)); }
+
+      const muscleGroupsRaw = req.body.muscle_groups;
+      if (muscleGroupsRaw !== undefined) {
+        const parsed = Array.isArray(muscleGroupsRaw) ? muscleGroupsRaw : JSON.parse(muscleGroupsRaw);
+        updates.push("muscle_groups = ?");
+        values.push(JSON.stringify(parsed));
+      }
 
       if (files?.video?.[0]) {
         updates.push("video_url = ?");

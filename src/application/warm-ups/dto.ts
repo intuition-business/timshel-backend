@@ -21,6 +21,15 @@ const duration_in_minutes = Joi.number().integer().min(1).max(60).required().mes
   "number.max": "La duración máxima es 60 minutos",
 });
 
+const VALID_MUSCLE_GROUPS = [
+  "PECHO", "ESPALDA", "CUADRICEPS", "ISQUITIBIALES",
+  "BICEPS", "TRICEPS", "HOMBRO", "ABDOMEN", "GLUTEO", "PANTORRILLA",
+];
+
+const muscle_groups = Joi.array()
+  .items(Joi.string().valid(...VALID_MUSCLE_GROUPS))
+  .optional();
+
 // =======================
 // CREATE → TODOS REQUERIDOS
 // =======================
@@ -28,6 +37,7 @@ export const createWarmUpDto = Joi.object({
   name,
   description,
   duration_in_minutes,
+  muscle_groups,
 });
 
 // =======================
@@ -36,6 +46,7 @@ export const createWarmUpDto = Joi.object({
 export const getWarmUpDto = Joi.object({
   length: Joi.number().integer().min(1).max(100).optional(),
   random: Joi.string().valid("true", "false").optional(),
+  categories: Joi.string().optional(), // ej: "PECHO,TRICEPS,HOMBRO"
 });
 
 // =======================
@@ -45,6 +56,7 @@ export const updateWarmUpDto = Joi.object({
   name: Joi.string().trim().min(3).max(100).optional(),
   description: Joi.string().trim().min(10).max(500).optional(),
   duration_in_minutes: Joi.number().integer().min(1).max(60).optional(),
+  muscle_groups,
 }).min(0); // ← CLAVE: permite body vacío si solo hay archivos
 
 // =======================

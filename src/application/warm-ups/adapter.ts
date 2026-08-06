@@ -8,6 +8,9 @@ export const adapterWarmUps = (data: any) => {
       video_url: item?.video_url,
       video_thumbnail: item?.video_thumbnail,
       duration_in_minutes: item?.duration_in_minutes,
+      muscle_groups: item?.muscle_groups
+        ? (typeof item.muscle_groups === 'string' ? JSON.parse(item.muscle_groups) : item.muscle_groups)
+        : [],
     };
   });
   return result;
