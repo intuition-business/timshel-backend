@@ -26,8 +26,11 @@ const VALID_MUSCLE_GROUPS = [
   "BICEPS", "TRICEPS", "HOMBRO", "ABDOMEN", "GLUTEO", "PANTORRILLA",
 ];
 
-const muscle_groups = Joi.array()
-  .items(Joi.string().valid(...VALID_MUSCLE_GROUPS))
+const muscle_groups = Joi.alternatives()
+  .try(
+    Joi.array().items(Joi.string().valid(...VALID_MUSCLE_GROUPS)),
+    Joi.string() // FormData siempre envía JSON stringificado
+  )
   .optional();
 
 // =======================
