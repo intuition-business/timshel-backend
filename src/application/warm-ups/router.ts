@@ -17,6 +17,7 @@ const asyncHandler = (fn: any) => (req: any, res: any, next: any) =>
 router.post("/", verifyToken, ...createWarmUp);
 router.get("/", verifyToken, asyncHandler(getWarmUps));
 router.put("/:id", verifyToken, ...updateWarmUp);
+router.patch("/:id", verifyToken, ...updateWarmUp);
 router.delete("/:id", verifyToken, asyncHandler(deleteWarmUp));
 
 export default router;
