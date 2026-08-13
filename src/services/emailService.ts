@@ -52,10 +52,13 @@ export const sendTrainerNewUserNotification = async (params: {
 
           <!-- Header -->
           <tr>
-            <td style="background-color:#dff400;padding:28px 40px;text-align:center;">
-              <h1 style="margin:0;color:#0f0f0f;font-size:26px;font-weight:800;letter-spacing:-0.5px;">TIMSHELL</h1>
-              <p style="margin:6px 0 0;color:#0f0f0f;font-size:13px;font-weight:500;opacity:0.7;">Plataforma de entrenamiento personalizado</p>
+            <td style="background-color:#0f0f0f;padding:28px 40px;text-align:center;">
+              <img src="https://timshell.co/logo.png" alt="Timshell" width="180" style="display:block;margin:0 auto;max-width:180px;" />
             </td>
+          </tr>
+          <!-- Separador amarillo header -->
+          <tr>
+            <td style="background-color:#dff400;height:3px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Cuerpo -->
@@ -170,9 +173,13 @@ export const sendTrainerNewUserNotification = async (params: {
             </td>
           </tr>
 
+          <!-- Separador amarillo footer -->
+          <tr>
+            <td style="background-color:#dff400;height:5px;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
           <!-- Footer -->
           <tr>
-            <td style="padding:24px 40px;border-top:1px solid #2a2a2a;text-align:center;">
+            <td style="padding:24px 40px;text-align:center;">
               <p style="margin:0;color:#555;font-size:12px;line-height:1.6;">
                 Este mensaje fue generado automáticamente por Timshell.<br/>
                 Si tienes alguna pregunta, escríbenos a
