@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../../config/db';
 import { getPayment } from './index';
+import { sendTrainerNewUserNotification } from '../../services/emailService';
 
 export const mercadopagoWebhook = async (req: Request, res: Response) => {
     const event = req.body;
@@ -141,6 +142,43 @@ export const mercadopagoWebhook = async (req: Request, res: Response) => {
                             `INSERT INTO asignaciones (usuario_id, entrenador_id, plan_id, fecha_asignacion, status) VALUES (?, ?, ?, ?, 'active')`,
                             [resolvedUserId, resolvedEntrenadorId, planId, new Date()]
                         );
+
+                        // 5. Notificar al entrenador por email
+                        try {
+                            const [[trainerRow]]: any = await pool.execute(
+                                `SELECT e.name AS trainer_name, a.email AS trainer_email
+                                 FROM entrenadores e
+                                 JOIN auth a ON a.entrenador_id = e.id
+                                 WHERE e.id = ?
+                                 LIMIT 1`,
+                                [resolvedEntrenadorId]
+                            );
+                            const [[userRow]]: any = await pool.execute(
+                                `SELECT a.name AS user_name, a.email AS user_email, a.telefono AS user_phone
+                                 FROM auth a
+                                 WHERE a.id = ?
+                                 LIMIT 1`,
+                                [resolvedUserId]
+                            );
+                            const [[planRow]]: any = await pool.execute(
+                                `SELECT title, price_cop FROM planes WHERE id = ? LIMIT 1`,
+                                [planId]
+                            );
+
+                            if (trainerRow?.trainer_email && userRow && planRow) {
+                                sendTrainerNewUserNotification({
+                                    trainerEmail: trainerRow.trainer_email,
+                                    trainerName: trainerRow.trainer_name || 'Entrenador',
+                                    userName: userRow.user_name || 'Usuario',
+                                    userEmail: userRow.user_email || '',
+                                    userPhone: userRow.user_phone || undefined,
+                                    planTitle: planRow.title,
+                                    planPrice: planRow.price_cop,
+                                }).catch((err) => console.error('[webhook] Error enviando email al entrenador:', err));
+                            }
+                        } catch (emailErr) {
+                            console.error('[webhook] Error obteniendo datos para email al entrenador:', emailErr);
+                        }
                     }
                 }
             }
