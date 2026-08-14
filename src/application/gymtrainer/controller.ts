@@ -280,7 +280,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
           JSON_ARRAY()
         ) AS assigned_users
       FROM entrenadores e
-      LEFT JOIN auth auth_t ON auth_t.entrenador_id = e.id
+      LEFT JOIN auth auth_t ON auth_t.entrenador_id = e.id AND auth_t.rol = 'trainer'
       LEFT JOIN asignaciones a ON a.entrenador_id = e.id
       LEFT JOIN usuarios u ON u.id = a.usuario_id
       ${whereClause}
