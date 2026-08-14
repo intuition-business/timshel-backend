@@ -347,7 +347,7 @@ export async function getUserChatList(userId: string): Promise<ChatPreview[]> {
             const receiverImage = receiver.image ? await presignUrl(receiver.image).catch(() => receiver.image) : null;
 
             previews.push({
-                receiverId: row.receiver_id,
+                receiverId: String(row.receiver_id),
                 receiverName: receiver.name,
                 receiverImage,
                 lastMessage: lastMsg,
