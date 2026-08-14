@@ -159,6 +159,12 @@ export const getTrainersListDto = Joi.object({
   name: Joi.string().optional().messages({
     'string.base': 'El nombre debe ser un string'
   }),
+  page: Joi.number().optional().messages({
+    'number.base': 'El page debe ser un número'
+  }),
+  limit: Joi.number().optional().messages({
+    'number.base': 'El limit debe ser un número'
+  }),
   length: Joi.number().optional().messages({
     'number.base': 'El length debe ser un número'
   }),
