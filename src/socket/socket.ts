@@ -3,6 +3,7 @@ import { verify } from "jsonwebtoken";
 import { v4 as uuidv4 } from 'uuid';
 import pool from "../config/db";
 import { SECRET } from "../config";
+import { presignUrl } from "../services/s3Presigner";
 
 interface UserDetails {
     name: string;
@@ -343,10 +344,12 @@ export async function getUserChatList(userId: string): Promise<ChatPreview[]> {
 
             const blockStatus = await getBlockStatus(userId, row.receiver_id);
 
+            const receiverImage = receiver.image ? await presignUrl(receiver.image).catch(() => receiver.image) : null;
+
             previews.push({
                 receiverId: row.receiver_id,
                 receiverName: receiver.name,
-                receiverImage: receiver.image,
+                receiverImage,
                 lastMessage: lastMsg,
                 lastMessageTime: row.last_time ? new Date(row.last_time).toISOString() : null,
                 unreadCount: Number(row.unread_count) || 0,
