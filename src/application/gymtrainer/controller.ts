@@ -256,42 +256,44 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
 
     // === CONSULTA PRINCIPAL ===
     let query = `
-      SELECT 
-        e.id, 
-        e.name, 
-        e.email, 
-        e.phone, 
-        e.description, 
-        e.goal, 
-        e.rating, 
-        e.experience_years, 
-        e.certifications, 
+      SELECT
+        e.id,
+        e.name,
+        e.email,
+        e.phone,
+        e.description,
+        e.goal,
+        e.rating,
+        e.experience_years,
+        e.certifications,
         e.image,
         e.created_at,
+        MAX(auth_t.id) AS auth_id,
         COUNT(DISTINCT a.usuario_id) AS user_count,
         IFNULL(
           JSON_ARRAYAGG(
             JSON_OBJECT(
               'id', u.id,
-              'name', u.nombre  -- Reemplaza 'nombre' con el nombre real de la columna en 'usuarios' si es diferente
+              'name', u.nombre
             )
           ),
           JSON_ARRAY()
         ) AS assigned_users
       FROM entrenadores e
+      LEFT JOIN auth auth_t ON auth_t.entrenador_id = e.id
       LEFT JOIN asignaciones a ON a.entrenador_id = e.id
       LEFT JOIN usuarios u ON u.id = a.usuario_id
       ${whereClause}
-      GROUP BY 
-        e.id, 
-        e.name, 
-        e.email, 
-        e.phone, 
-        e.description, 
-        e.goal, 
-        e.rating, 
-        e.experience_years, 
-        e.certifications, 
+      GROUP BY
+        e.id,
+        e.name,
+        e.email,
+        e.phone,
+        e.description,
+        e.goal,
+        e.rating,
+        e.experience_years,
+        e.certifications,
         e.created_at
       ORDER BY e.name ASC
       LIMIT ? OFFSET ?
@@ -312,6 +314,7 @@ export const getTrainers = async (req: Request, res: Response, next: NextFunctio
       certifications: string;
       image: string;
       created_at: Date;
+      auth_id: number | null;
       user_count: number;
       assigned_users: string; // JSON string from the query
     }>;
